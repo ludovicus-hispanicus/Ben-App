@@ -1,0 +1,9 @@
+<div class="meta-container">
+    <title>Metadata</title>
+    <div class="real-meta">
+        <span *ngFor="let meta of metadata">
+            <span class="title">{{meta.title | titlecase}}:</span><span class="text">{{meta.text}}</span>
+        </span>
+    </div>
+    
+</div>

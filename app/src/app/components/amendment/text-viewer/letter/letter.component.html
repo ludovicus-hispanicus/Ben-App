@@ -1,0 +1,36 @@
+<div style="display: flex; flex-direction: column; border: 1px solid rgb(200, 200, 200);
+             border-radius: 10%; padding: 5px; min-width: 1.5em; min-height: 2em;"
+             [style.background-color]="getBackgroundColor()">
+    <span *ngIf="probability" style="font-size: 1em; align-self: center;">
+        {{getScore()}}
+    </span>
+    <div *ngIf="showSign && !LetterModel.loading" style="font-size: 1em; align-self: center;" [style.width]="getWidth()">
+        <span *ngIf="!editMode" style="font-size: 1em; align-self: center;">
+            {{ getLetterView() }}
+        </span>
+        <span *ngIf="editMode">
+            <textarea cdkTextareaAutosize type="text" [(ngModel)]="LetterModel.letter" (focus)="lineFocus.emit()" style="font-size: 1em;
+             align-self: center; width: 100%; overflow-y: hidden; min-height: 2m !important;"></textarea>
+        </span>
+    </div>
+    <span *ngIf="showSign && LetterModel.loading" style="font-size: 1em; align-self: center;">
+        <mat-icon aria-hidden="false" class="robot-icon rotate" style="font-weight: bold; display: block; color: blue;">smart_toy</mat-icon> 
+    </span>
+    <hr *ngIf="showSymbol && showSign" style="margin: 0.5rem 0;">
+    <span *ngIf="showSymbol && !LetterModel.loading" style='font-size: 1.5em; align-self: center;'
+    [style.fontFamily]="getFont()">
+        {{ LetterModel.symbol }}
+    </span>
+    <span *ngIf="showSymbol && LetterModel.loading" style="font-size: 1em; align-self: center;">
+        <mat-icon aria-hidden="false" class="robot-icon rotate" style="font-weight: bold; display: block; color: blue;">smart_toy</mat-icon> 
+    </span>
+</div>
+
+
+
+<!-- 
+[style.background-color]="getBackgroundColor()"
+[style.border]="getBorder()"
+[style.cursor]="getCursor()"
+[style.fontFamily]="getFont()"
+[style.fontSize]="getFontSize()" -->

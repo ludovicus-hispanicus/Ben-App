@@ -1,0 +1,60 @@
+<div class="container">
+    <div class="row" style="margin-top: 2vh;">
+        <div class="col-md-12" style="display: flex; justify-content: center; flex-direction: column; align-items: center;">
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div style="display: flex; flex-direction: row; align-items: center;">
+                        <mat-form-field appearance="fill" style="margin-right: 1vw;">
+                            <mat-label style="margin-bottom: 1em;">Search type</mat-label>
+                            <mat-select [(value)]="searchType" (selectionChange)="searchTypeChanged()">
+                                <mat-option *ngFor="let stype of searchTypes" [value]="stype" >
+                                    by {{stype}}
+                                </mat-option>
+                            </mat-select>
+                        </mat-form-field>
+                        <mat-form-field *ngIf="searchType == searchTypes[0]" class="example-full-width" appearance="fill">
+                            <mat-label>GIŠ.ŠUB...</mat-label>
+                            <input type="text" matInput (keydown.enter)="search()" [(ngModel)]="symbol" placeholder="GIŠ.ŠUB...">
+                        </mat-form-field>
+                        <smart-selector *ngIf="searchType == searchTypes[1]" (selectionChange)="symbolSelectionChanged($event)" [signs]="signs" class="child" 
+                        style="align-self: auto; margin-right: 2em;"> </smart-selector>                
+                        <button class="btn btn-secondary" style="margin-left: 1vw; margin-bottom: 1.2em;" type="button" (click)="search()">Search</button>
+                    </div>
+                    <button  *ngIf="images.length > 0" class="btn btn-secondary" type="button" (click)="clear()">Clear</button>
+            </div>
+
+            <div *ngIf="images.length > 0" style="margin-top: 1vw;">
+                <span>Showing {{images.length}} texts 
+                    <span *ngIf="searchType == searchTypes[1]">for
+                        <span style="font-family: Esagil; font-size: x-large; margin-left: .3vw;"> {{unicodeQuery}}</span>
+                    </span>
+                </span>
+            </div>
+                
+        </div>
+    </div>
+    <div class="row" style="margin-top: 1vw;">
+        <div class="col-md-6">
+            <div class="input-group">
+            </div>
+        </div>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card-columns"> <!-- on click call function -->
+                <div class="card" *ngFor="let image of images"
+                     style="cursor: pointer; border: 1px solid #0000004f;">
+                    <img class="card-img-top" style="height: 30vh; width: auto; max-width: 10vw;" 
+                        [src]="image.url" (click)="showImage(image.textId, image.transliterationId)"
+                        matTooltip="Click to expand image" matTooltipHideDelay="100" matTooltipPosition="right"
+                        alt="Card image cap">
+                    <div class="card-body">
+                        <h5 class="card-title
+                        ">{{image.title}}</h5>
+                        <p class="card-text">{{image.description}}</p>
+                        <button *ngIf="image.textId == image.transliterationId" class="btn btn-primary" (click)="goToCure(image.textId)">Cure</button>
+                        <button *ngIf="image.textId != image.transliterationId" class="btn btn-primary" (click)="goToCured(image.textId, image.transliterationId)">CuReD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

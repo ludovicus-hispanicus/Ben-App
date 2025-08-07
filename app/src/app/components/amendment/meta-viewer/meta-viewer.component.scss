@@ -1,0 +1,40 @@
+.real-meta {
+    overflow-y: scroll;
+    height: 8em;
+
+}
+
+.meta-container {
+    box-shadow: 5px 2px #88888857;
+    border: 1px solid #000000bf;
+    border-radius: 2%;
+    padding: 5px;
+    // height: 100%;
+
+    title {
+        text-align: center;
+        font-size: 1.4em;
+        font-weight: bold;
+        text-decoration-line: underline;
+        margin: 0.3em;
+    }
+
+    * {
+        display: block;
+    }
+
+    .title {
+        margin: 3px;
+        display: inline-block;
+        text-decoration: underline;
+        font-size: 1.2em;
+    }
+
+    .text {
+        margin: 3px;
+
+        display: inline-block;
+        font-size: 1em;
+
+    }
+}

@@ -1,0 +1,42 @@
+<div class="instructions">
+    <h2 style="display: inline">Decunify</h2>
+    <p>Draw a sign, then CuReI will predict it for you!</p>
+  </div>
+<div class="the-container">
+    <div class="canvas-container">
+        <fabric-canvas #canvas [canvasType]="canvasType" (modeChange)="modeChanged($event)" (mouseup)="getPrediction()"></fabric-canvas>
+    </div>
+    <div *ngIf="predictions || isLoading" class="result-container">
+        <button mat-stroked-button *ngIf="!isLoading" (click)="getPrediction()">Get AI Prediction</button>
+        <hr *ngIf="predictions">
+
+        <div  *ngIf="isLoading">
+            <mat-spinner diameter="100"></mat-spinner><span>Loading...</span>
+        </div>
+        <!-- <span class="guess-title" *ngIf="guess">AI prediction: </span> -->
+        <div *ngFor="let prediction of predictions" class="mega-guess-box">
+            <div class="guess-box">
+                <span class="symbol">
+                    {{prediction.letter.symbol}} 
+                </span>
+                <div class="text-container">
+                    <span class="probability">
+                        Score: {{getScore(prediction.probability)}}
+                    </span>
+                    <!-- <span class="letter">
+                        {{prediction.letter.letter}}
+                    </span> -->
+                    <span class="letters">
+                        {{prediction.all_letters}}
+                    </span>
+                 
+                </div>
+            </div>
+            <hr *ngIf="predictions">
+
+            
+            <!-- <hr> -->
+        </div>
+    </div>
+</div>
+

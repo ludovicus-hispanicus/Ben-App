@@ -1,0 +1,103 @@
+h1 {
+    font-family: Ubuntu-Bold;
+    font-size: 3em;
+    color: #403866;
+    line-height: 1.2;
+    text-transform: uppercase;
+    text-align: center;
+    width: 100%;
+    display: block;
+}
+
+.instructions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #d6d6d638;
+  border-radius: 25px;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+    border: 1px;
+    margin-top: 10%; 
+    padding: 4%; 
+    width: 30vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-items: stretch;
+    // background: #ecebeb61;
+    border-radius: 7%;
+}
+
+input {
+    font-family: Ubuntu-Bold;
+    color: #403866;
+    line-height: 1.2;
+    font-size: 18px;
+    display: block;
+    width: 100%;
+    background: transparent;
+    height: 62px;
+    padding: 0 20px 0 38px;
+    border: 1px;
+    margin-bottom: 10px;
+    margin-top: 10px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    font-family: 'Quicksand';
+    font-weight: 500;
+}
+
+.button1 {
+    font-family: Ubuntu-Bold;
+    font-size: 16px;
+    color: #fff;
+    line-height: 1.2;
+    text-transform: uppercase;
+    display: -webkit-box;
+    border: none;
+    display: -webkit-flex;
+    display: -moz-box;
+    display: -ms-flexbox;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0 20px;
+    width: 100%;
+    height: 62px;
+    background-color: #827ffe;
+    border-radius: 3px;
+    -webkit-transition: all 0.4s;
+    -o-transition: all 0.4s;
+    -moz-transition: all 0.4s;
+    transition: all 0.4s;
+    font-family: sans-serif;  
+}
+
+.button1:hover {
+    background-color: #403866;
+}
+
+.the-input {
+  background-color: #e8f0fe;
+}
+
+.rotate {
+    animation: rotation 10s infinite linear;
+  }
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(180deg);
+  }
+}
+

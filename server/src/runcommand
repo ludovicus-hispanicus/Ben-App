@@ -1,0 +1,56 @@
+uvicorn main:app --host 0.0.0.0 --reload --env-file .env
+
+# train cured flow #
+1. Figure out what are the new texts since last time
+2. Export texts and images since last time
+3. Train
+4. replace model in server with new model
+
+
+##### export the db #####
+
+# export db
+mongoexport --db flaskdb -c texts --out newdbexport.json -u mongodbuser -p your_mongodb_root_password  --authenticationDatabase admin
+mongoexport --db flaskdb -c new_texts --out new_texts.json -u mongodbuser -p your_mongodb_root_password  --authenticationDatabase admin
+
+# cp file from db
+docker cp DOCKER_HASH:/file .t
+
+# zip a directory
+zip -r output.zip dir_name
+zip -r output.zip cured_training_data
+
+
+# scp the file
+scp -i key.pem ubuntu@13.38.104.209:/home/ubuntu/takeaway/214db.json .
+scp -i key.pem ubuntu@13.38.104.209:/home/ubuntu/takeaway/new_texts.json .
+scp -i key.pem ubuntu@13.38.104.209:/home/ubuntu/takeaway/output.zip .
+
+
+########################
+
+##### export images ###
+
+# on server:
+cd /var/lib/docker/volumes/uniapp_server-storage/_data/ && zip -r user_upload.zip user_upload/ && mv user_upload.zip /home/ubuntu/takeaway/
+# later:
+scp -i key.pem ubuntu@13.38.104.209:/home/ubuntu/takeaway/user_upload.zip .
+# convert .jpg to png (u first need to rename png to jpg)
+mogrify -format png /path/*.jpg
+
+#######################
+# Rename all *.txt to *.text
+for f in *.png; do
+mv -- "$f" "${f%.png}.jpg"
+done
+
+# login to mongo on server
+set admin
+db.auth("mongodbuser", "your_mongodb_root_password")
+
+
+# cheat sheet
+https://www.mongodb.com/developer/quickstart/cheat-sheet/
+
+# install mongodb on ubunto 20.04
+https://www.digitalocean.com/community/tutorials/how-to-install-mongodb-on-ubuntu-20-04

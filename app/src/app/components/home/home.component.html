@@ -1,0 +1,28 @@
+<!-- <h1>WELCOME</h1> -->
+
+<div *ngIf="!authService.isAuthenticated()"  class="container">
+
+    <div style="display: flex;">
+        <img src="../assets/img/BEn_logo2.png" height="50" class="d-inline-block align-top" alt="" 
+        style="border-radius: 7%; ">
+        <h1>Login</h1>
+        <img src="../assets/img/BEn_logo2.png" height="50" class="d-inline-block align-top" alt="" 
+        style="border-radius: 7%;  ">
+    </div>
+
+    <input #username matInput type="text" aria-label="Username" placeholder="Username" style="width: 100%" class="the-input">
+    <input #password matInput type="password" aria-label="Password" placeholder="Password" style="width: 100%" class="the-input">
+    <button (click)="login()" class="button1">Login</button>
+</div>
+
+<div style="display: flex; display: flex; flex-direction: column; align-items: center;"
+    [ngStyle]="{'padding': authService.isAuthenticated() ? '10vw' : '0vw'}" >
+    <h1 *ngIf="authService.isAuthenticated()">
+        Hello there, {{tokenStorageService.getUser().name}}!
+    </h1>
+    <div class="instructions" [ngStyle]="{'margin-top': authService.isAuthenticated() ? '2vw' : '0vw'}">
+        <h2 style="display: inline">Check out BEN gallery!</h2>
+        <button (click)="goToGallery()" mat-stroked-button>go to Gallery</button>
+    </div>
+    <img src="../assets/img/BEn_logo2.png" *ngIf="authService.isAuthenticated()" height="200" class="d-inline-block align-top" alt="" style="border-radius: 7%;  margin-top: 2vw; animation: rotation 2s infinite linear;">
+</div>

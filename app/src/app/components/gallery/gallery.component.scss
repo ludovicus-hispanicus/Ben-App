@@ -1,0 +1,24 @@
+// implement classes for the gallery component
+.card {
+    width: 18rem;
+    margin: 1rem;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+    transition: 0.3s;
+    border-radius: 5px;
+    display: inline-block;
+}
+
+.card:hover {
+    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+}
+
+.card-columns {
+    text-align: -webkit-center;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    max-height: 54em;
+}
+
+smart-selector {
+    margin-right: 0 !important;
+}

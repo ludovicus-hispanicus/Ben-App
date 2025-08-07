@@ -1,0 +1,113 @@
+<div *ngIf="stage == 0" class="big-container">
+    <div class="instructions">
+        <h2 style="display: inline">Welcome to CuRe Demo!</h2>
+        <p>You are going to experience CuRe...</p>
+    </div>
+    <button mat-stroked-button style="margin-top: 1em;" (click)="startStageOne()">Click here to start!</button>
+</div>
+
+
+<div [hidden]="stage < 1">
+    <div *ngIf="stage == 5" class="top-container">
+        <div class="buttons-container" style="flex: 1">
+            <div class="real-container">
+                <div style="display: flex; align-items: stretch; flex: 1; flex-direction: column">
+                    <div class="instructions">
+                        <h2 style="display: inline">Demo final step</h2>
+                        <p *ngIf="showInstructions">You have picked a text, generated bounding boxes, fixed them, and now you got AI transliterations.</p>
+                        <p *ngIf="showInstructions">You can now see the transliterations, and fix them if you want to.</p>
+                        <div style="display: flex; align-items: flex-start; flex: 1; flex-direction: row">
+                            <button mat-stroked-button class="flex-one" (click)="openDialog()">Show guide</button>
+                            <button mat-stroked-button class="flex-one" (click)="exportResult()">Export result</button>
+                            <button mat-stroked-button class="flex-one" (click)="startOver()">Start over demo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
+        <letter-viewer class="letter-viewer" style="flex: 1" #letterViewer [isEditMode]="false" [hidden]="activeLetterIndex == null"
+            [signs]="signs"></letter-viewer>
+    
+        <!-- <meta-viewer [hidden]="stage < 5" *ngIf="metadata" class="child metadata-comp" style="flex: 1" [metadata]="metadata"></meta-viewer> -->
+    </div>
+    
+    <div class="content-container" [class.stage-1-content-container]="stage >= 1"> 
+        <div class="viewers-container row" [class.stage-1-viewers-container]="stage >= 1">
+            <div *ngIf="stage >= 1 && stage <= 4" class="instructions" style="width: 40%; height: fit-content;">
+                <h2 style="display: inline">Pick and prepare a text</h2>
+                <div *ngIf="stage <= 2">
+                    <p>You are going to generate transliterations for this text using an AI</p>
+                    <button mat-stroked-button style="margin-top: 1em;" class="instructions-button" (click)="stage = 2">Let's go!</button>
+                    <button mat-stroked-button style="margin-top: 1em;" class="instructions-button" (click)="startStageOne()">Pick another text...</button>
+                </div>
+                <div *ngIf="stage == 2" style="margin-top: 1em;">
+                    <p>To get transliterations, we firstly need some bounding boxes...</p>
+                    <div style="display: flex; flex-direction: row;">
+                        <button mat-stroked-button style="margin-top: 1em;" class="instructions-button"
+                        (click)="generateBoundingBoxes()">
+                        <span *ngIf="!isLoadingBoxes">Generate bounding boxes with an AI</span>
+                        <div *ngIf="isLoadingBoxes" style="display: flex; flex-direction: row;">
+                            <span>Loading...</span>
+                            <mat-icon aria-hidden="false" class="robot-icon rotate" style="font-weight: bold; color: blue;">smart_toy</mat-icon> 
+                        </div>
+                       </button>
+                       
+                    </div>
+             
+                </div>
+                <div *ngIf="stage == 3" style="margin-top: 1em;">
+                    <p>We have got {{rectsForCanvas.length}} bounding boxes!</p>
+                    <p>Our AI is great, however nothing is perfect.</p>
+                    <p>There might be some bounding boxes to fix.</p>
+                    <div style="display: flex; flex-direction: row;">
+                        <button mat-stroked-button style="margin-top: 1em;" class="instructions-button"
+                        (click)="startFixingBoxes()">Let's fix some boxes</button>
+                       
+                    </div>
+             
+                </div>
+                <div *ngIf="stage == 4" style="margin-top: 1em;">
+                    <p>Edit mode is on.</p>
+                    <p>Using the next tools, fix the bounding boxes</p>
+                    <p>The tools are:</p>
+
+                    <div *ngFor="let action of canvas.allowedActions" class="action-box">
+                        <mat-icon aria-hidden="false">{{action.icon}}</mat-icon>
+                        <span>{{action.tooltip}}</span>
+                    </div>
+            
+                    <br>
+                    <p>Done with fixing boxes? click here to get transliterations!</p>
+                    <button mat-stroked-button style="margin-top: 1em;" class="instructions-button"
+                    (click)="generateTransliterations()">Generate transliterations using an AI</button>
+             
+                </div>
+            </div>
+
+            <fabric-canvas  #canvas style="width: 47%;"
+              [canvasType]="canvasType" (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)" (modeChange)="modeChanged($event)"
+            (selectionChange)="boxSelectionChanged($event)" (boxMarkToggle)="boxMarkToggle($event)" (combineBoxesEmitter)="combineBoxes()"></fabric-canvas>
+            
+           
+            <mat-spinner *ngIf="arePredictionsLoading"></mat-spinner>
+    
+            <text-viewer  #transliterationTextViewer [hidden]="stage < 5"
+                class="transliteration-container"
+                style="top: 0px; transition: 1s; margin: 0px !important; width: 52%" 
+                [style.visibility]="transliterations.length == 0 ? 'hidden': 'visible'"
+                [badLines]="badLines" [title]="'Transliterations'"
+                [isTransliterationViewer]="true"
+                [isLoadingPredictions]="arePredictionsLoading"
+                [signs]="signs"
+                [unicodesToSigns]="unicodeToSigns"
+                (letterHover)="transliterationLetterHover($event)"
+                (lineChanged)="transliterationChanged($event)"
+                (repredictSignEmitter)="repredictBoxes($event)"
+                (getSignPrediction)="repredictBoxes($event, true)">
+            </text-viewer>
+        </div>
+        
+    </div>
+</div>
+

@@ -1,0 +1,191 @@
+<div *ngIf="stage == 0" class="big-container">
+  <div  class="instructions">
+      <h2 style="display: inline">Welcome to CuReD!</h2>
+      <p>Want to convert a pdf / image to transliterations? Let's go!</p>
+  </div>
+  <div style="display: flex; flex-direction: row">
+    <div style="display: flex; flex-direction: column; margin-top: 1em;">
+      <div style="display: flex; flex-direction: row; justify-content: space-between;">
+        <button mat-stroked-button (click)="uploadFile.click()">Upload a PDF</button>    
+        <input #uploadFile (change)="loadPDF($event)" type='file' accept=".pdf" style="display:none"/>
+        <button mat-stroked-button (click)="uploadImage.click()">Upload an image</button>    
+        <input #uploadImage (change)="loadImage($event)" type='file' accept=".png,.jpg,.jpeg" style="display:none"/>
+      </div>
+      <div style="display: flex; flex-direction: column; margin-top: 1em">
+        <a>Or just paste (Ctrl+v) an image in this box!</a>
+        <textarea #myText (paste)="userPasted($event)" style="margin-top: 1em">Paste here!</textarea>
+      </div>
+    </div>
+    <mat-divider *ngIf="authService.isAuthenticated()" [vertical]="true" style="margin: 3em;"></mat-divider>
+    <button *ngIf="authService.isAuthenticated()" mat-stroked-button class="flex-one" style="margin: 1em; width: min-content; align-self: center; height: min-content;"
+     (click)="findATransliteration()">Find a transliteration
+    </button>
+  </div>
+
+
+ 
+  
+</div>
+
+<!-- <button mat-stroked-button class="flex-one" (click)="openDialog()">Submit</button> -->
+
+<!-- <text-creator cdkFocusInitial autofocus></text-creator> -->
+
+<div>
+
+   
+    <!-- <pdf-viewer *ngIf="pdfSrc != null" [src]="pdfSrc" [page]="currentpage"
+      [render-text]="true" [original-size]="false" [show-all]="false"  style="width: 60vw; height: 30vw" (after-load-complete)="afterLoadComplete($event)"></pdf-viewer> -->
+      
+    
+    <div style="display: flex; align-items: center;">
+
+      <div style="width: -webkit-fill-available;">
+        <div *ngIf="stage == 1" class="instructions">
+          <h2 style="display: inline">Pick a page</h2>
+          <p>Select the page which we will extract the transliteration from.</p>
+        </div>
+  
+        <div *ngIf="stage == 2" class="instructions">
+          <h2 style="display: inline">Help the AI a little</h2>
+          <p>Add a box on the desired conversion area.</p>
+          <p> Use the <mat-icon aria-hidden="false">add</mat-icon> tool to do so. </p>
+          <p>* you can use your mouse to zoom in & out</p>
+        </div>
+  
+        <div *ngIf="stage == 3" class="instructions">
+          <h2 style="display: inline">Last touches</h2>
+          <p *ngIf="selectedBox != null">Great! now adjust that box a little to include the desired area only. The accurater the better!</p>
+          <p *ngIf="selectedBox != null"> Use the <mat-icon aria-hidden="false">transform</mat-icon> tool to do so. </p>
+          <div style="display: flex; margin-top: 1em;">
+            <p>Happy with the box?</p>            
+            <button mat-stroked-button style="margin-left: 1em;" class="instructions-button" (click)="areaSelected()">
+              Generate transliterations using an AI
+            </button>
+          </div>
+        </div>
+    
+        <div *ngIf="stage == 4" class="instructions">
+          <h2 style="display: inline">Now we wait...</h2>
+          <p *ngIf="isLoading">Goob job! please wait a few seconds while the AI is working...</p>
+          <mat-spinner *ngIf="isLoading"></mat-spinner>
+        </div>
+    
+        <div *ngIf="stage == 5 && !viewOnly" class="instructions">
+          <div style="display: flex">
+            <div *ngIf="!isLoadedFromServer">
+                <h2 style="display: inline">Voila! (Vwäˈlä)</h2>
+                <p>That is what Akkademia model predicted.</p>
+                <p>Want to change the area selected? click on Previous Step</p>
+                <p>Click here to export the result!                             
+                  <button mat-stroked-button class="flex-one" (click)="exportResult()">Export result</button>
+                </p>
+            </div>
+            <mat-divider *ngIf="!isLoadedFromServer && authService.isAuthenticated()" [vertical]="true" style="margin: 3em;"></mat-divider>
+            <div *ngIf="authService.isAuthenticated()">
+              <h2 *ngIf="!isLoadedFromServer" style="display: block">Save submission</h2>
+              <p *ngIf="textId == null">To save your submission we first need to associate it to a text.</p>
+              <button *ngIf="textId == null" mat-stroked-button class="flex-one" style="margin: 1em; width: min-content;" (click)="openDialog()">Find / Create a text</button>
+              <p *ngIf="textId != null">
+                <span style="display: block">Text id: {{textId}}</span>
+                <span *ngIf="transliterationId == null">Transliteration id: <a style="color: red;">NOT SUBMITTED YET - Please submit or save as work in progress</a></span>
+                <span *ngIf="transliterationId != null" style="display: block; margin-top: 1em">Transliteration id: {{transliterationId}}</span>
+                <span style="display: block; margin-top: 1em;">Is fixed: {{isTextFixed ? "Yes" : "No"}}</span>
+                <button mat-stroked-button [disabled]="lines.length != boundingBoxes.length" class="flex-one" 
+                style="margin: 1em" (click)="submit(true)" matTooltip="{{lines != null && boundingBoxes != null && lines.length != boundingBoxes.length ? 'Match the box to line amount to submit as fixed' : null }}" matTooltipHideDelay="300" matTooltipPosition="right">
+                  Submit as fixed
+                </button>
+                <button mat-stroked-button class="flex-one" (click)="submit(false)">
+                  Save as work in progress
+                </button>
+                <button mat-stroked-button class="flex-one" style="margin: 1em" *ngIf="isLoadedFromServer" (click)="exportResult()">Export result</button>
+              </p>
+            </div>
+            <mat-divider [vertical]="true" style="margin: 3em;"></mat-divider>
+            <div>
+              <h2 style="display: block">Thank you, next</h2>
+              <p>I am done with this text, let's go with another one!</p>
+              <button mat-stroked-button class="flex-one" (click)="restart()">
+                Restart CureD
+              </button>
+            </div>
+
+
+          </div>
+          <mat-spinner *ngIf="isLoading"></mat-spinner>
+        </div>  
+
+        <div *ngIf="stage == 5 && viewOnly" class="instructions">
+          <div style="display: flex">
+            <div>
+              <p>
+                <span style="display: block">Text id: {{textId}}</span>
+                <span style="display: block; margin-top: 1em">Transliteration id: {{transliterationId}}</span>
+                <span style="display: block; margin-top: 1em;">Is fixed: {{isTextFixed ? "Yes" : "No"}}</span>
+                <button mat-stroked-button class="flex-one" style="margin: 1em" *ngIf="isLoadedFromServer" (click)="exportResult()">Download text</button>
+              </p>
+            </div>
+          </div>
+          <mat-spinner *ngIf="isLoading"></mat-spinner>
+        </div> 
+
+      </div>
+
+      <button *ngIf="stage >= 1 && stage != 4 && !isLoadedFromServer && !viewOnly" (click)="goBack()" class="btn btn-primary button-margin" style="float: right; display: block; margin-left: 1em;">previous step</button>
+
+    </div>
+
+
+    <div *ngIf="stage == 1 && !isLoading" style="display: flex;flex-direction: column; align-items: center;">
+      <div class="page-div">
+        <button (click)="selectPage()" class="btn btn-primary button-margin">Procceed with page {{currentpage}}</button>
+        <div class="pages-container">
+          <button (click)="previous()" class="btn btn-success">
+            Previous page
+          </button>
+          <div style="display: flex; flex-direction: column; margin-left: 1em; margin-right: 1em; align-items: center;">
+            <p class="pagescount">Page {{currentpage}} (total {{totalPages}})</p>
+            <div class="flex-one">
+              <input matInput type="number" min="1" aria-label="page" [(ngModel)]="goToPage" style="width: 100%; border: 1px solid black;">
+              <button mat-stroked-button (click)="goToAPage()" style="width: 100%">Go to page {{goToPage}}</button>
+            </div>
+          </div>
+          <button (click)="next()" class="btn btn-success">
+          Next page
+          </button>
+
+        </div>
+      </div>
+
+      <div class="pdf-container top-margin" [hidden]="isCropImage">
+          <pdf-viewer *ngIf="pdfSrc" [src]="pdfSrc" [render-text]="true" [page]="currentpage" [show-all]="false" 
+            [fit-to-page]="false" (after-load-complete)="afterLoadComplete($event)" style="width: 80vh; height: 65vh;">
+          </pdf-viewer>
+      </div>
+    </div>
+
+    <mat-spinner *ngIf="isLoading && stage == 1">
+      Loading...
+    </mat-spinner>
+
+
+    <div style="display: block; padding: 1em 0em;" [hidden]="backgroundImage == null && stage != 2">
+      <div style="display: flex; justify-content: space-between;">
+
+        <fabric-canvas #canvas (modeChange)="modeChanged($event)"
+        [canvasType]="canvasType" (selectionChange)="boxSelectionChanged($event)"  (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)"></fabric-canvas>
+
+        <line-editor #lineEditor *ngIf="stage >= 4" [canEdit]="!viewOnly"
+        (lineHover)="transliterationLineHover($event)" 
+        (lineChanged)="updateTransliterationIndexes()"
+        (lineDeleted)="lineDeleted($event)"
+        [lines]="lines"
+        [boxAmount]="boundingBoxes.length"
+        class="trans-result"></line-editor>
+      </div>
+
+    </div>
+
+    
+    
+</div>
