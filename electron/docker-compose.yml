@@ -1,0 +1,84 @@
+services:
+  # server - FastAPI Python backend
+  server:
+    build:
+      context: ../server/
+    container_name: server
+    ports:
+      - 5001:5001
+    networks:
+      - backend
+    volumes:
+      - server-storage:/data/server-storage
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "False"
+      APP_PORT: 5001
+      MONGODB_DATABASE: flaskdb
+      MONGODB_USERNAME: mongodbuser
+      MONGODB_PASSWORD: your_mongodb_root_password
+      MONGODB_HOSTNAME: mongodb://mongodb:27017/
+      TRANSLATOR_URL: http://translator:5002/api/v1
+      STORAGE_PATH: /data/server-storage
+      SECRET: 2c4fc4e6be22853fec33a243a9327e307dc56f0964d2e89e
+      ALGORITHM: HS256
+      USE_DETECTRON: "True"
+      LOG_LEVEL: DEBUG
+    shm_size: '2gb'
+    deploy:
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      - mongodb
+      - translator
+
+  # translator - FastAPI Akkadian service
+  translator:
+    build:
+      context: ../translator/
+    container_name: translator
+    ports:
+      - 5002:5002
+    networks:
+      - backend
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  # app - Angular frontend
+  app:
+    build:
+      context: ../app/
+    container_name: app
+    ports:
+      - 8081:80
+    restart: on-failure
+    networks:
+      - backend
+
+  # database - MongoDB
+  mongodb:
+    image: mongo:4.4.6
+    command: mongod --auth
+    networks:
+      - backend
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongodbuser
+      MONGO_INITDB_ROOT_PASSWORD: your_mongodb_root_password
+      MONGO_INITDB_DATABASE: flaskdb
+      MONGODB_DATA_DIR: /data/db
+      MONDODB_LOG_DIR: /dev/null
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  mongodata:
+    driver: local
+  server-storage:
+    driver: local
