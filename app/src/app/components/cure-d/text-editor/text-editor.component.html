@@ -1,0 +1,108 @@
+<div class="text-editor-container" [class.dark-mode]="darkMode" (keydown)="onKeydown($event)">
+  <div class="editor-header">
+    <button class="info-btn" matTooltip="Lines and boxes count" disabled>
+      <mat-icon class="btn-icon">article</mat-icon>
+      {{lineCount}} | {{boxAmount ?? 0}}
+    </button>
+
+    <button class="icon-btn" (click)="toggleDarkMode()" [matTooltip]="darkMode ? 'Light mode' : 'Dark mode'">
+      <mat-icon class="btn-icon">{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+
+    <button class="icon-btn normalize-btn" (click)="applyNormalization()" matTooltip="Normalize (Akkadian post-processing)"
+      [disabled]="isNormalizing">
+      <mat-icon class="btn-icon">{{ isNormalizing ? 'hourglass_empty' : 'auto_fix_high' }}</mat-icon>
+    </button>
+
+    <button class="icon-btn toggle-norm-btn" *ngIf="originalLines && normalizedLines" (click)="toggleNormalization()"
+      [matTooltip]="isNormalized ? 'Show original' : 'Show normalized'">
+      <mat-icon class="btn-icon">{{ isNormalized ? 'undo' : 'redo' }}</mat-icon>
+    </button>
+
+    <button class="icon-btn clean-btn" (click)="removeEmptyLines()" matTooltip="Remove empty lines">
+      <mat-icon class="btn-icon">cleaning_services</mat-icon>
+    </button>
+
+    <span class="number-group">
+      <input class="number-start-input" type="number" [(ngModel)]="startNumber" min="1" placeholder="1"
+        matTooltip="Starting line number">
+      <button class="icon-btn number-btn" (click)="addLineNumbers()" matTooltip="Number lines from {{startNumber}}">
+        <mat-icon class="btn-icon">format_list_numbered</mat-icon>
+      </button>
+      <button class="number-style-toggle" (click)="toggleNumberStyle()"
+        [matTooltip]="numberStyle === 'plain' ? 'Style: 1, 2, 3' : 'Style: 1′, 2′, 3′'">
+        {{numberStyleLabel}}
+      </button>
+    </span>
+
+    <button class="icon-btn find-btn" (click)="toggleFindReplace()" matTooltip="Find & Replace (Ctrl+H)"
+      [class.active]="showFindReplace">
+      <mat-icon class="btn-icon">find_replace</mat-icon>
+    </button>
+
+    <span class="normalize-result ok" *ngIf="normalizeResult === 'applied'">
+      <mat-icon class="result-icon">check_circle</mat-icon>
+      {{ normalizeCount }}
+    </span>
+    <span class="normalize-result none" *ngIf="normalizeResult === 'none'">
+      <mat-icon class="result-icon">info</mat-icon>
+    </span>
+
+    <span class="spacer"></span>
+
+    <div class="view-toggle">
+      <button class="toggle-option" [class.active]="viewMode === 'raw'" (click)="viewMode = 'raw'; onViewModeChange()"
+        matTooltip="Raw CuReD format">Raw</button>
+      <button class="toggle-option" [class.active]="viewMode === 'atf'" (click)="viewMode = 'atf'; onViewModeChange()"
+        matTooltip="eBL-ATF format (Beta)">eBL</button>
+    </div>
+  </div>
+
+  <!-- Find & Replace bar -->
+  <div class="find-replace-bar" *ngIf="showFindReplace">
+    <div class="find-row">
+      <input class="find-input" type="text" placeholder="Find..." [(ngModel)]="findText"
+        (ngModelChange)="onFindChanged()">
+      <input class="replace-input" type="text" placeholder="Replace..." [(ngModel)]="replaceText">
+      <button class="fr-btn" (click)="replaceNext()" matTooltip="Replace next">
+        <mat-icon>find_replace</mat-icon>
+      </button>
+      <button class="fr-btn" (click)="replaceAll()" matTooltip="Replace all">
+        <mat-icon>done_all</mat-icon>
+      </button>
+      <label class="fr-toggle" matTooltip="Use regex">
+        <input type="checkbox" [(ngModel)]="useRegex" (ngModelChange)="onFindChanged()">
+        .*
+      </label>
+      <label class="fr-toggle" matTooltip="Case sensitive">
+        <input type="checkbox" [(ngModel)]="caseSensitive" (ngModelChange)="onFindChanged()">
+        Aa
+      </label>
+      <span class="match-count" *ngIf="findText">{{matchCount}} matches</span>
+      <button class="fr-close" (click)="toggleFindReplace()" matTooltip="Close">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Editor area - using contenteditable div with direct highlighting -->
+  <div class="editor-wrap">
+    <div #editor
+      class="text-editor"
+      [attr.contenteditable]="canEdit"
+      spellcheck="false"
+      (input)="onEditorInput($event)"
+      (paste)="onEditorPaste($event)"
+      (blur)="onEditorBlur()">
+    </div>
+  </div>
+
+  <!-- Bracket legend -->
+  <div class="bracket-legend">
+    <span class="legend-item hl-square">[ ]</span> damage
+    <span class="legend-item hl-paren">( )</span> supplied
+    <span class="legend-item hl-angle">&lt; &gt;</span> omitted
+    <span class="legend-item hl-curly">{{ '{' }} {{ '}' }}</span> determinative
+    <span class="legend-item hl-half">⸢ ⸣</span> partial
+  </div>
+</div>
