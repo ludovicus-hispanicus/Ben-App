@@ -1,12 +1,22 @@
 from typing import List
 
-from auth.auth_bearer import JWTBearer
+# Auth removed for desktop app
+# from auth.auth_bearer import JWTBearer
 
 from api.dto.submissions import SearchTextByIdentifiersDto
 from api.dto.text import CreateTextDto, NewTextPreviewDto
 from common.global_handlers import global_new_text_handler
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel
 import logging
+
+
+class UpdateLabelDto(BaseModel):
+    label: str = ""
+
+
+class UpdatePartDto(BaseModel):
+    part: str = ""
 
 router = APIRouter(
     prefix="/api/v1/text",
@@ -15,9 +25,14 @@ router = APIRouter(
 )
 
 
-@router.get("/list", dependencies=[Depends(JWTBearer(admin_required=True))])
+@router.get("/list")
 async def list_texts() -> List[NewTextPreviewDto]:
     return global_new_text_handler.list_texts()
+
+
+@router.get("/labels")
+async def get_labels() -> List[str]:
+    return global_new_text_handler.get_all_labels()
 
 
 @router.get("/museums")
@@ -72,7 +87,7 @@ async def get_random_texts() -> List[NewTextPreviewDto]:
 # 3. make sure to include image id of the cured transliteration inside that very object
 
 
-@router.post("/create", dependencies=[Depends(JWTBearer())])
+@router.post("/create")
 async def create(request: Request, dto: CreateTextDto) -> int:
     user_id = request.state.user_id
 
@@ -80,3 +95,19 @@ async def create(request: Request, dto: CreateTextDto) -> int:
                                                       uploader_id=user_id)
 
     return text_id
+
+
+@router.patch("/{text_id}/label")
+async def update_label(text_id: int, dto: UpdateLabelDto):
+    if type(text_id) is not int:
+        raise HTTPException(status_code=400, detail="invalid BEN id")
+    global_new_text_handler.update_label(text_id=text_id, label=dto.label)
+    return {"updated": True}
+
+
+@router.patch("/{text_id}/part")
+async def update_part(text_id: int, dto: UpdatePartDto):
+    if type(text_id) is not int:
+        raise HTTPException(status_code=400, detail="invalid BEN id")
+    global_new_text_handler.update_part(text_id=text_id, part=dto.part)
+    return {"updated": True}

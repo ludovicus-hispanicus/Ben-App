@@ -144,6 +144,11 @@ class NewTextsHandler:
     def get_by_text_identifiers_dto(self, text_identifiers: TextIdentifiersDto) -> NewText:
         query_items = text_identifiers.to_query_items()
         print(query_items)
+
+        # Return None if no valid query items (MongoDB $or requires non-empty array)
+        if not query_items:
+            return None
+
         result = self._collection.find({
             "$or": query_items
         })
@@ -274,6 +279,59 @@ class NewTextsHandler:
             return text
         return None
 
+    def delete_transliteration(self, text_id: int, transliteration_id: int) -> int:
+        """Delete a transliteration and its image. Returns remaining transliteration count."""
+        text = self.get_by_text_id(text_id=text_id)
+        if not text:
+            return -1
+
+        # Find the transliteration to get its image_name before deleting
+        trans = next((t for t in text.transliterations if t.transliteration_id == transliteration_id), None)
+        if trans and trans.image_name:
+            # Delete image file and preview
+            image_path = StorageUtils.build_cured_train_image_path(image_name=trans.image_name)
+            preview_path = StorageUtils.build_preview_image_path(image_name=trans.image_name)
+            for path in [image_path, preview_path]:
+                if os.path.isfile(path):
+                    os.remove(path)
+                    logging.info(f"Deleted file: {path}")
+
+        # Remove the transliteration from the array
+        self._collection.update_one(
+            {"text_id": text_id},
+            {"$pull": {"transliterations": {"transliteration_id": transliteration_id}}}
+        )
+
+        # Return remaining transliteration count
+        updated_text = self.get_by_text_id(text_id=text_id)
+        return len(updated_text.transliterations) if updated_text else 0
+
+    def delete_text(self, text_id: int):
+        """Delete an entire text document."""
+        self._collection.delete_one({"text_id": int(text_id)})
+        logging.info(f"Deleted text {text_id}")
+
+    def update_label(self, text_id: int, label: str):
+        """Update the label of a text entry."""
+        self._collection.update_one(
+            {"text_id": int(text_id)},
+            {"$set": {"label": label}}
+        )
+        logging.info(f"Updated label for text {text_id} to '{label}'")
+
+    def update_part(self, text_id: int, part: str):
+        """Update the part identifier of a text entry."""
+        self._collection.update_one(
+            {"text_id": int(text_id)},
+            {"$set": {"part": part}}
+        )
+        logging.info(f"Updated part for text {text_id} to '{part}'")
+
+    def get_all_labels(self) -> list:
+        """Return all distinct non-empty labels."""
+        labels = self._collection.distinct("label", {"label": {"$ne": "", "$exists": True}})
+        return sorted(labels)
+
     def get_amendment_stats(self) -> AmendmentStats:
         completed_text_amount = self._collection.count_documents({"is_fixed": True})
         path = StorageUtils.get_confirmed_signs_path()
@@ -286,3 +344,106 @@ class NewTextsHandler:
 
         return AmendmentStats(completed_texts=completed_text_amount,
                               saved_signs=signs_amount)
+
+    def get_curated_training_stats(self) -> dict:
+        """Get statistics about curated texts for training the Kraken OCR model."""
+        # Simpler approach: count texts with is_fixed=True at the document level
+        # and also count texts that have CuReD transliterations with is_fixed edits
+
+        curated_texts = 0
+        total_lines = 0
+
+        # Find all texts with CuReD transliterations
+        cursor = self._collection.find({
+            "transliterations": {
+                "$elemMatch": {
+                    "source": TransliterationSource.CURED.value
+                }
+            }
+        })
+
+        for doc in cursor:
+            for trans in doc.get("transliterations", []):
+                if trans.get("source") != TransliterationSource.CURED.value:
+                    continue
+
+                edit_history = trans.get("edit_history", [])
+                if not edit_history:
+                    continue
+
+                # Check the latest edit for is_fixed status
+                latest_edit = edit_history[-1] if edit_history else None
+                if latest_edit and latest_edit.get("is_fixed", False):
+                    curated_texts += 1
+                    lines = latest_edit.get("lines", [])
+                    total_lines += len(lines)
+
+        logging.info(f"Curated training stats: {curated_texts} texts, {total_lines} lines")
+
+        return {"curated_texts": curated_texts, "total_lines": total_lines}
+
+    def get_curated_training_data(self) -> list:
+        """
+        Get all curated training data for Kraken OCR training.
+        Returns a list of dicts with image_path, lines, and boxes.
+        """
+        from utils.storage_utils import StorageUtils
+
+        training_data = []
+
+        # Find all texts with CuReD transliterations
+        cursor = self._collection.find({
+            "transliterations": {
+                "$elemMatch": {
+                    "source": TransliterationSource.CURED.value
+                }
+            }
+        })
+
+        for doc in cursor:
+            text_id = doc.get("text_id")
+
+            for trans in doc.get("transliterations", []):
+                if trans.get("source") != TransliterationSource.CURED.value:
+                    continue
+
+                edit_history = trans.get("edit_history", [])
+                if not edit_history:
+                    continue
+
+                # Check the latest edit for is_fixed status
+                latest_edit = edit_history[-1] if edit_history else None
+                if latest_edit and latest_edit.get("is_fixed", False):
+                    # Get the image path
+                    image_name = trans.get("image_name", "")
+                    if image_name:
+                        image_path = StorageUtils.build_preview_image_path(image_name)
+                    else:
+                        image_path = ""
+
+                    lines = latest_edit.get("lines", [])
+                    boxes = latest_edit.get("boxes", [])
+
+                    # Convert boxes to dict format if they aren't already
+                    box_dicts = []
+                    for box in boxes:
+                        if isinstance(box, dict):
+                            box_dicts.append(box)
+                        else:
+                            # Assume it's an object with x, y, width, height attributes
+                            box_dicts.append({
+                                "x": getattr(box, "x", 0),
+                                "y": getattr(box, "y", 0),
+                                "width": getattr(box, "width", 0),
+                                "height": getattr(box, "height", 0)
+                            })
+
+                    training_data.append({
+                        "text_id": text_id,
+                        "image_path": image_path,
+                        "lines": lines,
+                        "boxes": box_dicts
+                    })
+
+        logging.info(f"Found {len(training_data)} curated texts for training")
+        return training_data

@@ -9,10 +9,7 @@ export class AuthGuardService implements CanActivate {
   constructor(public auth: AuthService, public router: Router) {}
 
   canActivate(): boolean {
-    if (!this.auth.isAuthenticated()) {
-      this.router.navigate(['home']);
-      return false;
-    }
+    // Desktop app - always allow access, no authentication required
     return true;
   }
 }

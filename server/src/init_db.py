@@ -1,58 +1,9 @@
-from common.global_handlers import global_users_handler
+# Auth removed for desktop app - no hardcoded users needed
 from entities.text import Text, Uploader
 from common.env_vars import STORAGE_PATH
-from entities.user import UserRole
 from mongo.mongo_client import MongoClient
 import os
 import logging
-
-users = [
-    {
-        "fullname": "Lord Lalazar",
-        "email": "roeylalazar@gmail.com",
-        "password": "EEUc2uzX2a"
-    },
-    {
-        "fullname": "Dr. Shai G",
-        "email": "shygordin@gmail.com",
-        "password": "INtbKVqiNP"
-    },
-    {
-        "fullname": "Lady Romach",
-        "email": "lond12lance@gmail.com",
-        "password": "azG3C8p08d"
-    },
-    {
-        "fullname": "Senior Luis",
-        "email": "luissaenzs@gmail.com",
-        "password": "ImUyCYmWun"
-    },
-    {
-        "fullname": "Mister Ireman",
-        "email": "ireman.br@gmail.com",
-        "password": "LmZryGcgAl"
-    },
-    {
-        "fullname": "Dr. Moni S",
-        "email": "monishahar@gmail.com",
-        "password": "j17Qqz9GwM"
-    },
-    {
-        "fullname": "Dr. Ethan F",
-        "email": "ethanfetaya@gmail.com",
-        "password": "z2IuKgnFrW"
-    },
-    {
-        "fullname": "Morris Alper",
-        "email": "morrisalper@mail.tau.ac.il",
-        "password": "3k8ANfk40f6"
-    },
-    {
-        "fullname": "Samuel Clark",
-        "email": "clark.samuel@gmail.com",
-        "password": "q5IOKfnFRw"
-    }
-]
 
 
 def init_the_db():
@@ -60,7 +11,7 @@ def init_the_db():
     print("init db called")
     db = MongoClient.get_db()
     logging.info("found db...")
-    add_users()
+    # Auth removed - no users needed for desktop app
     logging.info("check if collection exists...")
     collections = db.list_collection_names()
     if len(collections) > 0:
@@ -119,17 +70,3 @@ def init_the_db():
         db[MongoClient.TEXTS_COLLECTION].insert_one(text.dict())
     logging.info("started loading texts...DONE")
     logging.info("loaded 384 texts")
-
-
-def add_users():
-    # global_users_handler.add_user(full_name="Or Lewenstein", email="or.lewenstein@mail.huji.ac.il",
-    #                               password="a35Abm9DDs3",
-    #                               role=UserRole.ADMIN)
-
-    if global_users_handler.count() > 0:
-        return
-
-    for user in users:
-        print(f"adding  {user}")
-        global_users_handler.add_user(full_name=user["fullname"], email=user["email"], password=user["password"],
-                                      role=UserRole.ADMIN)

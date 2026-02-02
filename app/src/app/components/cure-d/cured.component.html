@@ -1,191 +1,354 @@
-<div *ngIf="stage == 0" class="big-container">
-  <div  class="instructions">
-      <h2 style="display: inline">Welcome to CuReD!</h2>
-      <p>Want to convert a pdf / image to transliterations? Let's go!</p>
-  </div>
-  <div style="display: flex; flex-direction: row">
-    <div style="display: flex; flex-direction: column; margin-top: 1em;">
-      <div style="display: flex; flex-direction: row; justify-content: space-between;">
-        <button mat-stroked-button (click)="uploadFile.click()">Upload a PDF</button>    
-        <input #uploadFile (change)="loadPDF($event)" type='file' accept=".pdf" style="display:none"/>
-        <button mat-stroked-button (click)="uploadImage.click()">Upload an image</button>    
-        <input #uploadImage (change)="loadImage($event)" type='file' accept=".png,.jpg,.jpeg" style="display:none"/>
+<!-- Stage 0: Dashboard - List + Upload + Model Info -->
+<div *ngIf="stage == 0" class="cured-dashboard">
+  <!-- Top Row: List (80%) + Upload (20%) -->
+  <div class="dashboard-top-row">
+    <!-- Transliteration List -->
+    <div class="dashboard-list">
+      <div class="list-header">
+        <h2>My Transliterations</h2>
+        <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} items</span>
       </div>
-      <div style="display: flex; flex-direction: column; margin-top: 1em">
-        <a>Or just paste (Ctrl+v) an image in this box!</a>
-        <textarea #myText (paste)="userPasted($event)" style="margin-top: 1em">Paste here!</textarea>
+
+      <!-- Filter bar -->
+      <div class="filter-bar" *ngIf="curedTexts.length > 0">
+        <div class="label-filters">
+          <button mat-stroked-button
+                  [class.active]="!selectedLabelFilter"
+                  (click)="setLabelFilter(null)"
+                  class="filter-chip">
+            All
+          </button>
+          <button mat-stroked-button
+                  *ngFor="let label of availableLabels"
+                  [class.active]="selectedLabelFilter === label"
+                  (click)="setLabelFilter(label)"
+                  class="filter-chip">
+            {{ label }}
+          </button>
+          <button mat-stroked-button
+                  [class.active]="selectedLabelFilter === ''"
+                  (click)="setLabelFilter('')"
+                  class="filter-chip unlabeled-chip">
+            Unlabeled
+          </button>
+        </div>
       </div>
-    </div>
-    <mat-divider *ngIf="authService.isAuthenticated()" [vertical]="true" style="margin: 3em;"></mat-divider>
-    <button *ngIf="authService.isAuthenticated()" mat-stroked-button class="flex-one" style="margin: 1em; width: min-content; align-self: center; height: min-content;"
-     (click)="findATransliteration()">Find a transliteration
-    </button>
-  </div>
 
+      <!-- Table header -->
+      <div class="work-table-header" *ngIf="filteredTexts.length > 0">
+        <div class="col-thumbnail"></div>
+        <div class="col-identifier">Identifier</div>
+        <div class="col-separator">|</div>
+        <div class="col-date">Date</div>
+        <div class="col-separator">|</div>
+        <div class="col-ben-id">BEN ID</div>
+        <div class="col-separator">|</div>
+        <div class="col-label">Label</div>
+        <div class="col-separator">|</div>
+        <div class="col-status">Status</div>
+        <div class="col-separator">|</div>
+        <div class="col-actions">Actions</div>
+      </div>
 
- 
-  
-</div>
-
-<!-- <button mat-stroked-button class="flex-one" (click)="openDialog()">Submit</button> -->
-
-<!-- <text-creator cdkFocusInitial autofocus></text-creator> -->
-
-<div>
-
-   
-    <!-- <pdf-viewer *ngIf="pdfSrc != null" [src]="pdfSrc" [page]="currentpage"
-      [render-text]="true" [original-size]="false" [show-all]="false"  style="width: 60vw; height: 30vw" (after-load-complete)="afterLoadComplete($event)"></pdf-viewer> -->
-      
-    
-    <div style="display: flex; align-items: center;">
-
-      <div style="width: -webkit-fill-available;">
-        <div *ngIf="stage == 1" class="instructions">
-          <h2 style="display: inline">Pick a page</h2>
-          <p>Select the page which we will extract the transliteration from.</p>
-        </div>
-  
-        <div *ngIf="stage == 2" class="instructions">
-          <h2 style="display: inline">Help the AI a little</h2>
-          <p>Add a box on the desired conversion area.</p>
-          <p> Use the <mat-icon aria-hidden="false">add</mat-icon> tool to do so. </p>
-          <p>* you can use your mouse to zoom in & out</p>
-        </div>
-  
-        <div *ngIf="stage == 3" class="instructions">
-          <h2 style="display: inline">Last touches</h2>
-          <p *ngIf="selectedBox != null">Great! now adjust that box a little to include the desired area only. The accurater the better!</p>
-          <p *ngIf="selectedBox != null"> Use the <mat-icon aria-hidden="false">transform</mat-icon> tool to do so. </p>
-          <div style="display: flex; margin-top: 1em;">
-            <p>Happy with the box?</p>            
-            <button mat-stroked-button style="margin-left: 1em;" class="instructions-button" (click)="areaSelected()">
-              Generate transliterations using an AI
+      <!-- Items list -->
+      <div class="work-list" *ngIf="filteredTexts.length > 0">
+        <div class="work-item" *ngFor="let item of filteredTexts" (click)="openListItem(item)">
+          <div class="col-thumbnail">
+            <img *ngIf="item._thumbnailUrl" [src]="item._thumbnailUrl" alt="thumbnail" />
+            <mat-icon *ngIf="!item._thumbnailUrl">image</mat-icon>
+          </div>
+          <div class="col-identifier">{{ getItemIdentifier(item) }}</div>
+          <div class="col-separator">|</div>
+          <div class="col-date">{{ item.last_modified | date:'d MMM yyyy' }}</div>
+          <div class="col-separator">|</div>
+          <div class="col-ben-id">{{ item.text_id }}</div>
+          <div class="col-separator">|</div>
+          <div class="col-label" (click)="openLabelDialog(item, $event)">
+            <button mat-stroked-button class="label-button" [class.has-label]="item.label">
+              <mat-icon>label</mat-icon>
+              <span *ngIf="item.label">{{ item.label }}</span>
+              <span *ngIf="!item.label" class="no-label">Add label</span>
+            </button>
+          </div>
+          <div class="col-separator">|</div>
+          <div class="col-status">
+            <span *ngIf="item.is_curated" class="status-curated">curated</span>
+            <span *ngIf="item.latest_transliteration_id && !item.is_curated" class="status-saved">saved</span>
+            <span *ngIf="!item.latest_transliteration_id" class="status-unsaved">no save</span>
+          </div>
+          <div class="col-separator">|</div>
+          <div class="col-actions">
+            <button mat-icon-button color="warn" (click)="deleteListItem(item, $event)" matTooltip="Delete">
+              <mat-icon>delete</mat-icon>
             </button>
           </div>
         </div>
-    
-        <div *ngIf="stage == 4" class="instructions">
-          <h2 style="display: inline">Now we wait...</h2>
-          <p *ngIf="isLoading">Goob job! please wait a few seconds while the AI is working...</p>
-          <mat-spinner *ngIf="isLoading"></mat-spinner>
-        </div>
-    
-        <div *ngIf="stage == 5 && !viewOnly" class="instructions">
-          <div style="display: flex">
-            <div *ngIf="!isLoadedFromServer">
-                <h2 style="display: inline">Voila! (Vwäˈlä)</h2>
-                <p>That is what Akkademia model predicted.</p>
-                <p>Want to change the area selected? click on Previous Step</p>
-                <p>Click here to export the result!                             
-                  <button mat-stroked-button class="flex-one" (click)="exportResult()">Export result</button>
-                </p>
-            </div>
-            <mat-divider *ngIf="!isLoadedFromServer && authService.isAuthenticated()" [vertical]="true" style="margin: 3em;"></mat-divider>
-            <div *ngIf="authService.isAuthenticated()">
-              <h2 *ngIf="!isLoadedFromServer" style="display: block">Save submission</h2>
-              <p *ngIf="textId == null">To save your submission we first need to associate it to a text.</p>
-              <button *ngIf="textId == null" mat-stroked-button class="flex-one" style="margin: 1em; width: min-content;" (click)="openDialog()">Find / Create a text</button>
-              <p *ngIf="textId != null">
-                <span style="display: block">Text id: {{textId}}</span>
-                <span *ngIf="transliterationId == null">Transliteration id: <a style="color: red;">NOT SUBMITTED YET - Please submit or save as work in progress</a></span>
-                <span *ngIf="transliterationId != null" style="display: block; margin-top: 1em">Transliteration id: {{transliterationId}}</span>
-                <span style="display: block; margin-top: 1em;">Is fixed: {{isTextFixed ? "Yes" : "No"}}</span>
-                <button mat-stroked-button [disabled]="lines.length != boundingBoxes.length" class="flex-one" 
-                style="margin: 1em" (click)="submit(true)" matTooltip="{{lines != null && boundingBoxes != null && lines.length != boundingBoxes.length ? 'Match the box to line amount to submit as fixed' : null }}" matTooltipHideDelay="300" matTooltipPosition="right">
-                  Submit as fixed
-                </button>
-                <button mat-stroked-button class="flex-one" (click)="submit(false)">
-                  Save as work in progress
-                </button>
-                <button mat-stroked-button class="flex-one" style="margin: 1em" *ngIf="isLoadedFromServer" (click)="exportResult()">Export result</button>
-              </p>
-            </div>
-            <mat-divider [vertical]="true" style="margin: 3em;"></mat-divider>
-            <div>
-              <h2 style="display: block">Thank you, next</h2>
-              <p>I am done with this text, let's go with another one!</p>
-              <button mat-stroked-button class="flex-one" (click)="restart()">
-                Restart CureD
-              </button>
-            </div>
-
-
-          </div>
-          <mat-spinner *ngIf="isLoading"></mat-spinner>
-        </div>  
-
-        <div *ngIf="stage == 5 && viewOnly" class="instructions">
-          <div style="display: flex">
-            <div>
-              <p>
-                <span style="display: block">Text id: {{textId}}</span>
-                <span style="display: block; margin-top: 1em">Transliteration id: {{transliterationId}}</span>
-                <span style="display: block; margin-top: 1em;">Is fixed: {{isTextFixed ? "Yes" : "No"}}</span>
-                <button mat-stroked-button class="flex-one" style="margin: 1em" *ngIf="isLoadedFromServer" (click)="exportResult()">Download text</button>
-              </p>
-            </div>
-          </div>
-          <mat-spinner *ngIf="isLoading"></mat-spinner>
-        </div> 
-
       </div>
 
-      <button *ngIf="stage >= 1 && stage != 4 && !isLoadedFromServer && !viewOnly" (click)="goBack()" class="btn btn-primary button-margin" style="float: right; display: block; margin-left: 1em;">previous step</button>
-
-    </div>
-
-
-    <div *ngIf="stage == 1 && !isLoading" style="display: flex;flex-direction: column; align-items: center;">
-      <div class="page-div">
-        <button (click)="selectPage()" class="btn btn-primary button-margin">Procceed with page {{currentpage}}</button>
-        <div class="pages-container">
-          <button (click)="previous()" class="btn btn-success">
-            Previous page
-          </button>
-          <div style="display: flex; flex-direction: column; margin-left: 1em; margin-right: 1em; align-items: center;">
-            <p class="pagescount">Page {{currentpage}} (total {{totalPages}})</p>
-            <div class="flex-one">
-              <input matInput type="number" min="1" aria-label="page" [(ngModel)]="goToPage" style="width: 100%; border: 1px solid black;">
-              <button mat-stroked-button (click)="goToAPage()" style="width: 100%">Go to page {{goToPage}}</button>
-            </div>
-          </div>
-          <button (click)="next()" class="btn btn-success">
-          Next page
-          </button>
-
-        </div>
+      <div class="empty-list" *ngIf="curedTexts.length > 0 && filteredTexts.length === 0">
+        <p>No items match the selected filter.</p>
       </div>
 
-      <div class="pdf-container top-margin" [hidden]="isCropImage">
-          <pdf-viewer *ngIf="pdfSrc" [src]="pdfSrc" [render-text]="true" [page]="currentpage" [show-all]="false" 
-            [fit-to-page]="false" (after-load-complete)="afterLoadComplete($event)" style="width: 80vh; height: 65vh;">
-          </pdf-viewer>
+      <div class="empty-list" *ngIf="curedTexts.length === 0">
+        <mat-icon>folder_open</mat-icon>
+        <p>No transliterations yet</p>
+        <span>Upload an image to get started</span>
       </div>
     </div>
 
-    <mat-spinner *ngIf="isLoading && stage == 1">
-      Loading...
-    </mat-spinner>
+    <!-- Upload Zone -->
+    <div class="dashboard-upload">
+      <div class="upload-zone"
+           (dragover)="onDragOver($event)"
+           (dragleave)="onDragLeave($event)"
+           (drop)="onDrop($event)"
+           [class.drag-over]="isDragOver"
+           (click)="uploadFile.click()">
 
+        <input #uploadFile (change)="handleFileInput($event)" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none"/>
 
-    <div style="display: block; padding: 1em 0em;" [hidden]="backgroundImage == null && stage != 2">
-      <div style="display: flex; justify-content: space-between;">
+        <div class="upload-icon">
+          <mat-icon>cloud_upload</mat-icon>
+        </div>
+        <h3>New OCR</h3>
+        <p>Drop file or click</p>
+        <span class="file-types">PDF, PNG, JPG</span>
+      </div>
+    </div>
+  </div>
 
-        <fabric-canvas #canvas (modeChange)="modeChanged($event)"
-        [canvasType]="canvasType" (selectionChange)="boxSelectionChanged($event)"  (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)"></fabric-canvas>
+  <!-- Bottom Row: Model Info -->
+  <div class="dashboard-model-info">
+    <div class="model-section">
+      <div class="model-header">
+        <mat-icon>model_training</mat-icon>
+        <h3>OCR Model</h3>
+      </div>
+      <div class="model-details">
+        <div class="model-stat">
+          <span class="stat-label">Active Model</span>
+          <span class="stat-value">{{ modelInfo.name }}</span>
+        </div>
+        <div class="model-stat">
+          <span class="stat-label">Type</span>
+          <span class="stat-value">{{ modelInfo.isPretrained ? 'Pre-trained' : 'Fine-tuned' }}</span>
+        </div>
+        <div class="model-stat">
+          <span class="stat-label">Size</span>
+          <span class="stat-value">{{ modelInfo.sizeMb }} MB</span>
+        </div>
+      </div>
+    </div>
 
-        <line-editor #lineEditor *ngIf="stage >= 4" [canEdit]="!viewOnly"
-        (lineHover)="transliterationLineHover($event)" 
-        (lineChanged)="updateTransliterationIndexes()"
-        (lineDeleted)="lineDeleted($event)"
+    <div class="training-section">
+      <div class="training-header">
+        <mat-icon>school</mat-icon>
+        <h3>Training Data</h3>
+      </div>
+      <div class="training-progress">
+        <div class="progress-stats">
+          <!-- Show previous/new breakdown only after first training -->
+          <div class="progress-stat" *ngIf="trainingStatus.lastTraining">
+            <span class="stat-number">{{ trainingStatus.previousLines }}</span>
+            <span class="stat-label">Previous Lines</span>
+          </div>
+          <div class="progress-stat highlight" *ngIf="trainingStatus.lastTraining">
+            <span class="stat-number">{{ trainingStatus.newLines }}</span>
+            <span class="stat-label">New Lines</span>
+          </div>
+          <!-- Show simple total before first training, detailed total after -->
+          <div class="progress-stat" [class.highlight]="!trainingStatus.lastTraining">
+            <span class="stat-number">{{ trainingStatus.totalLines }}</span>
+            <span class="stat-label">{{ trainingStatus.lastTraining ? 'Total (Prev + New)' : 'Curated Lines' }}</span>
+          </div>
+        </div>
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="trainingStatus.progress"></div>
+          </div>
+          <span class="progress-label" *ngIf="trainingStatus.lastTraining">{{ trainingStatus.newLines }}/{{ trainingStatus.requiredForNextTraining }} new lines for next training</span>
+          <span class="progress-label" *ngIf="!trainingStatus.lastTraining">{{ trainingStatus.totalLines }}/{{ trainingStatus.requiredForNextTraining }} lines for training</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="training-actions">
+      <!-- Training in progress -->
+      <div class="training-in-progress" *ngIf="isTraining && trainingProgress">
+        <div class="training-status-bar">
+          <mat-spinner diameter="20"></mat-spinner>
+          <span class="training-status-text">
+            <span *ngIf="trainingProgress.status === 'preparing'">Preparing training data...</span>
+            <span *ngIf="trainingProgress.status === 'training'">
+              Training: Epoch {{ trainingProgress.current_epoch }} / {{ trainingProgress.total_epochs }}
+            </span>
+          </span>
+        </div>
+        <div class="training-progress-bar" *ngIf="trainingProgress.status === 'training'">
+          <div class="progress-fill" [style.width.%]="(trainingProgress.current_epoch / trainingProgress.total_epochs) * 100"></div>
+        </div>
+        <button mat-stroked-button color="warn" (click)="cancelTraining()">
+          <mat-icon>cancel</mat-icon>
+          Cancel Training
+        </button>
+      </div>
+
+      <!-- Start training button -->
+      <div *ngIf="!isTraining">
+        <button mat-stroked-button
+                [disabled]="!trainingStatus.isReady"
+                [color]="trainingStatus.isReady ? 'primary' : undefined"
+                (click)="startTraining()"
+                [matTooltip]="trainingStatus.isReady ? 'Start training with ' + trainingStatus.totalLines + ' curated lines' : 'Need at least 100 curated lines to start training'">
+          <mat-icon>play_arrow</mat-icon>
+          Start Training
+        </button>
+        <span class="training-hint" *ngIf="!trainingStatus.isReady">Mark transliterations as "Curated" to contribute training data</span>
+        <span class="training-hint ready" *ngIf="trainingStatus.isReady">Ready to train with {{ trainingStatus.totalLines }} lines!</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stage 1: PDF Page Selection - Thumbnail View -->
+<div *ngIf="stage == 1" style="padding: 2em;">
+  <div class="pdf-thumbnails">
+    <div *ngFor="let page of pageNumbers; let i = index"
+         class="pdf-thumbnail"
+         [class.selected]="currentpage === page"
+         (click)="selectPageFromThumbnail(page)">
+      <pdf-viewer [src]="pdfSrc"
+                  [page]="page"
+                  [show-all]="false"
+                  [render-text]="false"
+                  [fit-to-page]="true"
+                  style="width: 220px; height: 300px;">
+      </pdf-viewer>
+      <span class="page-number">Page {{page}}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden PDF viewer for page count -->
+<pdf-viewer *ngIf="pdfSrc && totalPages === 0"
+            [src]="pdfSrc"
+            [show-all]="false"
+            [render-text]="false"
+            (after-load-complete)="afterLoadComplete($event)"
+            style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;">
+</pdf-viewer>
+
+<!-- Main Visualizer (stages 2+) -->
+<div class="visualizer-container" *ngIf="stage >= 2">
+
+  <!-- Left Toolbar -->
+  <div class="visualizer-toolbar">
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
+            (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (double-click-hold to draw)">
+      <mat-icon>pan_tool</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Add"
+            (click)="canvas?.changeMode(CanvasMode.Add)" matTooltip="Draw selection box (Alt+A)">
+      <mat-icon>add_box</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Adjust"
+            (click)="canvas?.changeMode(CanvasMode.Adjust)" matTooltip="Adjust box (Alt+X)">
+      <mat-icon>transform</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Delete"
+            (click)="canvas?.changeMode(CanvasMode.Delete)" matTooltip="Delete (Alt+D)">
+      <mat-icon>delete</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" (click)="canvas?.zoomIn()" matTooltip="Zoom in">
+      <mat-icon>zoom_in</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.zoomOut()" matTooltip="Zoom out">
+      <mat-icon>zoom_out</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.forceZoomOut(1)" matTooltip="Reset zoom">
+      <mat-icon>fit_screen</mat-icon>
+    </button>
+  </div>
+
+  <!-- Split Panels -->
+  <div class="split-container">
+    <!-- Left Panel: PDF Canvas -->
+    <div class="panel panel-left" [style.width.%]="leftPanelWidth">
+      <fabric-canvas #canvas (modeChange)="modeChanged($event)"
+        [canvasType]="canvasType" (selectionChange)="boxSelectionChanged($event)"
+        (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)">
+      </fabric-canvas>
+    </div>
+
+    <!-- Resizer -->
+    <div class="panel-resizer"
+         (mousedown)="startResize($event)"
+         (touchstart)="startResize($event)">
+      <div class="resizer-handle"></div>
+    </div>
+
+    <!-- Right Panel: Preview or Lines -->
+    <div class="panel panel-right" [style.width.%]="100 - leftPanelWidth">
+      <!-- Preview before detection -->
+      <div *ngIf="stage == 2" class="preview-panel">
+        <div class="preview-content" *ngIf="!isLoading">
+          <mat-icon class="preview-icon">auto_awesome</mat-icon>
+          <h3>Ready to detect lines</h3>
+          <p>Click <strong>Generate</strong> to detect text lines</p>
+
+          <!-- Model selector -->
+          <mat-form-field appearance="outline" class="model-selector">
+            <mat-label>OCR Model</mat-label>
+            <mat-select [(ngModel)]="selectedOcrModel">
+              <mat-option *ngFor="let model of availableOcrModels" [value]="model.value">
+                {{ model.label }}
+              </mat-option>
+            </mat-select>
+            <mat-hint>Select the model best suited for your text type</mat-hint>
+          </mat-form-field>
+
+          <button mat-raised-button color="primary" (click)="generateLines()">
+            <mat-icon>auto_awesome</mat-icon>
+            Generate
+          </button>
+        </div>
+        <div class="preview-content" *ngIf="isLoading" style="display: flex; flex-direction: column; align-items: center;">
+          <mat-spinner diameter="48"></mat-spinner>
+          <h3 style="margin-top: 1em;">Detecting lines...</h3>
+        </div>
+      </div>
+
+      <!-- Status info bar -->
+      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed)" class="results-info">
+        <span class="info-item" *ngIf="textId">BEN: {{textId}}</span>
+        <span class="info-item" *ngIf="transliterationId">Trans: {{transliterationId}}</span>
+        <span class="status-badge" *ngIf="isTextFixed">Curated</span>
+      </div>
+
+      <!-- Text editor after detection -->
+      <text-editor #lineEditor *ngIf="stage >= 5" [canEdit]="!viewOnly"
+        (lineHover)="transliterationLineHover($event)"
+        (lineChanged)="onLinesChanged($event)"
+        (regexMatchLines)="onRegexMatchLines($event)"
         [lines]="lines"
         [boxAmount]="boundingBoxes.length"
-        class="trans-result"></line-editor>
-      </div>
-
+        class="lines-panel"></text-editor>
     </div>
-
-    
-    
+  </div>
 </div>
+
+<!-- Hidden Export Menu -->
+<div style="visibility: hidden; position: fixed" [matMenuTriggerFor]="exportMenu"></div>
+<mat-menu #exportMenu="matMenu">
+  <button mat-menu-item (click)="exportResult()">
+    <mat-icon>text_snippet</mat-icon>
+    <span>Plain Text</span>
+  </button>
+  <button mat-menu-item (click)="exportAtfEbl()">
+    <mat-icon>code</mat-icon>
+    <span>ATF (eBL)</span>
+  </button>
+</mat-menu>

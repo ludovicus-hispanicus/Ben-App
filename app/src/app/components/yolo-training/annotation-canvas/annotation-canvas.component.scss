@@ -1,0 +1,976 @@
+// Full-screen annotation canvas - makesense.ai style
+:host {
+  display: block;
+  position: fixed;
+  top: 64px; // App header height
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+.annotation-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #1e1e1e;
+  position: relative;
+  overflow: hidden;
+}
+
+// Left panel - Classes and annotations
+.left-panel {
+  width: 240px;
+  background: #2d2d2d;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #3a3a3a;
+  z-index: 10;
+
+  &.collapsed {
+    width: 48px;
+
+    .panel-content {
+      display: none;
+    }
+
+    .panel-toggle {
+      mat-icon {
+        transform: rotate(180deg);
+      }
+    }
+  }
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #363636;
+  border-bottom: 1px solid #3a3a3a;
+
+  h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .panel-toggle {
+    color: #aaa;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+.panel-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+}
+
+// Class list
+.class-list {
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.class-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 4px;
+  background: transparent;
+
+  &:hover {
+    background: #3a3a3a;
+  }
+
+  &.selected {
+    background: #1976d2;
+
+    .class-name {
+      color: #fff;
+    }
+
+    .class-count {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+  }
+
+  .class-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  .class-name {
+    flex: 1;
+    font-size: 13px;
+    color: #ddd;
+  }
+
+  .class-count {
+    font-size: 11px;
+    color: #888;
+    background: #3a3a3a;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+  }
+}
+
+// Section divider
+.section-divider {
+  height: 1px;
+  background: #3a3a3a;
+  margin: 16px 0;
+  flex-shrink: 0;
+}
+
+// Annotation list in left panel
+.annotation-list-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  h4 {
+    font-size: 11px;
+    font-weight: 500;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 0;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+}
+
+.annotation-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.annotation-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #bbb;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #3a3a3a;
+  }
+
+  &.selected {
+    background: #1976d2;
+    color: #fff;
+  }
+
+  .ann-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+}
+
+// Main canvas area
+.canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+// Side toolbar - vertical toolbar between left panel and canvas
+.side-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: #252525;
+  border-right: 1px solid #3a3a3a;
+  z-index: 20;
+
+  button {
+    color: #aaa;
+    width: 36px;
+    height: 36px;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    &:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &[disabled] {
+      color: #444;
+    }
+
+    &.active {
+      color: #fff;
+      background: #1976d2;
+      border-radius: 4px;
+    }
+  }
+
+  .toolbar-divider {
+    width: 24px;
+    height: 1px;
+    background: #3a3a3a;
+    margin: 4px 0;
+  }
+
+  .zoom-level {
+    font-size: 10px;
+    color: #888;
+    text-align: center;
+    padding: 2px 0;
+  }
+
+  .split-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  mat-button-toggle-group {
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    overflow: hidden;
+
+    mat-button-toggle {
+      background: transparent;
+      color: #888;
+      width: 28px;
+      height: 28px;
+      font-size: 11px;
+      font-weight: 600;
+
+      ::ng-deep .mat-button-toggle-label-content {
+        padding: 0;
+        line-height: 28px;
+      }
+
+      &.mat-button-toggle-checked {
+        background: #1976d2;
+        color: #fff;
+      }
+    }
+  }
+}
+
+// Canvas wrapper
+.canvas-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+
+  canvas {
+    cursor: crosshair;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .empty-state {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    color: #666;
+
+    mat-icon {
+      font-size: 80px;
+      width: 80px;
+      height: 80px;
+      opacity: 0.3;
+    }
+
+    p {
+      margin: 0;
+      font-size: 16px;
+      color: #888;
+    }
+
+    button {
+      margin-top: 8px;
+    }
+  }
+}
+
+// Bottom info bar
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #2d2d2d;
+  border-top: 1px solid #3a3a3a;
+  font-size: 12px;
+  color: #888;
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    button {
+      color: #ddd;
+
+      &[disabled] {
+        color: #555;
+      }
+    }
+  }
+}
+
+// Right panel - Images and Help (collapsible)
+.right-panel {
+  width: 310px;
+  background: #2d2d2d;
+  border-left: 1px solid #3a3a3a;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+
+  &.collapsed {
+    width: 48px;
+
+    .panel-content, .panel-tabs {
+      display: none;
+    }
+
+    .panel-toggle {
+      mat-icon {
+        transform: rotate(0deg);
+      }
+    }
+  }
+
+  .panel-toggle mat-icon {
+    transform: rotate(180deg);
+  }
+}
+
+// Tab styles for right panel
+.panel-tabs {
+  display: flex;
+  background: #363636;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.panel-tab {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #888;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    color: #bbb;
+    background: #3a3a3a;
+  }
+
+  &.active {
+    color: #fff;
+    background: #2d2d2d;
+    border-bottom: 2px solid #1976d2;
+  }
+}
+
+// Image queue in right panel
+.image-queue {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.image-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 12px;
+}
+
+.image-queue-item {
+  position: relative;
+  border: 2px solid #3a3a3a;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  aspect-ratio: 1;
+  background: #1e1e1e;
+
+  &:hover {
+    border-color: #555;
+  }
+
+  &.active {
+    border-color: #1976d2;
+  }
+
+  &.annotated {
+    border-color: #4caf50;
+
+    .image-status {
+      background: #4caf50;
+    }
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .image-status {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #666;
+  }
+
+  .annotation-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    background: #1976d2;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  }
+
+  .image-remove {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    color: #fff;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  &:hover .image-remove {
+    opacity: 1;
+  }
+}
+
+.image-queue-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #666;
+  text-align: center;
+
+  mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: 12px;
+  }
+}
+
+.instructions {
+  ol {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 12px;
+    color: #999;
+    line-height: 1.6;
+
+    li {
+      margin-bottom: 6px;
+    }
+  }
+}
+
+.keyboard-shortcuts {
+  margin-top: 16px;
+
+  h4 {
+    font-size: 11px;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 10px 0;
+  }
+}
+
+.shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+
+  .key {
+    background: #3a3a3a;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    color: #ddd;
+    font-size: 11px;
+  }
+
+  .action {
+    color: #888;
+  }
+}
+
+// Saved images list
+.saved-images-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: #888;
+
+  span {
+    font-size: 13px;
+  }
+}
+
+.saved-images-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+
+.saved-image-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #2d2d2d;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #3a3a3a;
+  }
+
+  &.active {
+    background: #1976d2;
+
+    .saved-image-name {
+      color: #fff;
+    }
+
+    .saved-image-meta {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .split-badge {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+  }
+}
+
+.saved-image-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.saved-image-name {
+  font-size: 12px;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-image-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #888;
+}
+
+.split-badge {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+
+  &.train {
+    background: #2e7d32;
+    color: #a5d6a7;
+  }
+
+  &.val {
+    background: #1565c0;
+    color: #90caf9;
+  }
+}
+
+.annotation-count {
+  color: #aaa;
+}
+
+.delete-saved-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.saved-image-item:hover .delete-saved-btn {
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+    color: #ef5350;
+  }
+}
+
+.saved-images-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #666;
+  text-align: center;
+
+  mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: 12px;
+  }
+}
+
+.refresh-btn {
+  margin-top: 12px;
+  width: 100%;
+  color: #888;
+  border-color: #444;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+  }
+
+  &:hover {
+    background: #3a3a3a;
+    color: #fff;
+  }
+}
+
+// Loading overlay
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(30, 30, 30, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 100;
+
+  span {
+    color: #aaa;
+    font-size: 14px;
+  }
+}
+
+// PDF Selector Overlay
+.pdf-selector-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.pdf-selector-content {
+  background: #2d2d2d;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #3a3a3a;
+}
+
+.pdf-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: #363636;
+  border-bottom: 1px solid #3a3a3a;
+
+  h3 {
+    margin: 0;
+    flex: 1;
+    font-size: 18px;
+    color: #fff;
+  }
+
+  .pdf-info {
+    color: #888;
+    font-size: 13px;
+    margin-right: 16px;
+  }
+
+  .close-btn {
+    color: #888;
+    margin-left: 8px;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+}
+
+.page-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: #363636;
+  border-bottom: 1px solid #3a3a3a;
+
+  button {
+    color: #aaa;
+
+    &:hover:not([disabled]) {
+      color: #fff;
+    }
+
+    &[disabled] {
+      color: #555;
+    }
+  }
+
+  .page-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    span {
+      font-size: 14px;
+      color: #888;
+    }
+
+    input {
+      width: 80px;
+      padding: 6px 10px;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: center;
+      background: #2d2d2d;
+      color: #fff;
+
+      &:focus {
+        outline: none;
+        border-color: #1976d2;
+      }
+    }
+  }
+}
+
+.pdf-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  background: #1e1e1e;
+}
+
+.thumbnail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px;
+  border: 2px solid #3a3a3a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #2d2d2d;
+
+  &:hover {
+    border-color: #1976d2;
+    background: #363636;
+  }
+
+  &.selected {
+    border-color: #1976d2;
+    background: #1976d2;
+  }
+
+  .page-number {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #aaa;
+  }
+
+  pdf-viewer {
+    pointer-events: none;
+    overflow: hidden;
+    background: white;
+    border-radius: 4px;
+  }
+}
+
+.pdf-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid #3a3a3a;
+  background: #363636;
+  gap: 12px;
+
+  button {
+    color: #aaa;
+
+    &[color="primary"] {
+      color: #fff;
+    }
+  }
+}
+
+// Scrollbar styling for dark theme
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+
+  &:hover {
+    background: #4a4a4a;
+  }
+}

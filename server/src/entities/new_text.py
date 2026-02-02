@@ -101,3 +101,5 @@ class NewText(DbModel):
     is_fixed: bool = False  # replace with function?
     uploader: Uploader = Uploader.ADMIN
     uploader_id: str = "admin"
+    label: str = ""
+    part: str = ""

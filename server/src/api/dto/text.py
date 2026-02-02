@@ -68,11 +68,27 @@ class NewTextPreviewDto(BaseModel):
     metadata: List[Dict] = []
     last_modified: str
     uploader_id: str
+    latest_transliteration_id: int = None
+    label: str = ""
+    part: str = ""
+    is_curated: bool = False
 
     # uploader: Uploader = Uploader.ADMIN
 
     @staticmethod
     def from_new_text(new_text: NewText):
+        latest_trans_id = None
+        is_curated = False
+        if new_text.transliterations:
+            latest_trans_id = new_text.transliterations[-1].transliteration_id
+            # Check if any transliteration has is_fixed=True in its latest edit
+            for trans in new_text.transliterations:
+                if trans.edit_history:
+                    latest_edit = trans.edit_history[-1]
+                    if getattr(latest_edit, 'is_fixed', False):
+                        is_curated = True
+                        break
+
         return NewTextPreviewDto(
             text_id=new_text.text_id,
             text_identifiers=TextIdentifiersDto.from_values(
@@ -83,5 +99,9 @@ class NewTextPreviewDto(BaseModel):
             transliterations_amount=len(new_text.transliterations),
             metadata=new_text.metadata,
             last_modified=str(datetime.fromtimestamp(new_text.use_start_time)),
-            uploader_id=new_text.uploader_id
+            uploader_id=new_text.uploader_id,
+            latest_transliteration_id=latest_trans_id,
+            label=getattr(new_text, 'label', '') or '',
+            part=getattr(new_text, 'part', '') or '',
+            is_curated=is_curated
         )

@@ -30,6 +30,11 @@ export class TokenStorageService {
   }
 
   public getUser(): User {
-    return JSON.parse(localStorage.getItem(USER_KEY));
+    const stored = localStorage.getItem(USER_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    // Desktop app - return default user
+    return { name: 'Desktop User', email: 'desktop@local', admin: true };
   }
 }

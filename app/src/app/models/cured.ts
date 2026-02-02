@@ -14,13 +14,18 @@ export class TextIdentifiers {
 }
 
 export class TextPreview {
+    public _thumbnailUrl: any = null;
     constructor(
         public text_id: number,
         public text_identifiers: TextIdentifiers,
         public transliterations_amount: number,
         public metadata: object[] = [],
         public last_modified: string,
-        public uploader_id: string
+        public uploader_id: string,
+        public latest_transliteration_id: number = null,
+        public label: string = "",
+        public part: string = "",
+        public is_curated: boolean = false
     ) {}
 }
 
@@ -43,10 +48,10 @@ export class CuredSubmissionDto {
 }
 
 export class CuredTransliterationPreview {
-    constructor(transliteration_id: number, 
-        uploader_id: string,
-        last_edited: string,
-        image_name: string) {}
+    constructor(public transliteration_id: number,
+        public uploader_id: string,
+        public last_edited: string,
+        public image_name: string) {}
 }
 
 export class CuredTransliterationData {

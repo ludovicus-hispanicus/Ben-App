@@ -1,21 +1,18 @@
 <nav class="my-navbar navbar navbar-expand-lg navbar-dark bg-dark">
 
-  <a class="navbar-brand" href="#" style="margin-left: 10px; display: flex; align-items: center;">
+  <a class="navbar-brand" routerLink="/" style="margin-left: 10px; display: flex; align-items: center; cursor: pointer;">
     <img src="../assets/img/BEn_logo2.png" height="50" class="d-inline-block align-top" alt="" style="border-radius: 7%;">
     <span style="color: #f4f4f4; font-size: 25px; margin-left: 15px;"> Babylonian Engine</span>
   </a>
-  
+
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
 
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
     <ul class="navbar-nav mr-auto" routerLinkActive="active">
-      <li class="nav-item active">
-        <a class="nav-link" routerLink="home">Home</a>
-      </li>
       <li class="nav-item">
-          <a class="nav-link" *ngIf="authService.isAuthenticated()"  routerLink="amendment">CuRe</a>
+        <a class="nav-link" routerLink="amendment">CuRe</a>
       </li>
       <li class="nav-item">
         <a class="nav-link" routerLink="decuneify">Decuneify</a>
@@ -24,31 +21,53 @@
         <a class="nav-link" routerLink="cured">CuReD</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" routerLink="demo">CuRe Demo</a>
+        <a class="nav-link" routerLink="dictionary-ocr">
+          Dictionary OCR
+          <span class="beta-badge">BETA</span>
+        </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" routerLink="gallery">Gallery</a>
+        <a class="nav-link" routerLink="yolo-training">
+          Layout Training
+          <span class="beta-badge">NEW</span>
+        </a>
       </li>
+    </ul>
+
+    <!-- Dynamic toolbar area -->
+    <div class="navbar-toolbar" *ngIf="toolbarState$ | async as state">
+      <!-- Back button -->
+      <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+
+      <!-- Message -->
+      <span *ngIf="state.message" class="toolbar-message">{{state.message}}</span>
+
+      <!-- Spacer -->
+      <span class="spacer"></span>
+
+      <!-- Action buttons -->
+      <button *ngFor="let btn of state.buttons"
+              class="toolbar-btn"
+              [class.toolbar-btn-primary]="btn.color === 'primary'"
+              [class.toolbar-btn-warn]="btn.color === 'warn'"
+              [disabled]="btn.disabled"
+              (click)="btn.action()">
+        <mat-icon *ngIf="btn.icon">{{btn.icon}}</mat-icon>
+        <span>{{btn.label}}</span>
+      </button>
+    </div>
+
+    <ul class="navbar-nav ml-auto">
       <li class="nav-item">
         <a class="nav-link" routerLink="about">About</a>
-      </li>
-      <li *ngIf="authService.isAuthenticated()" class="nav-item" style="right: 0 !important; position: absolute; margin-right: 2em; display: flex;">
-        <a *ngIf="authService.isAdmin()" class="nav-link" routerLink="adminpanel">Admin Panel</a>
-        <a class="nav-link">Hello {{tokenStorageService.getUser().name}}!</a>
-        <a class="logout-link nav-link" (click)="logout()">Log out</a>
-      </li>
-      <li *ngIf="!authService.isAuthenticated()" class="nav-item" style="right: 0 !important; position: absolute; margin-right: 2em; display: flex;">
-        <a class="nav-link" routerLink="home">Login</a>
       </li>
     </ul>
   </div>
 </nav>
 
-<div style="width: 96%; margin-left: 2%; margin-top: 1em;">
 
-  <!-- <amendment-page></amendment-page> -->
-  
+<div style="width: 98%; margin-left: 1%; margin-top: 0.5em;">
   <router-outlet></router-outlet>
-  
-  
 </div>

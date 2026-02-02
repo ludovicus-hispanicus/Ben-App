@@ -1,0 +1,496 @@
+<div class="yolo-training-container">
+  <!-- Header -->
+  <div class="header">
+    <h1>YOLO Layout Detection Training</h1>
+    <div class="health-status" [class.healthy]="healthStatus?.status === 'healthy'" [class.unhealthy]="healthStatus?.status === 'unhealthy'">
+      <span class="status-dot"></span>
+      {{ healthStatus?.status || 'checking...' }}
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="nav-tabs">
+    <button [class.active]="viewMode === ViewMode.Dashboard" (click)="setViewMode(ViewMode.Dashboard)">
+      <mat-icon>dashboard</mat-icon> Dashboard
+    </button>
+    <button [class.active]="viewMode === ViewMode.Datasets" (click)="setViewMode(ViewMode.Datasets)">
+      <mat-icon>folder</mat-icon> Datasets
+    </button>
+    <button [class.active]="viewMode === ViewMode.Models" (click)="setViewMode(ViewMode.Models)">
+      <mat-icon>model_training</mat-icon> Models
+    </button>
+    <button [class.active]="viewMode === ViewMode.Training" (click)="setViewMode(ViewMode.Training)">
+      <mat-icon>fitness_center</mat-icon> Training
+    </button>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <mat-spinner diameter="50"></mat-spinner>
+  </div>
+
+  <!-- Dashboard View -->
+  <div class="view-content" *ngIf="viewMode === ViewMode.Dashboard">
+    <div class="dashboard-grid">
+      <!-- Datasets Summary -->
+      <div class="dashboard-card">
+        <h3><mat-icon>folder</mat-icon> Datasets</h3>
+        <div class="stat-value">{{ datasets.length }}</div>
+        <div class="stat-label">Available datasets</div>
+        <button mat-stroked-button (click)="setViewMode(ViewMode.Datasets)">Manage Datasets</button>
+      </div>
+
+      <!-- Models Summary -->
+      <div class="dashboard-card">
+        <h3><mat-icon>model_training</mat-icon> Models</h3>
+        <div class="stat-value">{{ models.length }}</div>
+        <div class="stat-label">Trained models</div>
+        <button mat-stroked-button (click)="setViewMode(ViewMode.Models)">View Models</button>
+      </div>
+
+      <!-- Training Jobs -->
+      <div class="dashboard-card">
+        <h3><mat-icon>fitness_center</mat-icon> Training Jobs</h3>
+        <div class="stat-value">{{ activeTrainingJobs.length }}</div>
+        <div class="stat-label">Recent jobs</div>
+        <button mat-stroked-button (click)="setViewMode(ViewMode.Training)">Start Training</button>
+      </div>
+    </div>
+
+    <!-- Recent Training Jobs -->
+    <div class="section" *ngIf="activeTrainingJobs.length > 0">
+      <h3>Recent Training Jobs</h3>
+      <div class="jobs-list">
+        <div class="job-item" *ngFor="let job of activeTrainingJobs">
+          <div class="job-info">
+            <span class="job-name">{{ job.output_name }}</span>
+            <span class="job-dataset">from {{ job.dataset_name }}</span>
+          </div>
+          <div class="job-status" [style.color]="getStatusColor(job.status)">
+            {{ job.status }}
+          </div>
+          <div class="job-progress" *ngIf="job.status === 'running'">
+            {{ job.progress_percent | number:'1.0-0' }}%
+          </div>
+          <button mat-icon-button (click)="watchTrainingJob(job)" matTooltip="View Progress">
+            <mat-icon>visibility</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Training Progress -->
+    <div class="section" *ngIf="currentTrainingProgress">
+      <h3>Training Progress</h3>
+      <div class="progress-card">
+        <div class="progress-header">
+          <span>{{ currentTrainingProgress.training_id }}</span>
+          <span [style.color]="getStatusColor(currentTrainingProgress.status)">
+            {{ currentTrainingProgress.status }}
+          </span>
+        </div>
+        <mat-progress-bar mode="determinate" [value]="currentTrainingProgress.progress_percent"></mat-progress-bar>
+        <div class="progress-details">
+          <span>Epoch {{ currentTrainingProgress.current_epoch }} / {{ currentTrainingProgress.total_epochs }}</span>
+          <span *ngIf="currentTrainingProgress.metrics">
+            mAP50: {{ (currentTrainingProgress.metrics.mAP50 || 0) * 100 | number:'1.1-1' }}%
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Datasets View -->
+  <div class="view-content" *ngIf="viewMode === ViewMode.Datasets">
+    <div class="two-column-layout">
+      <!-- Dataset List -->
+      <div class="column-left">
+        <h3>Datasets</h3>
+
+        <!-- Create New Dataset -->
+        <div class="create-form">
+          <h4>Create New Dataset</h4>
+          <mat-form-field appearance="outline">
+            <mat-label>Dataset Name</mat-label>
+            <input matInput [(ngModel)]="newDatasetName" placeholder="e.g., ahw_layout">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Description (optional)</mat-label>
+            <input matInput [(ngModel)]="newDatasetDescription" placeholder="AHw dictionary layout detection">
+          </mat-form-field>
+
+          <div class="classes-section">
+            <label>Classes:</label>
+            <div class="class-chips">
+              <span class="class-chip" *ngFor="let cls of newDatasetClasses; let i = index"
+                    [style.background-color]="classColors[cls] || '#888'">
+                {{ cls }}
+                <mat-icon (click)="removeClass(i)">close</mat-icon>
+              </span>
+              <button mat-icon-button (click)="addClass()" matTooltip="Add Class">
+                <mat-icon>add</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          <button mat-raised-button color="primary" (click)="createDataset()" [disabled]="!newDatasetName">
+            <mat-icon>add</mat-icon> Create Dataset
+          </button>
+        </div>
+
+        <!-- Dataset List -->
+        <div class="list-section">
+          <div class="list-item" *ngFor="let dataset of datasets"
+               [class.selected]="selectedDataset?.dataset_id === dataset.dataset_id"
+               (click)="selectDataset(dataset)">
+            <div class="item-info">
+              <span class="item-name">{{ dataset.name }}</span>
+              <span class="item-meta">{{ dataset.image_count }} images, {{ dataset.class_count }} classes</span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="datasets.length === 0">
+            No datasets yet. Create one above.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dataset Details -->
+      <div class="column-right" *ngIf="selectedDataset">
+        <div class="detail-header">
+          <h3>{{ selectedDataset.name }}</h3>
+          <div class="detail-actions">
+            <button mat-raised-button color="primary" (click)="openAnnotation(selectedDataset)">
+              <mat-icon>edit</mat-icon> Annotate Images
+            </button>
+            <button mat-icon-button color="warn" (click)="deleteDataset(selectedDataset.dataset_id)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">{{ selectedDataset.train_images }}</div>
+            <div class="stat-label">Training Images</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ selectedDataset.val_images }}</div>
+            <div class="stat-label">Validation Images</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ selectedDataset.total_annotations }}</div>
+            <div class="stat-label">Total Annotations</div>
+          </div>
+        </div>
+
+        <!-- Training Readiness -->
+        <div class="readiness-section" [class.ready]="selectedDataset.ready_for_training" [class.not-ready]="!selectedDataset.ready_for_training">
+          <mat-icon>{{ selectedDataset.ready_for_training ? 'check_circle' : 'warning' }}</mat-icon>
+          <span>{{ selectedDataset.ready_for_training ? 'Ready for training' : 'Not ready for training' }}</span>
+        </div>
+
+        <div class="issues-list" *ngIf="selectedDataset.issues.length > 0">
+          <div class="issue-item" *ngFor="let issue of selectedDataset.issues">
+            <mat-icon>info</mat-icon> {{ issue }}
+          </div>
+        </div>
+
+        <!-- Class Distribution -->
+        <div class="class-distribution">
+          <h4>Class Distribution</h4>
+          <div class="class-bar" *ngFor="let cls of selectedDataset.classes">
+            <span class="class-name" [style.color]="classColors[cls.name] || '#888'">{{ cls.name }}</span>
+            <div class="bar-container">
+              <div class="bar-fill"
+                   [style.width.%]="(selectedDataset.class_distribution[cls.name] / selectedDataset.total_annotations) * 100"
+                   [style.background-color]="classColors[cls.name] || '#888'">
+              </div>
+            </div>
+            <span class="class-count">{{ selectedDataset.class_distribution[cls.name] || 0 }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Models View -->
+  <div class="view-content" *ngIf="viewMode === ViewMode.Models">
+    <div class="two-column-layout">
+      <!-- Model List -->
+      <div class="column-left">
+        <h3>Trained Models</h3>
+        <div class="list-section">
+          <div class="list-item" *ngFor="let model of models"
+               [class.selected]="selectedModel?.model_id === model.model_id"
+               (click)="selectModel(model)">
+            <div class="item-info">
+              <span class="item-name">{{ model.name }}</span>
+              <span class="item-meta">{{ formatMetrics(model.metrics) }}</span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="models.length === 0">
+            No trained models yet. Train one in the Training tab.
+          </div>
+        </div>
+
+        <h3>Base Models</h3>
+        <div class="base-models-list">
+          <div class="base-model-item" *ngFor="let base of baseModels">
+            <mat-icon>memory</mat-icon>
+            {{ base }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Details -->
+      <div class="column-right" *ngIf="selectedModel">
+        <div class="detail-header">
+          <h3>{{ selectedModel.name }}</h3>
+          <button mat-icon-button color="warn" (click)="deleteModel(selectedModel.model_id)">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+
+        <div class="model-details">
+          <div class="detail-row">
+            <span class="label">Base Model:</span>
+            <span class="value">{{ selectedModel.base_model }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Dataset:</span>
+            <span class="value">{{ selectedModel.dataset_name }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Training Epochs:</span>
+            <span class="value">{{ selectedModel.training_epochs }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">File Size:</span>
+            <span class="value">{{ selectedModel.file_size_mb | number:'1.1-1' }} MB</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedModel.created_at | date:'medium' }}</span>
+          </div>
+        </div>
+
+        <div class="metrics-section" *ngIf="selectedModel.metrics">
+          <h4>Performance Metrics</h4>
+          <div class="metrics-grid">
+            <div class="metric-item" *ngIf="selectedModel.metrics.mAP50">
+              <div class="metric-value">{{ (selectedModel.metrics.mAP50 * 100) | number:'1.1-1' }}%</div>
+              <div class="metric-label">mAP50</div>
+            </div>
+            <div class="metric-item" *ngIf="selectedModel.metrics['mAP50-95']">
+              <div class="metric-value">{{ (selectedModel.metrics['mAP50-95'] * 100) | number:'1.1-1' }}%</div>
+              <div class="metric-label">mAP50-95</div>
+            </div>
+            <div class="metric-item" *ngIf="selectedModel.metrics.precision">
+              <div class="metric-value">{{ (selectedModel.metrics.precision * 100) | number:'1.1-1' }}%</div>
+              <div class="metric-label">Precision</div>
+            </div>
+            <div class="metric-item" *ngIf="selectedModel.metrics.recall">
+              <div class="metric-value">{{ (selectedModel.metrics.recall * 100) | number:'1.1-1' }}%</div>
+              <div class="metric-label">Recall</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="classes-section">
+          <h4>Classes</h4>
+          <div class="class-chips">
+            <span class="class-chip" *ngFor="let cls of selectedModel.classes"
+                  [style.background-color]="classColors[cls.name] || '#888'">
+              {{ cls.name }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Training View -->
+  <div class="view-content" *ngIf="viewMode === ViewMode.Training">
+    <div class="training-layout">
+      <!-- Training Configuration -->
+      <div class="training-config">
+        <h3>Start New Training</h3>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Dataset</mat-label>
+          <mat-select [(ngModel)]="trainingDatasetName">
+            <mat-option *ngFor="let ds of datasets" [value]="ds.dataset_id">
+              {{ ds.name }} ({{ ds.image_count }} images)
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Base Model</mat-label>
+          <mat-select [(ngModel)]="trainingBaseModel">
+            <mat-optgroup label="Pre-trained Models">
+              <mat-option value="yolov8n.pt">YOLOv8 Nano (fastest)</mat-option>
+              <mat-option value="yolov8s.pt">YOLOv8 Small (recommended)</mat-option>
+              <mat-option value="yolov8m.pt">YOLOv8 Medium</mat-option>
+              <mat-option value="yolov8l.pt">YOLOv8 Large</mat-option>
+            </mat-optgroup>
+            <mat-optgroup label="Your Trained Models" *ngIf="models.length > 0">
+              <mat-option *ngFor="let model of models" [value]="model.model_id + '/best.pt'">
+                {{ model.name }}
+              </mat-option>
+            </mat-optgroup>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Output Model Name</mat-label>
+          <input matInput [(ngModel)]="trainingOutputName" placeholder="e.g., ahw_layout_v2">
+        </mat-form-field>
+
+        <div class="config-section">
+          <h4>Training Configuration</h4>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Epochs</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingConfig.epochs" min="1" max="1000">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Batch Size</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingConfig.batch_size" min="1" max="64">
+            </mat-form-field>
+          </div>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Image Size</mat-label>
+              <mat-select [(ngModel)]="trainingConfig.image_size">
+                <mat-option [value]="640">640 (faster)</mat-option>
+                <mat-option [value]="800">800</mat-option>
+                <mat-option [value]="1024">1024 (recommended)</mat-option>
+                <mat-option [value]="1280">1280 (higher quality)</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Early Stopping Patience</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingConfig.patience" min="5" max="100">
+            </mat-form-field>
+          </div>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Device</mat-label>
+              <mat-select [(ngModel)]="trainingConfig.device">
+                <mat-option value="auto">Auto (GPU if available)</mat-option>
+                <mat-option value="cpu">CPU</mat-option>
+                <mat-option value="0">GPU 0</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <button mat-raised-button color="primary" (click)="startTraining()"
+                [disabled]="!trainingDatasetName || !trainingOutputName || isLoading">
+          <mat-icon>play_arrow</mat-icon> Start Training
+        </button>
+      </div>
+
+      <!-- Training Progress -->
+      <div class="training-progress" *ngIf="currentTrainingProgress">
+        <h3>Current Training</h3>
+        <div class="progress-card large">
+          <div class="progress-header">
+            <span class="training-id">{{ currentTrainingProgress.training_id }}</span>
+            <span class="training-status" [style.color]="getStatusColor(currentTrainingProgress.status)">
+              {{ currentTrainingProgress.status }}
+            </span>
+          </div>
+
+          <mat-progress-bar mode="determinate" [value]="currentTrainingProgress.progress_percent"></mat-progress-bar>
+
+          <div class="progress-stats">
+            <div class="stat">
+              <span class="label">Epoch</span>
+              <span class="value">{{ currentTrainingProgress.current_epoch }} / {{ currentTrainingProgress.total_epochs }}</span>
+            </div>
+            <div class="stat">
+              <span class="label">Progress</span>
+              <span class="value">{{ currentTrainingProgress.progress_percent | number:'1.0-0' }}%</span>
+            </div>
+            <div class="stat" *ngIf="currentTrainingProgress.eta_seconds">
+              <span class="label">ETA</span>
+              <span class="value">{{ currentTrainingProgress.eta_seconds | number:'1.0-0' }}s</span>
+            </div>
+          </div>
+
+          <div class="metrics-display" *ngIf="currentTrainingProgress.metrics">
+            <div class="metric" *ngIf="currentTrainingProgress.metrics.mAP50">
+              <span class="label">mAP50</span>
+              <span class="value">{{ (currentTrainingProgress.metrics.mAP50 * 100) | number:'1.1-1' }}%</span>
+            </div>
+            <div class="metric" *ngIf="currentTrainingProgress.metrics.precision">
+              <span class="label">Precision</span>
+              <span class="value">{{ (currentTrainingProgress.metrics.precision * 100) | number:'1.1-1' }}%</span>
+            </div>
+            <div class="metric" *ngIf="currentTrainingProgress.metrics.recall">
+              <span class="label">Recall</span>
+              <span class="value">{{ (currentTrainingProgress.metrics.recall * 100) | number:'1.1-1' }}%</span>
+            </div>
+          </div>
+
+          <div class="error-message" *ngIf="currentTrainingProgress.error">
+            <mat-icon>error</mat-icon>
+            {{ currentTrainingProgress.error }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Jobs -->
+      <div class="recent-jobs">
+        <h3>Recent Training Jobs</h3>
+        <div class="jobs-table">
+          <div class="job-row header">
+            <span>Model</span>
+            <span>Dataset</span>
+            <span>Status</span>
+            <span>Progress</span>
+            <span>Actions</span>
+          </div>
+          <div class="job-row" *ngFor="let job of activeTrainingJobs">
+            <span>{{ job.output_name }}</span>
+            <span>{{ job.dataset_name }}</span>
+            <span [style.color]="getStatusColor(job.status)">{{ job.status }}</span>
+            <span>{{ job.progress_percent | number:'1.0-0' }}%</span>
+            <span class="actions">
+              <button mat-icon-button (click)="watchTrainingJob(job)" matTooltip="View">
+                <mat-icon>visibility</mat-icon>
+              </button>
+              <button mat-icon-button (click)="cancelTraining(job.training_id)"
+                      *ngIf="job.status === 'pending'" matTooltip="Cancel">
+                <mat-icon>cancel</mat-icon>
+              </button>
+            </span>
+          </div>
+          <div class="empty-row" *ngIf="activeTrainingJobs.length === 0">
+            No training jobs yet.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annotation View -->
+  <div class="view-content" *ngIf="viewMode === ViewMode.Annotate">
+    <app-annotation-canvas
+      [datasetName]="annotationDataset"
+      [classes]="annotationClasses"
+      (saved)="onAnnotationSaved()"
+      (cancelled)="onAnnotationCancelled()">
+    </app-annotation-canvas>
+  </div>
+</div>

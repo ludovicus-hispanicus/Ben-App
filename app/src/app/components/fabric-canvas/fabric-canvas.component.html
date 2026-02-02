@@ -1,13 +1,13 @@
 <ng-keyboard-shortcuts [shortcuts]="shortcuts"></ng-keyboard-shortcuts>
 <div #container class="container mega-container" [class.spinner]="isLoading">
-    <mat-button-toggle-group #actionGroup [value]="selectedMode" name="fontStyle" aria-label="Font Style" (change)="changeMode($event.value)">
-            
+    <mat-button-toggle-group *ngIf="canvasType !== 'SingleSelection'" #actionGroup [value]="selectedMode" name="fontStyle" aria-label="Font Style" (change)="changeMode($event.value)">
+
         <mat-button-toggle *ngFor="let action of allowedActions" value="{{action.name}}" matTooltip="{{action.tooltip}}"
          matTooltipHideDelay="100" matTooltipPosition="below">
           <mat-icon aria-hidden="false">{{action.icon}}</mat-icon>
         </mat-button-toggle>
-        
-  
+
+
     </mat-button-toggle-group>
 
     <button *ngIf="canvasType == 'Drawing'" mat-stroked-button (click)="clearCanvas()">Clear</button>

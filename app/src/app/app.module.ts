@@ -9,6 +9,7 @@ import {MatIconModule} from '@angular/material/icon';
 import {MatTooltipModule} from '@angular/material/tooltip';
 import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatButtonModule} from '@angular/material/button';
+import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import { AmendmentModule } from './components/amendment/amendment.module';
 import { DetexifyModule } from './components/detexify/detexify.module';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
@@ -24,11 +25,24 @@ import { KeyboardShortcutsModule }     from 'ng-keyboard-shortcuts';
 import { AdminPanelModule } from './components/admin-panel/admin-panel.module';
 import { GalleryModule } from './components/gallery/gallery.module';
 import { AboutModule } from './components/about/about.module';
+import { DictionaryOcrModule } from './components/dictionary-ocr/dictionary-ocr.module';
+import { YoloTrainingModule } from './components/yolo-training/yolo-training.module';
+import { ConfirmDialogComponent } from './components/common/confirm-dialog/confirm-dialog.component';
+import { LabelDialogComponent } from './components/common/label-dialog/label-dialog.component';
+import { SaveDialogComponent } from './components/common/save-dialog/save-dialog.component';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatDividerModule } from '@angular/material/divider';
 
 
 @NgModule({
   declarations: [
     AppComponent,
+    ConfirmDialogComponent,
+    LabelDialogComponent,
+    SaveDialogComponent,
  ],
   imports: [
     BrowserModule,
@@ -40,7 +54,14 @@ import { AboutModule } from './components/about/about.module';
     MatTooltipModule,
     MatButtonToggleModule,
     MatButtonModule,
+    MatProgressSpinnerModule,
     MatDialogModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatAutocompleteModule,
+    MatDividerModule,
+    FormsModule,
+    ReactiveFormsModule,
     ToastrModule.forRoot(),
     AmendmentModule,
     HomeModule,
@@ -50,6 +71,8 @@ import { AboutModule } from './components/about/about.module';
     AdminPanelModule,
     GalleryModule,
     AboutModule,
+    DictionaryOcrModule,
+    YoloTrainingModule,
     KeyboardShortcutsModule.forRoot()  
   ],
   exports: [

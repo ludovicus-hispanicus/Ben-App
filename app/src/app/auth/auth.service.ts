@@ -8,21 +8,14 @@ import { TokenStorageService, TOKEN_KEY } from './token-storage.service';
 export class AuthService {
   constructor(public jwtHelper: JwtHelperService,
               public tokenService: TokenStorageService) {}
-  // ...
+  // Desktop app - always authenticated
   public isAuthenticated(): boolean {
-    try {
-      const token = localStorage.getItem(TOKEN_KEY);
-      if(token) {
-        return !this.tokenExpired(token);
-      }
-    } catch {
-      //console.log("error!");
-    }
-    return false;
+    return true;
   }
 
   public isAdmin(): boolean {
-    return this.isAuthenticated() && this.tokenService.getUser().admin;
+    // Desktop app - always admin
+    return true;
   }
 
   private tokenExpired(token: string) {

@@ -21,6 +21,7 @@ services:
 
   # server - fast api
   server:
+    # image: vaziman/server:latest
     build:
       context: ./server/
     ports:
@@ -29,6 +30,7 @@ services:
       - backend
     volumes:
       - server-storage:/data/server-storage
+      - yolo-data:/data/yolo
 
     environment:
       APP_ENV: prod
@@ -39,6 +41,7 @@ services:
       MONGODB_PASSWORD: your_mongodb_root_password
       MONGODB_HOSTNAME: mongodb://mongodb:27017/
       TRANSLATOR_URL: http://translator:5002/api/v1
+      DEEPSEEK_OCR_URL: http://deepseek-ocr:5004
       STORAGE_PATH: /data/server-storage
       SECRET: 2c4fc4e6be22853fec33a243a9327e307dc56f0964d2e89e
       ALGORITHM: HS256
@@ -53,8 +56,9 @@ services:
 
   # translator - fast api
   translator:
-    build:
-      context: ./translator/
+    image: vaziman/translator:latest
+    # build:
+    #   context: ./translator/
     ports:
       - 5002:5002
     networks:
@@ -62,7 +66,42 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
-  
+
+  # DeepSeek-OCR-2 service for dictionary OCR (AHw/CAD)
+  deepseek-ocr:
+    build:
+      context: ./deepseek-ocr
+    container_name: deepseek-ocr
+    ports:
+      - 5004:5004
+    networks:
+      - backend
+    volumes:
+      - deepseek-models:/app/models
+      - deepseek-cache:/root/.cache/huggingface
+      - deepseek-adapters:/app/lora_adapters
+    environment:
+      - MODEL_ID=deepseek-ai/DeepSeek-OCR-2
+      - QUANTIZATION=4bit
+      - MAX_BATCH_SIZE=4
+      - PRELOAD_MODEL=true
+      - LORA_ADAPTER_DIR=/app/lora_adapters
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
   # angular ui
   app:
     image: app
@@ -70,7 +109,7 @@ services:
     build: 
       context: ./app
     ports: 
-      - 8080:80
+      - 8081:80
     restart: on-failure
     networks:
       - backend
@@ -101,4 +140,12 @@ volumes:
   mongodata:
     driver: local
   server-storage:
+    driver: local
+  yolo-data:
+    driver: local
+  deepseek-models:
+    driver: local
+  deepseek-cache:
+    driver: local
+  deepseek-adapters:
     driver: local

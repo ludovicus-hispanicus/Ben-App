@@ -2,10 +2,12 @@ FROM python:3.7
 
 WORKDIR /code
 
+# Upgrade pip and install setuptools first to avoid version conflicts
+RUN pip install --upgrade pip setuptools wheel
+
 COPY ./requirements.txt /code/requirements.txt
 
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
-RUN pip install akkadian==1.0.12
+RUN pip install --no-cache-dir -r /code/requirements.txt
 COPY src /code/src
 
 WORKDIR /code/src

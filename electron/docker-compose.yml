@@ -1,8 +1,7 @@
 services:
   # server - FastAPI Python backend
   server:
-    build:
-      context: ../server/
+    image: vaziman/server:latest
     container_name: server
     ports:
       - 5001:5001
@@ -10,6 +9,7 @@ services:
       - backend
     volumes:
       - server-storage:/data/server-storage
+      - yolo-data:/data/yolo
     environment:
       APP_ENV: prod
       APP_DEBUG: "False"
@@ -24,26 +24,31 @@ services:
       ALGORITHM: HS256
       USE_DETECTRON: "True"
       LOG_LEVEL: DEBUG
+      VLM_OCR_URL: http://vlm-ocr:5003  # Ollama LLaVA service
+      YOLO_DATA_PATH: /data/yolo  # YOLO training data storage
     shm_size: '2gb'
     deploy:
       restart_policy:
         condition: on-failure
     depends_on:
       - mongodb
-      - translator
+      # - translator  # Disabled until new model available
+      # - vlm-ocr  # Uncomment when GPU available
 
   # translator - FastAPI Akkadian service
-  translator:
-    build:
-      context: ../translator/
-    container_name: translator
-    ports:
-      - 5002:5002
-    networks:
-      - backend
-    deploy:
-      restart_policy:
-        condition: on-failure
+  # DISABLED: Removed for now due to Python 3.7 + akkadian dependency conflicts
+  # Re-enable when a new transliteration model is available
+  # translator:
+  #   build:
+  #     context: ../translator/
+  #   container_name: translator
+  #   ports:
+  #     - 5002:5002
+  #   networks:
+  #     - backend
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
 
   # app - Angular frontend
   app:
@@ -63,7 +68,7 @@ services:
     networks:
       - backend
     ports:
-      - "27017:27017"
+      - "27018:27017"  # Use 27018 to avoid conflicts with existing MongoDB
     volumes:
       - mongodata:/data/db
     environment:
@@ -73,6 +78,37 @@ services:
       MONGODB_DATA_DIR: /data/db
       MONDODB_LOG_DIR: /dev/null
 
+  # vlm-ocr - Ollama LLaVA service for Dictionary OCR (Beta)
+  # Requires NVIDIA GPU with 8GB VRAM (uses llava:13b for better OCR accuracy)
+  # Uncomment to enable when GPU is available
+  # vlm-ocr:
+  #   build:
+  #     context: ../vlm-ocr/
+  #   container_name: vlm-ocr
+  #   ports:
+  #     - 5003:5003
+  #   networks:
+  #     - backend
+  #   volumes:
+  #     - vlm-models:/root/.ollama/models
+  #   environment:
+  #     - OLLAMA_HOST=0.0.0.0:5003
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #     restart_policy:
+  #       condition: on-failure
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:5003/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 120s  # Give time for model download on first run
+
 networks:
   backend:
     driver: bridge
@@ -81,4 +117,8 @@ volumes:
   mongodata:
     driver: local
   server-storage:
+    driver: local
+  vlm-models:  # Cache for Ollama LLaVA model weights
+    driver: local
+  yolo-data:  # YOLO training datasets, models, and jobs
     driver: local

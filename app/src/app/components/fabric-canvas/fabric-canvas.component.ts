@@ -1,9 +1,10 @@
-import { AfterContentChecked, AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { AfterContentChecked, AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild } from '@angular/core';
 import { fabric } from 'fabric';
 import { Point, Rect } from 'fabric/fabric-impl';
 import { Index, LineStats } from 'src/app/models/letter';
-import { ShortcutInput, ShortcutEventOutput, KeyboardShortcutsComponent, AllowIn } from "ng-keyboard-shortcuts";  
+import { ShortcutInput, ShortcutEventOutput, KeyboardShortcutsComponent, AllowIn } from "ng-keyboard-shortcuts";
 import { NotificationService } from 'src/app/services/notification.service';
+import { CanvasBoxService } from 'src/app/services/canvas-box.service';
 
 
 
@@ -131,22 +132,65 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   ]
 
   private tempTemplate = null;
- 
+
   private newRect = null;
   private deleteLine: fabric.Line = null;
-  
-  public RECT_STROKE_WIDTH = 1;
-  public DEFAULT_RECT_FILL = "rgba(0,0,255,0.1)"
 
+  public RECT_STROKE_WIDTH = 2;  // Match YOLO annotation style
+  public DEFAULT_RECT_FILL = "rgba(33,150,243,0.2)"  // Material blue, matching service
+  public DEFAULT_RECT_STROKE = "#2196F3"  // Material blue
+
+  // Pan/zoom state (same as annotation-canvas)
+  private spacePressed = false;
+  private panModeActive = false;
+  private isPanning = false;
+  private lastPanPosition: { x: number; y: number } | null = null;
+  private isDrawingBox = false;
+  private drawStart: { x: number; y: number } | null = null;
 
   private mode: CanvasMode = CanvasMode.Pan;
 
-  constructor(private cdref: ChangeDetectorRef,
-    public notificationService: NotificationService) {}
+  constructor(
+    private cdref: ChangeDetectorRef,
+    public notificationService: NotificationService,
+    private canvasBoxService: CanvasBoxService
+  ) {}
+
+  // Keyboard listeners for pan mode (same as annotation-canvas)
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.code === 'Space' && !this.spacePressed) {
+      this.spacePressed = true;
+      if (this.canvas) {
+        this.canvas.defaultCursor = 'grab';
+        this.canvas.renderAll();
+      }
+    }
+  }
+
+  @HostListener('window:keyup', ['$event'])
+  onKeyUp(event: KeyboardEvent): void {
+    if (event.code === 'Space') {
+      this.spacePressed = false;
+      this.isPanning = false;
+      if (this.canvas) {
+        this.canvas.defaultCursor = this.panModeActive ? 'grab' : 'default';
+        this.canvas.renderAll();
+      }
+    }
+  }
 
   ngAfterViewInit(): void {
     this.initAll();
     this.cdref.detectChanges();
+
+    // Native keydown listener for Delete key as fallback
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Delete') {
+        console.log('[KEYDOWN] Delete key pressed natively');
+        this.deleteActiveObject();
+      }
+    });
     for (let index = 0; index < 7; index++) {
       this.shortcuts.push({
         key: `alt + ${index+1}`,  
@@ -192,11 +236,37 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
         command: e => this.changeMode(CanvasMode.Delete)
       },
       {
-        key: "alt + r",  
-        preventDefault: true,  
+        key: "alt + r",
+        preventDefault: true,
         command: e => this.changeMode(CanvasMode.Draw)
+      },
+      {
+        key: "delete",
+        preventDefault: true,
+        command: e => this.deleteActiveObject()
       }
     )
+  }
+
+  deleteActiveObject() {
+    console.log('[DELETE] deleteActiveObject called');
+    let activeObj = this.canvas.getActiveObject();
+    console.log('[DELETE] activeObj:', activeObj);
+    if (activeObj) {
+      console.log('[DELETE] type:', activeObj.type, 'data:', activeObj.data);
+    }
+    if (activeObj && activeObj.type === 'rect') {
+      console.log('[DELETE] Removing rect from canvas');
+      this.canvas.remove(activeObj);
+      this.canvas.discardActiveObject();
+      this.canvas.requestRenderAll();
+      if (activeObj.data) {
+        console.log('[DELETE] Emitting boxDeleted with index:', activeObj.data.index);
+        this.boxDeleted.emit(activeObj.data.index);
+      }
+    } else {
+      console.log('[DELETE] No active rect to delete');
+    }
   }
 
 
@@ -223,9 +293,10 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   initAll() {
     this.canvas = new fabric.Canvas(this.htmlCanvas.nativeElement, {
       hoverCursor: 'pointer',
-      selectionBorderColor: 'blue',
+      selectionBorderColor: '#2196F3',  // Material blue
       backgroundColor: '#ebebef',
       preserveObjectStacking: true,
+      uniformScaling: false,
     });
     
     if(this.canvasType) {
@@ -285,24 +356,31 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.canvas.setBackgroundColor("#ebebef", undefined);
   }
 
-  forceZoomOut(zoom=0.3) {
-    this.canvas.zoomToPoint({ x: 0, y: 0} as Point, zoom);
+  forceZoomOut(zoom=0.5) {
+    // Set zoom - position at origin (like before) for consistent placement
+    // The viewport transform is [scaleX, skewY, skewX, scaleY, translateX, translateY]
+    this.canvas.setViewportTransform([zoom, 0, 0, zoom, 0, 0]);
+    this.canvas.renderAll();
+  }
+
+  zoomIn() {
+    let zoom = this.canvas.getZoom() * 1.3;
+    if (zoom > this.props.maxZoom) zoom = this.props.maxZoom;
+    this.canvas.zoomToPoint({ x: this.canvas.getWidth() / 2, y: this.canvas.getHeight() / 2 } as Point, zoom);
+  }
+
+  zoomOut() {
+    let zoom = this.canvas.getZoom() / 1.3;
+    if (zoom < this.props.minZoom) zoom = this.props.minZoom;
+    this.canvas.zoomToPoint({ x: this.canvas.getWidth() / 2, y: this.canvas.getHeight() / 2 } as Point, zoom);
   }
 
   setWheelZooming() {
-    this.canvas.on('mouse:wheel', (opt) => {
-      let wheelEvent = (opt.e as unknown) as WheelEvent;
-      const delta = wheelEvent.deltaY
-      
-      let zoom = this.canvas.getZoom();
-      zoom *= 0.999 ** delta;
-      if (zoom > this.props.maxZoom) zoom = this.props.maxZoom;
-      if (zoom < this.props.minZoom) zoom = this.props.minZoom;
-      this.canvas.zoomToPoint({ x: wheelEvent.offsetX, y: wheelEvent.offsetY } as Point, zoom);
-
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-    })
+    // Use shared service for consistent zoom/pan behavior
+    this.canvasBoxService.setupWheelZoomPan(this.canvas, {
+      minZoom: this.props.minZoom,
+      maxZoom: this.props.maxZoom
+    });
   }
 
   setCanvasSize() {
@@ -345,55 +423,122 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   }
 
   setFreeHandMode() {
-    if(this.canvasType == CanvasType.Drawing) return;
+    if (this.canvasType == CanvasType.Drawing) return;
 
-    let self = this;
-    let isMouseDown = false;
+    // Allow object selection (for handles) but disable multi-select drag
+    this.canvas.selection = false;
+    this.setAllRectsSelectableState(true);
 
-    this.canvas.on('mouse:down', function(opt) {    
-      isMouseDown = true;
+    // Use arrow functions to preserve 'this' context (same as annotation-canvas)
+    this.canvas.on('mouse:down', (opt) => this.onFreeHandMouseDown(opt));
+    this.canvas.on('mouse:move', (opt) => this.onFreeHandMouseMove(opt));
+    this.canvas.on('mouse:up', (opt) => this.onFreeHandMouseUp(opt));
+  }
 
-      let mouseEvent = (opt.e as unknown) as MouseEvent;
-      this.lastPosX = mouseEvent.clientX;
-      this.lastPosY = mouseEvent.clientY;
-    });
+  // Mouse handlers matching annotation-canvas behavior
+  private onFreeHandMouseDown(e: fabric.IEvent): void {
+    if (!this.canvas) return;
 
-    this.canvas.on('mouse:move', function(opt) {
-      if (isMouseDown) {
-        let mouseEvent = (opt.e as unknown) as MouseEvent;
-        var vpt = this.viewportTransform;
-        
-        vpt[4] += mouseEvent.clientX - this.lastPosX;
-        vpt[5] += mouseEvent.clientY - this.lastPosY;
-        this.requestRenderAll();
+    const evt = e.e as MouseEvent;
+    const target = e.target;
 
-        this.lastPosX = mouseEvent.clientX;
-        this.lastPosY = mouseEvent.clientY;
+    // Middle mouse button or space + left click = panning
+    if (evt.button === 1 || (this.spacePressed && evt.button === 0)) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      this.canvas.defaultCursor = 'grabbing';
+      this.canvas.renderAll();
+      return;
+    }
+
+    // Click on a box or its handles: let fabric.js handle it natively
+    if (target) {
+      this.isPanning = false;
+      this.isDrawingBox = false;
+      return;
+    }
+
+    // Left click on empty area = start drawing a box
+    if (evt.button === 0) {
+      this.canvas.discardActiveObject();
+
+      const pointer = this.canvas.getPointer(e.e);
+      this.drawStart = { x: pointer.x, y: pointer.y };
+      this.isDrawingBox = true;
+
+      // Create temp rect
+      this.newRect = this.makeRectangle(
+        pointer.x, pointer.y, 0, 0,
+        this.DEFAULT_RECT_FILL, this.DEFAULT_RECT_STROKE, false
+      );
+      this.canvas.add(this.newRect);
+      this.canvas.renderAll();
+    }
+  }
+
+  private onFreeHandMouseMove(e: fabric.IEvent): void {
+    if (!this.canvas) return;
+
+    const evt = e.e as MouseEvent;
+
+    // Handle panning
+    if (this.isPanning && this.lastPanPosition) {
+      const vpt = this.canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] += evt.clientX - this.lastPanPosition.x;
+        vpt[5] += evt.clientY - this.lastPanPosition.y;
+        this.canvas.setViewportTransform(vpt);
+        this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
       }
-    });
+      return;
+    }
 
-    this.canvas.on('mouse:up', function(opt) {
-      // on mouse up we want to recalculate new interaction
-      // for all objects, so we call setViewportTransform
-      this.setViewportTransform(this.viewportTransform);
-      isMouseDown = false;
-    });
+    // Handle drawing
+    if (!this.isDrawingBox || !this.drawStart || !this.newRect) return;
 
-    this.canvas.on('selection:created', function(obj) {
-      let possiblyRect = (obj['selected'][0] as fabric.Rect);
-      if(possiblyRect.type == "text") return;
-      self.emitSelectionChanged(possiblyRect.data.index);
-    });
+    const pointer = this.canvas.getPointer(e.e);
 
-    this.canvas.on('selection:updated', function(obj) {
-      let possiblyRect = (obj['selected'][0] as fabric.Rect);
-      if(possiblyRect.type == "text") return;
-      self.emitSelectionChanged(possiblyRect.data.index);
-    });
+    const left = Math.min(this.drawStart.x, pointer.x);
+    const top = Math.min(this.drawStart.y, pointer.y);
+    const width = Math.abs(pointer.x - this.drawStart.x);
+    const height = Math.abs(pointer.y - this.drawStart.y);
 
-    this.canvas.on('selection:cleared', function(obj) {
-      self.emitSelectionClear();
-    });
+    this.newRect.set({ left, top, width, height });
+    this.canvas.renderAll();
+  }
+
+  private onFreeHandMouseUp(e: fabric.IEvent): void {
+    if (!this.canvas) return;
+
+    // End panning
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.lastPanPosition = null;
+      this.canvas.defaultCursor = (this.spacePressed || this.panModeActive) ? 'grab' : 'default';
+      this.canvas.setViewportTransform(this.canvas.viewportTransform!);
+      this.canvas.renderAll();
+      return;
+    }
+
+    // End drawing
+    if (!this.isDrawingBox || !this.newRect) return;
+
+    this.isDrawingBox = false;
+    this.drawStart = null;
+
+    // Finalize the box
+    this.canvas.remove(this.newRect);
+    const finalRect = this.newRect;
+    this.newRect = null;
+
+    // Only add if box is large enough
+    if (finalRect.getScaledWidth() >= 7 && finalRect.getScaledHeight() >= 7) {
+      this.addEventsToRectangle(finalRect);
+      this.canvas.add(finalRect);
+      this.boxAdded.emit(finalRect);
+    }
+
+    this.canvas.renderAll();
   }
 
   deselectSelectedRect() {
@@ -559,7 +704,7 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
       originY = pointer.y;
       
       if(self.newRect == null) {
-        self.newRect = self.makeRectangle(originX, originY, pointer.x-originX, pointer.y-originY, self.DEFAULT_RECT_FILL, 'blue', false);
+        self.newRect = self.makeRectangle(originX, originY, pointer.x-originX, pointer.y-originY, self.DEFAULT_RECT_FILL, self.DEFAULT_RECT_STROKE, false);
         self.canvas.add(self.newRect);
       }
     });
@@ -604,14 +749,12 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
       });
 
       self.boxAdded.emit(finalRect);
-      if(self.canvasType == CanvasType.SingleSelection) {
-        self.changeMode(CanvasMode.Pan);
-      }
-    });    
+    });
   }
 
-makeRectangle(left: number, top: number, width: number, height: number, fill: string = 'rgba(0,0,255,0.1)',
-  stroke: string = 'blue', addListeners: boolean = true, index: Index = null, trustedDimensions: boolean = false) {
+makeRectangle(left: number, top: number, width: number, height: number, fill: string = this.DEFAULT_RECT_FILL,
+  stroke: string = this.DEFAULT_RECT_STROKE, addListeners: boolean = true, index: Index = null, trustedDimensions: boolean = false) {
+  // Boundary checking
   if(!trustedDimensions) {
     if(left < 0) left = 0;
     if(top < 0) top = 0;
@@ -619,23 +762,13 @@ makeRectangle(left: number, top: number, width: number, height: number, fill: st
     if(left + width > canvasWidth) width = canvasWidth - left;
   }
 
-  let newRect = new fabric.Rect({
-    data: index,
-    left: left,
-    top: top,
-    originX: 'left',
-    originY: 'top',
-    width: width,
-    height: height,
-    angle: 0,
+  // Use shared service for consistent box creation
+  const newRect = this.canvasBoxService.createBox(left, top, width, height, {
     fill: fill,
-    selectionBackgroundColor: 'rgba(0,255,0,0.3)',
     stroke: stroke,
     strokeWidth: this.RECT_STROKE_WIDTH,
-    strokeUniform: true,
-    transparentCorners: false
+    data: index
   });
-
 
   if(addListeners) {
     this.addEventsToRectangle(newRect);
@@ -656,7 +789,7 @@ printTarget(target) {
   // //console.log("SCALED Height: ", target.getScaledHeight(), " Width: ", target.getScaledWidth())
 }
 
-addEventsToRectangle(rect: fabric.Rect) { 
+addEventsToRectangle(rect: fabric.Rect) {
   let self = this;
 
   rect.on('mouseover', (opt) => {
@@ -666,7 +799,10 @@ addEventsToRectangle(rect: fabric.Rect) {
 
     if(self.mode == CanvasMode.Pan) {
       if(this.canvas.getActiveObject() == undefined) {
-        self.emitSelectionChanged(rect.data.index);
+        // Only emit selection change if rect has data with index (not for selection boxes in stage 2)
+        if (rect.data && rect.data.index !== undefined) {
+          self.emitSelectionChanged(rect.data.index);
+        }
         self.changeSelection(rect);
       }
     }
@@ -681,11 +817,11 @@ addEventsToRectangle(rect: fabric.Rect) {
       let target = opt.target;
       if(self.deleteLine != null) {
         self.canvas.remove(self.deleteLine);
-      } 
+      }
 
       var pointer = self.canvas.getPointer(opt.e);
       let pointerX = pointer.x;
-      
+
       let targetHeight = target.getScaledHeight();
       let zoom = this.canvas.getZoom()
       self.deleteLine = new fabric.Line([pointerX, target.top, pointerX, (target.top + targetHeight)], {
@@ -694,8 +830,8 @@ addEventsToRectangle(rect: fabric.Rect) {
         selectable: false,
         evented: false
       })
-      
-      self.canvas.add(self.deleteLine);      
+
+      self.canvas.add(self.deleteLine);
       self.canvas.renderAll();
     }
     if(self.mode == CanvasMode.Delete) {
@@ -716,7 +852,7 @@ addEventsToRectangle(rect: fabric.Rect) {
       }
     }
 
-    if(self.mode == CanvasMode.Delete || ((self.mode == CanvasMode.Combine || self.mode == CanvasMode.Mark) && !rect.data.selectedForAction)) {
+    if(self.mode == CanvasMode.Delete || ((self.mode == CanvasMode.Combine || self.mode == CanvasMode.Mark) && rect.data && !rect.data.selectedForAction)) {
       this.fillBox(rect, RectColor.Regular);
     }
   });
@@ -735,14 +871,16 @@ addEventsToRectangle(rect: fabric.Rect) {
             targetHeight = target.getScaledHeight() - this.RECT_STROKE_WIDTH,
             targetWidth = target.getScaledWidth();
 
-      let leftRect = self.makeRectangle(targetLeft, targetTop, mouseX - targetLeft, targetHeight );      
+      let leftRect = self.makeRectangle(targetLeft, targetTop, mouseX - targetLeft, targetHeight );
       let leftRectWidth = leftRect.getScaledWidth();
       let rightRect = self.makeRectangle(mouseX, targetTop, targetWidth - leftRectWidth, targetHeight);
 
       self.canvas.add(leftRect, rightRect);
       self.canvas.remove(rect, self.deleteLine);
 
-      self.boxDeleted.emit(rect.data.index);
+      if (rect.data && rect.data.index !== undefined) {
+        self.boxDeleted.emit(rect.data.index);
+      }
       self.boxAdded.emit(rightRect);
       self.boxAdded.emit(leftRect);
 
@@ -754,13 +892,17 @@ addEventsToRectangle(rect: fabric.Rect) {
 
     if(self.mode == CanvasMode.Delete) {
       self.canvas.remove(rect);
-      self.boxDeleted.emit(rect.data.index);
+      if (rect.data && rect.data.index !== undefined) {
+        self.boxDeleted.emit(rect.data.index);
+      }
       rect = null;
     }
-    
+
     else if(self.mode == CanvasMode.Combine || self.mode == CanvasMode.Mark) {
-      self.boxMarkToggle.emit(rect.data.index);
-    } 
+      if (rect.data && rect.data.index !== undefined) {
+        self.boxMarkToggle.emit(rect.data.index);
+      }
+    }
 
   });
 }
@@ -901,15 +1043,15 @@ fillBox(rect: Rect, mode: RectColor, render = true) {
   switch (mode) {
     case RectColor.Regular:
       rect.set("fill", this.DEFAULT_RECT_FILL);
-      rect.set("stroke", 'blue');
+      rect.set("stroke", this.DEFAULT_RECT_STROKE);
       break;
     case RectColor.Delete:
-      rect.set("fill", 'rgba(255,0,0,0.1)');
-      rect.set("stroke", 'red');
+      rect.set("fill", 'rgba(244,67,54,0.2)');  // Material red
+      rect.set("stroke", '#F44336');
       break;
     case RectColor.Mark:
-      rect.set("fill", 'rgba(200,255,0,0.2)');
-      rect.set("stroke", 'black');
+      rect.set("fill", 'rgba(255,235,59,0.3)');  // Material yellow
+      rect.set("stroke", '#FFC107');  // Material amber
       break;
     default:
       break;

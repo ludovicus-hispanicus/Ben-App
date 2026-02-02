@@ -26,8 +26,8 @@ export class CuredService {
                                      {responseType: 'blob'});
     }
 
-    getTransliterations(imageBase64: string) {
-        return this.http.post<CuredResult>(`${environment.apiUrl}${this.baseUrl}/getTransliterations`, {"image": imageBase64});
+    getTransliterations(imageBase64: string, model: string = 'latest') {
+        return this.http.post<CuredResult>(`${environment.apiUrl}${this.baseUrl}/getTransliterations`, {"image": imageBase64, "model": model});
     }
 
     getTextTransliterations(benId: number) {
@@ -39,7 +39,7 @@ export class CuredService {
     }
 
     saveImage(file: File, textId: number) {
-        let url = "/saveImage";
+        let url = "/saveImage/";
         
         const uploadData = new FormData();
         uploadData.append('file', file, file.name);
@@ -65,4 +65,113 @@ export class CuredService {
         return this.http.get(`${environment.apiUrl}${this.baseUrl}/transliterationImage/${textId}/${transliterationId}`, { responseType: 'blob' });
     }
 
+    deleteTransliteration(textId: number, transliterationId: number) {
+        return this.http.delete<{deleted: string}>(`${environment.apiUrl}${this.baseUrl}/${textId}/${transliterationId}`);
+    }
+
+    deleteText(textId: number) {
+        return this.http.delete<{deleted: string}>(`${environment.apiUrl}${this.baseUrl}/${textId}`);
+    }
+
+    getTrainingStatus() {
+        return this.http.get<{
+            curatedTexts: number;
+            previousLines: number;
+            newLines: number;
+            totalLines: number;
+            requiredForNextTraining: number;
+            progress: number;
+            isReady: boolean;
+            lastTraining: string | null;
+            currentTraining: TrainingProgress | null;
+        }>(`${environment.apiUrl}${this.baseUrl}/training/status`);
+    }
+
+    startTraining(epochs: number = 50, modelName: string = null) {
+        const params: any = { epochs };
+        if (modelName) {
+            params.model_name = modelName;
+        }
+        return this.http.post<{ message: string; epochs: number; model_name: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/start`,
+            null,
+            { params }
+        );
+    }
+
+    getTrainingProgress() {
+        return this.http.get<TrainingProgress>(`${environment.apiUrl}${this.baseUrl}/training/progress`);
+    }
+
+    cancelTraining() {
+        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/cancel`, null);
+    }
+
+    listModels() {
+        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/models`);
+    }
+
+    getActiveModel() {
+        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/active-model`);
+    }
+
+    activateModel(modelName: string) {
+        return this.http.post<{ message: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/models/${modelName}/activate`,
+            null
+        );
+    }
+
+    applyPostProcessing(lines: string[]) {
+        return this.http.post<PostProcessingResult>(
+            `${environment.apiUrl}${this.baseUrl}/postprocessor/apply`,
+            { lines }
+        );
+    }
+
+}
+
+export interface PostProcessingResult {
+    lines: string[];
+    corrections: PostProcessingCorrection[];
+}
+
+export interface PostProcessingCorrection {
+    original: string;
+    corrected: string;
+    corrections_count: number;
+    corrections: Array<{
+        original: string;
+        corrected: string;
+        rule_type: string;
+        description: string;
+        position: number;
+    }>;
+}
+
+export interface TrainingProgress {
+    status: 'idle' | 'preparing' | 'training' | 'completed' | 'failed' | 'cancelled';
+    current_epoch: number;
+    total_epochs: number;
+    accuracy: number;
+    model_name: string | null;
+    error: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+}
+
+export interface TrainedModel {
+    name: string;
+    path: string;
+    created: string;
+    epochs?: number;
+    accuracy?: number;
+    size_mb?: number;
+}
+
+export interface ActiveModelInfo {
+    name: string;
+    is_pretrained: boolean;
+    size_mb: number;
+    last_modified: string | null;
 }

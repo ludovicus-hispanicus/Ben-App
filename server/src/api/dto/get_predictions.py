@@ -29,6 +29,7 @@ class GetPredictionDto(BaseModel):
 
 class CureDGetTransliterationsDto(BaseModel):
     image: str
+    model: str = "latest"  # Options: "latest", "dillard", "base"
 
 
 class AmendmentStats(BaseModel):

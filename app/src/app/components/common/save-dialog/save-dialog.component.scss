@@ -1,0 +1,165 @@
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 28px;
+  background: #fafafa;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .ben-label {
+      font-size: 15px;
+      color: #888;
+      font-weight: 400;
+    }
+
+    .ben-id {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+
+      &.new {
+        color: #1976d2;
+        font-style: italic;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .save-btn {
+    background: #1976d2;
+    color: white;
+    width: 44px;
+    height: 44px;
+
+    mat-icon {
+      font-size: 26px;
+      width: 26px;
+      height: 26px;
+    }
+
+    &:hover {
+      background: #1565c0;
+    }
+  }
+}
+
+.divider {
+  height: 2px;
+  background: linear-gradient(to right, #e0e0e0, #ccc, #e0e0e0);
+  margin: 0;
+
+  &.inner {
+    margin: 20px 0;
+    height: 1px;
+    background: #e8e8e8;
+  }
+}
+
+mat-dialog-content {
+  padding: 28px;
+  min-width: 440px;
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+
+    .field-input {
+      flex: 1;
+    }
+
+    button {
+      margin-top: 0;
+      color: #ccc;
+      transition: all 0.2s ease;
+      width: 40px;
+      height: 40px;
+
+      mat-icon {
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
+      }
+
+      &:hover {
+        color: #1976d2;
+        background: rgba(25, 118, 210, 0.08);
+      }
+
+      &.active {
+        color: #4caf50;
+        background: rgba(76, 175, 80, 0.12);
+      }
+    }
+  }
+
+  .part-row {
+    margin-top: 8px;
+    padding-right: 52px; // Align with fields above (no button)
+
+    .field-input {
+      width: 100%;
+    }
+  }
+}
+
+mat-dialog-actions {
+  padding: 16px 28px 20px;
+  background: #fafafa;
+
+  .cancel-btn {
+    font-size: 14px;
+    padding: 8px 24px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    color: #666;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #f5f5f5;
+      border-color: #999;
+      color: #333;
+    }
+  }
+}
+
+// Form field styling
+::ng-deep {
+  .mat-form-field-wrapper {
+    margin-bottom: -1.25em;
+    padding-bottom: 0;
+  }
+
+  .mat-form-field-appearance-outline {
+    .mat-form-field-infix {
+      padding: 0.7em 0;
+    }
+
+    .mat-form-field-outline {
+      color: #ddd;
+    }
+
+    &.mat-focused .mat-form-field-outline-thick {
+      color: #1976d2;
+    }
+
+    .mat-form-field-label {
+      color: #666;
+      font-size: 14px;
+    }
+
+    input {
+      font-size: 15px;
+
+      &::placeholder {
+        color: #aaa;
+        font-size: 14px;
+      }
+    }
+  }
+}

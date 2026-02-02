@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe\" test_spacy_layout.py \"geller2001-2002 west meets east early greek and babylonian diagnosis afo 48-49.pdf\")"
+    ]
+  }
+}

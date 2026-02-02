@@ -54,4 +54,16 @@ export class TextService {
     getRandomTexts() {
         return this.http.get<GalleryItem[]>(`${environment.apiUrl}${this.baseUrl}/getRandomTexts/`);
     }
+
+    getLabels() {
+        return this.http.get<string[]>(`${environment.apiUrl}${this.baseUrl}/labels`);
+    }
+
+    updateLabel(textId: number, label: string) {
+        return this.http.patch<{updated: boolean}>(`${environment.apiUrl}${this.baseUrl}/${textId}/label`, { label });
+    }
+
+    updatePart(textId: number, part: string) {
+        return this.http.patch<{updated: boolean}>(`${environment.apiUrl}${this.baseUrl}/${textId}/part`, { part });
+    }
 }

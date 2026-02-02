@@ -10,7 +10,8 @@ from api.dto.letter import SignsData
 from api.dto.stage_one import StageOneDto
 from api.dto.submit import SubmitDto
 from api.dto.text import NewTextPreviewDto
-from auth.auth_bearer import JWTBearer
+# Auth removed for desktop app
+# from auth.auth_bearer import JWTBearer
 from clients.translator_client import TranslatorClient
 from common.global_handlers import global_ai_handler, global_texts_handler
 from entities.dimensions import Dimensions
@@ -103,7 +104,7 @@ async def get_specific_predictions(dto: GetSpecificPredictionsDto):
     return global_ai_handler.get_text_specific_predictions(text=text, bounding_boxes=dto.dimensions)
 
 
-@router.post("/submit/", dependencies=[Depends(JWTBearer())])
+@router.post("/submit/")
 async def submit(request: Request, submit_dto: SubmitDto):
     logging.info(submit_dto)
     logging.info(f"submit text id, {submit_dto.text_id}")
@@ -114,12 +115,12 @@ async def submit(request: Request, submit_dto: SubmitDto):
     return global_texts_handler.get_amendment_stats()
 
 
-@router.post("/set-in-progress/{text_id}", dependencies=[Depends(JWTBearer())])
+@router.post("/set-in-progress/{text_id}")
 async def set_in_progress(request: Request, text_id: int):
     logging.info(f"set text {text_id} in progress")
     global_texts_handler.set_text_in_progress(text_id=text_id)
 
-@router.post("/stageOneFile", dependencies=[Depends(JWTBearer())])
+@router.post("/stageOneFile")
 async def stage_one_file(request: Request, file: UploadFile = File(...), old_text_id=Form(...),
                          use_detectron: bool = Form(True),
                          detectron_sensitivity: float = Form(0.5)) -> StageOneDto:

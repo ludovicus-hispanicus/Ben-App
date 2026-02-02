@@ -21,7 +21,7 @@
     "@angular/platform-browser": "~12.1.0",
     "@angular/platform-browser-dynamic": "~12.1.0",
     "@angular/router": "~12.1.0",
-    "@auth0/angular-jwt": "^5.0.2",
+    "@auth0/angular-jwt": "5.0.2",
     "@ngrx/effects": "^13.0.2",
     "@ngrx/store": "^13.0.2",
     "@types/fabric": "^4.5.1",

@@ -13,9 +13,17 @@ from auth.auth_bearer import JWTBearer
 from auth.auth_handler import decode_jwt
 from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
-from api.routers import cured, about
+from api.routers import cured, about, yolo_training
 from api.routers import users, amendment, detexify, text
 from utils.storage_utils import StorageUtils
+
+# VLM OCR is optional - requires MongoDBClient and DeepSeek-OCR service
+try:
+    from api.routers import vlm_ocr
+    vlm_ocr_available = True
+except ImportError as e:
+    logging.warning(f"VLM OCR router not available: {e}. Dictionary OCR features will be disabled.")
+    vlm_ocr_available = False
 
 origins = [
     "*",
@@ -28,6 +36,9 @@ app.include_router(users.router)
 app.include_router(cured.router)
 app.include_router(text.router)
 app.include_router(about.router)
+if vlm_ocr_available:
+    app.include_router(vlm_ocr.router)  # Dictionary OCR (Beta)
+app.include_router(yolo_training.router)  # YOLO Layout Detection Training
 
 app.add_middleware(
     CORSMiddleware,

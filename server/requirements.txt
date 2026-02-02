@@ -1,6 +1,7 @@
 fastapi~=0.68.0
 pymongo~=3.12.0
 pydantic~=1.8.2
+typing_extensions>=3.7.4
 requests~=2.25.0
 python-multipart
 aiofiles
@@ -11,13 +12,15 @@ pandas>=1.2.4
 uvicorn~=0.15.0
 # Pillow~=8.2.0
 PyJWT>=2.2.0
+pyopenssl>=23.0.0  # Compatible with cryptography 46.x
 starlette>=0.14.2
 pdf2image>=1.16.0
-kraken
+kraken>=5.2.0,<6.0.0  # Kraken 5.2.x with PyTorch 2.x support
 opencv-python-headless
 python-dotenv
-torch~=1.11.0
-python-dev-tools
+# python-dev-tools  # Removed - causes dependency resolution issues
+httpx>=0.24.0  # Async HTTP client for VLM OCR
 pygit2
 pgzip
+ultralytics>=8.0.0  # YOLOv8 for layout detection training
 

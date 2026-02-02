@@ -1,4 +1,6 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://ben-digpasts.com/api/v1'
+  // For desktop app: use relative URL (proxied by nginx to server container)
+  // For web deployment, change to: 'https://ben-digpasts.com/api/v1'
+  apiUrl: '/api/v1'
 };

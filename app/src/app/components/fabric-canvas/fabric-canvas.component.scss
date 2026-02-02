@@ -32,9 +32,12 @@
 }
 
 .mega-container {
-    box-shadow: 5px 2px #88888857;
-    border: 1px solid #000000bf;
-    border-radius: 3%;
+    
+    overflow: hidden;
+
+    .canvas-container {
+        max-width: 100%;
+    }
 }
 
 .a-template {
@@ -61,7 +64,8 @@
         // height: 50em !important;
         // overflow-y: scroll !important;
         width: 100%;
-        padding: 1%;
+        // IMPORTANT: No padding on canvas - it causes cursor offset issues with fabric.js
+        // padding: 1%;
     }
 
     .brush-container {
