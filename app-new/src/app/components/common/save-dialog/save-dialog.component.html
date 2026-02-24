@@ -1,0 +1,73 @@
+<h2 mat-dialog-title>
+  <div class="title-left">
+    <mat-icon>save</mat-icon>
+    <span>Save Transliteration</span>
+  </div>
+  <span class="ben-id" *ngIf="data.textId">BEN {{ data.textId }}</span>
+  <span class="ben-id new" *ngIf="!data.textId">New Text</span>
+</h2>
+
+<mat-dialog-content>
+  <div class="section-label">Identifiers</div>
+
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Museum Number</mat-label>
+      <input matInput [formControl]="museumNumberControl" placeholder="e.g., BM-123456">
+    </mat-form-field>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>P-Number</mat-label>
+      <input matInput [formControl]="pNumberControl" placeholder="e.g., P-431300">
+    </mat-form-field>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Publication Number</mat-label>
+      <input matInput [formControl]="publicationNumberControl" placeholder="e.g., CT-51">
+    </mat-form-field>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-label">Classification</div>
+
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Label</mat-label>
+      <input matInput
+             [formControl]="labelControl"
+             [matAutocomplete]="autoLabel"
+             placeholder="Type or select existing label">
+      <mat-autocomplete #autoLabel="matAutocomplete">
+        <mat-option *ngFor="let label of filteredLabels | async" [value]="label">
+          {{ label }}
+        </mat-option>
+      </mat-autocomplete>
+    </mat-form-field>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Part</mat-label>
+      <input matInput type="number" [(ngModel)]="partInput" placeholder="Part number" min="1">
+    </mat-form-field>
+    <div class="existing-parts" *ngIf="data.existingParts?.length > 0">
+      <span class="parts-label">Used:</span>
+      <span class="part-badge"
+            *ngFor="let p of data.existingParts"
+            [class.current]="p === partInput"
+            (click)="partInput = p">
+        {{ p }}
+      </span>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" (click)="onSave()">Save</button>
+</mat-dialog-actions>

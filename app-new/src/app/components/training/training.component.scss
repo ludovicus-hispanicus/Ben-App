@@ -1,0 +1,564 @@
+.training-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+
+  &.visualizer-active {
+    padding: 0;
+    max-width: none;
+    margin: 0;
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+  }
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 12px;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #666;
+    transition: all 0.2s;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: #f5f5f5;
+    }
+
+    &.active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+  }
+}
+
+.view-content {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+// ========== Models View ==========
+.two-column-layout {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.column-left {
+  h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 500;
+  }
+}
+
+.column-right {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.list-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #fafafa;
+  }
+
+  &.selected {
+    background: #e3f2fd;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .item-info {
+    flex: 1;
+
+    .item-name {
+      display: block;
+      font-weight: 500;
+    }
+
+    .item-meta {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+  }
+}
+
+.active-badge {
+  font-size: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  color: #4caf50;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.empty-state {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h3 {
+    margin: 0;
+  }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+.model-details {
+  margin-bottom: 24px;
+
+  .detail-row {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+
+    .label {
+      width: 140px;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .value {
+      flex: 1;
+      font-weight: 500;
+    }
+  }
+}
+
+.base-models-list {
+  margin-top: 24px;
+
+  .base-model-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #666;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+// ========== Training View ==========
+.training-layout {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px;
+
+  @media (max-width: 1000px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.training-config {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+
+  h3 {
+    margin: 0 0 20px 0;
+  }
+
+  mat-form-field {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+// Engine List
+.engine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+
+  .engine-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid #e0e0e0;
+    background: #fff;
+    color: #757575;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #9e9e9e;
+    }
+
+    .engine-info {
+      display: flex;
+      flex-direction: column;
+
+      .engine-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: #424242;
+      }
+
+      .engine-desc {
+        font-size: 11px;
+        color: #9e9e9e;
+      }
+    }
+
+    &:hover {
+      border-color: #bdbdbd;
+      background: #fafafa;
+    }
+
+    &.active {
+      border-color: #1976d2;
+      background: rgba(25, 118, 210, 0.06);
+
+      mat-icon {
+        color: #1976d2;
+      }
+
+      .engine-info .engine-name {
+        color: #1976d2;
+      }
+    }
+  }
+}
+
+// Config Section (Training Configuration)
+.config-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    color: #666;
+  }
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  > * {
+    min-width: 0;
+  }
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Readiness Section
+.readiness-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+
+  .readiness-detail {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-left: auto;
+  }
+
+  &.ready {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  &.not-ready {
+    background: #fff3e0;
+    color: #e65100;
+  }
+}
+
+// Right Panel with Tabs
+.training-right-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.training-right-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    font-size: 13px;
+    color: #666;
+    transition: all 0.2s;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      background: #f5f5f5;
+    }
+
+    &.active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .tab-badge {
+      font-size: 11px;
+      background: #1976d2;
+      color: white;
+      border-radius: 10px;
+      padding: 1px 6px;
+      min-width: 18px;
+      text-align: center;
+    }
+  }
+}
+
+.training-right-content {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+// Progress Card
+.progress-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  &.large {
+    padding: 24px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 16px;
+
+    .training-id {
+      font-family: monospace;
+      color: #666;
+    }
+
+    .training-status {
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+  }
+
+  mat-progress-bar {
+    margin-bottom: 16px;
+    height: 8px;
+    border-radius: 4px;
+  }
+
+  .progress-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 16px;
+
+    .stat {
+      .label {
+        display: block;
+        font-size: 11px;
+        color: #999;
+      }
+      .value {
+        font-weight: 500;
+        color: #333;
+      }
+    }
+  }
+
+  .error-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 4px;
+    margin-top: 16px;
+
+    mat-icon {
+      font-size: 18px;
+    }
+  }
+}
+
+// Epoch History
+.epoch-history {
+  margin-top: 24px;
+
+  h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #666;
+  }
+}
+
+.epoch-table-container {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.epoch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  th {
+    background: #fafafa;
+    color: #666;
+    font-weight: 500;
+    font-size: 12px;
+  }
+
+  td {
+    color: #333;
+  }
+
+  tr.best-epoch {
+    background: rgba(76, 175, 80, 0.08);
+
+    td {
+      color: #388e3c;
+    }
+  }
+}
+
+// Jobs Table
+.jobs-table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+
+  .job-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 100px 100px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+
+    &.header {
+      background: #fafafa;
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .empty-row {
+    padding: 40px;
+    text-align: center;
+    color: #888;
+  }
+}

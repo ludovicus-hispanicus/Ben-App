@@ -1,0 +1,173 @@
+<div class="text-editor-container" [class.dark-mode]="darkMode" (keydown)="onKeydown($event)">
+  <!-- Editor header (only shown in plain text mode with validation data) -->
+  <div class="editor-header" *ngIf="plainTextMode && validationValid !== null">
+    <span class="spacer"></span>
+    <span class="validation-status-inline">
+      <mat-icon *ngIf="isValidating" class="btn-icon spinning">sync</mat-icon>
+      <mat-icon *ngIf="!isValidating && validationValid" class="btn-icon valid-icon">check_circle</mat-icon>
+      <mat-icon *ngIf="!isValidating && !validationValid" class="btn-icon invalid-icon">error</mat-icon>
+      <span class="validation-info">
+        {{ validationParsedLines }} lines
+        <span *ngIf="validationErrorCount > 0" class="error-count">| {{ validationErrorCount }} error(s)</span>
+        <span *ngIf="validationWarningCount > 0" class="warning-count">| {{ validationWarningCount }} warning(s)</span>
+      </span>
+      <span class="validation-source" *ngIf="validationSourceLabel">{{ validationSourceLabel }}</span>
+    </span>
+  </div>
+
+  <!-- Editor body: editor + optional right panel + right toolbar -->
+  <div class="editor-body">
+    <!-- Main editor area (ACE + bracket legend) -->
+    <div class="editor-main">
+      <div class="editor-pane" (wheel)="onEditorWheel($event)">
+        <div #aceEditor class="ace-editor"></div>
+      </div>
+
+      <!-- Bracket legend - hidden in plain text mode -->
+      <div class="bracket-legend" *ngIf="!plainTextMode">
+        <span class="legend-item hl-square">[ ]</span> damage
+        <span class="legend-item hl-paren">( )</span> supplied
+        <span class="legend-item hl-angle">&lt; &gt;</span> omitted
+        <span class="legend-item hl-curly">{{ '{' }} {{ '}' }}</span> determinative
+        <span class="legend-item hl-half">⸢ ⸣</span> partial
+      </div>
+    </div>
+
+    <!-- Right panel (slides in when a toolbar button is active) -->
+    <div class="right-panel" *ngIf="!plainTextMode && activeRightPanel" [style.width.px]="rightPanelWidth">
+      <div class="panel-resizer" (mousedown)="startPanelResize($event)">
+        <div class="panel-resizer-handle"></div>
+      </div>
+      <div class="panel-inner">
+        <div class="panel-header">
+          <span class="panel-title" *ngIf="activeRightPanel === 'replacement'">Replacement Chart</span>
+          <span class="panel-title" *ngIf="activeRightPanel === 'normalized'">Normalized Preview</span>
+          <span class="spacer"></span>
+          <button class="panel-close" (click)="toggleRightPanel(activeRightPanel)" matTooltip="Close panel">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <!-- Normalized preview content -->
+        <div class="panel-content rendered-content" *ngIf="activeRightPanel === 'normalized'" [innerHTML]="renderedHtml"></div>
+
+        <!-- Replacement Chart -->
+        <div class="panel-content replacement-chart" *ngIf="activeRightPanel === 'replacement'">
+        <div class="chart-controls">
+          <input type="text" class="chart-input from" [(ngModel)]="newMappingFrom" placeholder="From">
+          <span class="arrow">→</span>
+          <input type="text" class="chart-input to" [(ngModel)]="newMappingTo" placeholder="To (empty = remove)">
+          <select class="chart-select" [(ngModel)]="newMappingCategory">
+            <option value="Custom">Custom</option>
+            <option *ngFor="let cat of mappingCategories" [value]="cat">{{ cat }}</option>
+          </select>
+          <button class="chart-btn add" (click)="addMapping()" matTooltip="Add mapping">
+            <mat-icon>add</mat-icon>
+          </button>
+          <button class="chart-btn reset" (click)="resetMappings()" matTooltip="Reset to defaults">
+            <mat-icon>restart_alt</mat-icon>
+          </button>
+        </div>
+
+        <div class="chart-categories">
+          <div class="chart-category" *ngFor="let category of mappingCategories">
+            <div class="category-header" (click)="toggleCategoryMappings(category)">
+              <span class="category-name">{{ category }}</span>
+              <span class="category-count">({{ getMappingsByCategory(category).length }})</span>
+            </div>
+            <div class="category-mappings">
+              <div class="mapping-row" *ngFor="let mapping of getMappingsByCategory(category)"
+                [class.disabled]="!mapping.enabled">
+                <label class="mapping-checkbox">
+                  <input type="checkbox" [checked]="mapping.enabled" (change)="toggleMapping(mapping)">
+                </label>
+                <span class="mapping-from">{{ mapping.from || '(empty)' }}</span>
+                <span class="mapping-arrow">→</span>
+                <span class="mapping-to">{{ mapping.to || '(remove)' }}</span>
+                <button class="mapping-delete" (click)="removeMapping(mapping)" matTooltip="Remove">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Right toolbar (always visible, except in plain text mode) -->
+    <div class="right-toolbar" *ngIf="!plainTextMode">
+
+      <!-- Section: Info -->
+      <span class="rt-info" matTooltip="Bounding boxes">
+        <mat-icon>image</mat-icon>
+        <span class="rt-info-count">{{ boxAmount ?? 0 }}</span>
+      </span>
+      <span class="rt-info" matTooltip="Text lines">
+        <mat-icon>notes</mat-icon>
+        <span class="rt-info-count">{{ lineCount }}</span>
+      </span>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Panels -->
+      <button class="rt-btn" [class.active]="activeRightPanel === 'normalized'"
+        (click)="toggleRightPanel('normalized')" matTooltip="Normalized Preview">
+        <mat-icon>visibility</mat-icon>
+      </button>
+      <button class="rt-btn" [class.active]="activeRightPanel === 'replacement'"
+        (click)="toggleRightPanel('replacement')" matTooltip="Replacement Chart">
+        <mat-icon>swap_horiz</mat-icon>
+      </button>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Editor Tools -->
+      <button class="rt-btn" (click)="openAceSearch()" matTooltip="Find & Replace (Ctrl+H)">
+        <mat-icon>search</mat-icon>
+      </button>
+      <button class="rt-btn" (click)="toggleDarkMode()" [matTooltip]="darkMode ? 'Light mode' : 'Dark mode'">
+        <mat-icon>{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
+      </button>
+      <button class="rt-btn" (click)="removeEmptyLines()" matTooltip="Remove empty lines">
+        <mat-icon>cleaning_services</mat-icon>
+      </button>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Zoom -->
+      <button class="rt-btn" (click)="zoomEditorOut()" matTooltip="Zoom out (Ctrl+Scroll)"
+        [disabled]="editorFontSize <= minFontSize">
+        <mat-icon>remove</mat-icon>
+      </button>
+      <button class="rt-btn rt-text-btn" (click)="resetEditorZoom()" matTooltip="Reset zoom">
+        <span class="rt-text">{{ editorFontSize }}</span>
+      </button>
+      <button class="rt-btn" (click)="zoomEditorIn()" matTooltip="Zoom in (Ctrl+Scroll)"
+        [disabled]="editorFontSize >= maxFontSize">
+        <mat-icon>add</mat-icon>
+      </button>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Line Numbering -->
+      <input class="rt-number-input" type="number" [(ngModel)]="startNumber" min="1" placeholder="1"
+        matTooltip="Starting line number">
+      <button class="rt-btn" (click)="addLineNumbers()" matTooltip="Number lines from {{startNumber}}">
+        <mat-icon>format_list_numbered</mat-icon>
+      </button>
+      <button class="rt-btn rt-text-btn" (click)="toggleNumberStyle()"
+        [matTooltip]="numberStyle === 'plain' ? 'Style: 1, 2, 3' : 'Style: 1′, 2′, 3′'">
+        <span class="rt-text">{{ numberStyleLabel }}</span>
+      </button>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Format -->
+      <button class="rt-btn rt-text-btn" (click)="setViewMode(viewMode === 'atf' ? 'raw' : 'atf')"
+        [matTooltip]="viewMode === 'atf' ? 'Switch to Raw format' : 'Switch to eBL-ATF format'">
+        <span class="rt-text">{{ viewMode === 'atf' ? 'RAW' : 'eBL' }}</span>
+      </button>
+    </div>
+  </div>
+</div>

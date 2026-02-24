@@ -1,0 +1,31 @@
+<div style="display: flex; flex-direction: column;">
+    <div class="id-box" style="margin-top: 1em;">
+        <mat-form-field class="example-full-width" appearance="fill">
+            <mat-label>CDLI no.</mat-label>
+            <span matPrefix>P-&nbsp;</span>
+            <input type="number" matInput [(ngModel)]="textIdentifiers.p_number.number" placeholder="123456789">
+        </mat-form-field>
+    </div>  
+
+    <div class="id-box">
+        <smart-selector [states]="museums" [hint]="'museum'" [width]="'30em'"
+        (valueChange)="textIdentifiers.museum.name=$event"[resetAfterSelected]="false"></smart-selector>
+
+        <mat-form-field class="example-full-width" appearance="fill">
+            <mat-label>item no.</mat-label>
+            <input type="number" min="1" matInput [(ngModel)]="textIdentifiers.museum.number" placeholder="123456789"> 
+        </mat-form-field>
+    </div>
+
+    <!-- <div class="id-box">
+        
+        <smart-selector [states]="publications" [hint]="'publication'" [width]="'40em'"
+        (valueChange)="textIdentifiers.publication.name=$event" [resetAfterSelected]="false"></smart-selector>
+
+        <mat-form-field class="example-full-width" appearance="fill">
+            <mat-label>publication no.</mat-label>
+            <input type="number" min="1" matInput [(ngModel)]="textIdentifiers.publication.number" placeholder="123456789"> 
+        </mat-form-field>
+
+    </div> -->
+</div>

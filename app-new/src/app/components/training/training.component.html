@@ -1,0 +1,733 @@
+<div class="training-container" [class.visualizer-active]="hideChrome">
+  <!-- Header (hidden in visualizer/export mode) -->
+  <div class="header" *ngIf="!hideChrome">
+    <h1>CuReD</h1>
+  </div>
+
+  <!-- Navigation Tabs (hidden in visualizer/export mode) -->
+  <div class="nav-tabs" *ngIf="!hideChrome">
+    <button [class.active]="ocrViewMode === OcrViewMode.Datasets" (click)="setOcrViewMode(OcrViewMode.Datasets)">
+      <mat-icon>edit_document</mat-icon> Datasets
+    </button>
+    <button [class.active]="ocrViewMode === OcrViewMode.Models" (click)="setOcrViewMode(OcrViewMode.Models)">
+      <mat-icon>model_training</mat-icon> Models
+    </button>
+    <button [class.active]="ocrViewMode === OcrViewMode.Training" (click)="setOcrViewMode(OcrViewMode.Training)">
+      <mat-icon>fitness_center</mat-icon> Training
+    </button>
+    <button [class.active]="ocrViewMode === OcrViewMode.Export" (click)="setOcrViewMode(OcrViewMode.Export)">
+      <mat-icon>publish</mat-icon> Export
+    </button>
+  </div>
+
+  <!-- ====== DATASETS VIEW ====== -->
+  <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Datasets">
+    <cured (stageChange)="curedStage = $event"></cured>
+  </div>
+
+  <!-- ====== MODELS VIEW ====== -->
+  <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Models">
+    <div class="two-column-layout">
+      <!-- Left: Model Lists -->
+      <div class="column-left">
+        <!-- Kraken Models -->
+        <h3>Kraken Models</h3>
+        <div class="list-section">
+          <div class="list-item" *ngFor="let model of krakenModels"
+               [class.selected]="selectedKrakenModel?.name === model.name"
+               (click)="selectedKrakenModel = model; selectedDeepseekModel = null; selectedQwenModel = null">
+            <div class="item-info">
+              <span class="item-name">
+                {{ model.name }}
+                <mat-icon *ngIf="krakenActiveModel?.name === model.name" class="active-badge">check_circle</mat-icon>
+              </span>
+              <span class="item-meta">
+                <span *ngIf="model.accuracy">{{ (model.accuracy * 100).toFixed(1) }}% acc</span>
+                <span *ngIf="model.epochs"> · {{ model.epochs }} epochs</span>
+              </span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="krakenModels.length === 0">
+            No Kraken models yet. Train one in the Training tab.
+          </div>
+        </div>
+
+        <!-- DeepSeek Models -->
+        <h3 style="margin-top: 24px;">DeepSeek Models</h3>
+        <div class="list-section">
+          <div class="list-item" *ngFor="let model of deepseekModels"
+               [class.selected]="selectedDeepseekModel?.name === model.name"
+               (click)="selectedDeepseekModel = model; selectedKrakenModel = null; selectedQwenModel = null">
+            <div class="item-info">
+              <span class="item-name">
+                {{ model.name }}
+                <mat-icon *ngIf="deepseekActiveModel?.name === model.name" class="active-badge">check_circle</mat-icon>
+              </span>
+              <span class="item-meta">
+                <span *ngIf="model.accuracy">{{ (model.accuracy * 100).toFixed(1) }}% acc</span>
+                <span *ngIf="model.epochs"> · {{ model.epochs }} epochs</span>
+              </span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="deepseekModels.length === 0">
+            No DeepSeek models yet. Train one in the Training tab.
+          </div>
+        </div>
+
+        <!-- Qwen Models -->
+        <h3 style="margin-top: 24px;">Qwen Models</h3>
+        <div class="list-section">
+          <div class="list-item" *ngFor="let model of qwenModels"
+               [class.selected]="selectedQwenModel?.name === model.name"
+               (click)="selectedQwenModel = model; selectedKrakenModel = null; selectedDeepseekModel = null">
+            <div class="item-info">
+              <span class="item-name">
+                {{ model.name }}
+                <mat-icon *ngIf="qwenActiveModel?.name === model.name" class="active-badge">check_circle</mat-icon>
+              </span>
+              <span class="item-meta">
+                <span *ngIf="model.best_loss">Loss: {{ model.best_loss.toFixed(4) }}</span>
+                <span *ngIf="model.epochs"> · {{ model.epochs }} epochs</span>
+                <span *ngIf="model.base_model"> · {{ model.base_model }}</span>
+              </span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="qwenModels.length === 0">
+            No Qwen models yet. Train one in the Training tab.
+          </div>
+        </div>
+
+        <!-- Base Models -->
+        <h3 style="margin-top: 24px;">Base Models</h3>
+        <div class="base-models-list">
+          <div class="base-model-item" *ngFor="let model of krakenBaseModels">
+            <mat-icon>memory</mat-icon>
+            {{ model.name }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Model Details -->
+      <div class="column-right" *ngIf="selectedKrakenModel">
+        <div class="detail-header">
+          <h3>{{ selectedKrakenModel.name }}</h3>
+          <div class="detail-actions">
+            <button mat-raised-button color="accent"
+                    (click)="activateKrakenModel(selectedKrakenModel.name)"
+                    [disabled]="krakenActiveModel?.name === selectedKrakenModel.name">
+              <mat-icon>check_circle</mat-icon>
+              {{ krakenActiveModel?.name === selectedKrakenModel.name ? 'Active Model' : 'Set as Active' }}
+            </button>
+            <button mat-icon-button color="warn"
+                    (click)="deleteKrakenModel(selectedKrakenModel.name)"
+                    [disabled]="krakenActiveModel?.name === selectedKrakenModel.name"
+                    [matTooltip]="krakenActiveModel?.name === selectedKrakenModel.name ? 'Cannot delete active model' : 'Delete model'">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="model-details">
+          <div class="detail-row">
+            <span class="label">Engine:</span>
+            <span class="value">Kraken OCR</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedKrakenModel.epochs">
+            <span class="label">Training Epochs:</span>
+            <span class="value">{{ selectedKrakenModel.epochs }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedKrakenModel.accuracy">
+            <span class="label">Accuracy:</span>
+            <span class="value">{{ (selectedKrakenModel.accuracy * 100).toFixed(2) }}%</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedKrakenModel.size_mb">
+            <span class="label">File Size:</span>
+            <span class="value">{{ selectedKrakenModel.size_mb.toFixed(1) }} MB</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedKrakenModel.created }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="column-right" *ngIf="selectedDeepseekModel">
+        <div class="detail-header">
+          <h3>{{ selectedDeepseekModel.name }}</h3>
+          <div class="detail-actions">
+            <button mat-raised-button color="accent"
+                    (click)="activateDeepseekModel(selectedDeepseekModel.name)"
+                    [disabled]="deepseekActiveModel?.name === selectedDeepseekModel.name">
+              <mat-icon>check_circle</mat-icon>
+              {{ deepseekActiveModel?.name === selectedDeepseekModel.name ? 'Active Model' : 'Set as Active' }}
+            </button>
+            <button mat-icon-button color="warn"
+                    (click)="deleteDeepseekModel(selectedDeepseekModel.name)"
+                    [disabled]="deepseekActiveModel?.name === selectedDeepseekModel.name"
+                    [matTooltip]="deepseekActiveModel?.name === selectedDeepseekModel.name ? 'Cannot delete active model' : 'Delete model'">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="model-details">
+          <div class="detail-row">
+            <span class="label">Engine:</span>
+            <span class="value">DeepSeek QLoRA</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedDeepseekModel.epochs">
+            <span class="label">Training Epochs:</span>
+            <span class="value">{{ selectedDeepseekModel.epochs }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedDeepseekModel.accuracy">
+            <span class="label">Accuracy:</span>
+            <span class="value">{{ (selectedDeepseekModel.accuracy * 100).toFixed(2) }}%</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedDeepseekModel.size_mb">
+            <span class="label">File Size:</span>
+            <span class="value">{{ selectedDeepseekModel.size_mb.toFixed(1) }} MB</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedDeepseekModel.created }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="column-right" *ngIf="selectedQwenModel">
+        <div class="detail-header">
+          <h3>{{ selectedQwenModel.name }}</h3>
+          <div class="detail-actions">
+            <button mat-raised-button color="accent"
+                    (click)="activateQwenModel(selectedQwenModel.name)"
+                    [disabled]="qwenActiveModel?.name === selectedQwenModel.name">
+              <mat-icon>check_circle</mat-icon>
+              {{ qwenActiveModel?.name === selectedQwenModel.name ? 'Active Model' : 'Set as Active' }}
+            </button>
+            <button mat-icon-button color="warn"
+                    (click)="deleteQwenModel(selectedQwenModel.name)"
+                    [disabled]="qwenActiveModel?.name === selectedQwenModel.name"
+                    [matTooltip]="qwenActiveModel?.name === selectedQwenModel.name ? 'Cannot delete active model' : 'Delete model'">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="model-details">
+          <div class="detail-row">
+            <span class="label">Engine:</span>
+            <span class="value">Qwen QLoRA</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedQwenModel.base_model">
+            <span class="label">Base Model:</span>
+            <span class="value">{{ selectedQwenModel.base_model }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedQwenModel.epochs">
+            <span class="label">Training Epochs:</span>
+            <span class="value">{{ selectedQwenModel.epochs }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedQwenModel.output_mode">
+            <span class="label">Output Mode:</span>
+            <span class="value">{{ selectedQwenModel.output_mode }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedQwenModel.best_loss">
+            <span class="label">Best Loss:</span>
+            <span class="value">{{ selectedQwenModel.best_loss.toFixed(4) }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedQwenModel.created }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== TRAINING VIEW ====== -->
+  <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Training">
+    <div class="training-layout">
+      <!-- Left: Training Configuration -->
+      <div class="training-config">
+        <h3>Start New Training</h3>
+
+        <!-- Engine selector -->
+        <div class="engine-list">
+          <div class="engine-item" [class.active]="trainingEngine === TrainingEngine.Kraken"
+               (click)="setTrainingEngine(TrainingEngine.Kraken)">
+            <mat-icon>text_fields</mat-icon>
+            <div class="engine-info">
+              <span class="engine-name">Kraken OCR</span>
+              <span class="engine-desc">CPU-based line OCR with custom models</span>
+            </div>
+          </div>
+          <div class="engine-item" [class.active]="trainingEngine === TrainingEngine.DeepSeek"
+               (click)="setTrainingEngine(TrainingEngine.DeepSeek)">
+            <mat-icon>psychology</mat-icon>
+            <div class="engine-info">
+              <span class="engine-name">DeepSeek QLoRA</span>
+              <span class="engine-desc">GPU fine-tuning of DeepSeek VLM</span>
+            </div>
+          </div>
+          <div class="engine-item" [class.active]="trainingEngine === TrainingEngine.Qwen"
+               (click)="setTrainingEngine(TrainingEngine.Qwen)">
+            <mat-icon>smart_toy</mat-icon>
+            <div class="engine-info">
+              <span class="engine-name">Qwen QLoRA</span>
+              <span class="engine-desc">GPU fine-tuning of Qwen3-VL (4B/8B)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Kraken Config -->
+        <ng-container *ngIf="trainingEngine === TrainingEngine.Kraken">
+          <div class="readiness-section"
+               [class.ready]="trainingStatus.isReady" [class.not-ready]="!trainingStatus.isReady">
+            <mat-icon>{{ trainingStatus.isReady ? 'check_circle' : 'warning' }}</mat-icon>
+            <span>{{ trainingStatus.isReady ? 'Training data ready' : 'Not enough training data' }}</span>
+            <span class="readiness-detail">{{ trainingStatus.totalLines }} lines · {{ trainingStatus.curatedTexts }} curated texts</span>
+          </div>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Base Model</mat-label>
+            <mat-select [(ngModel)]="selectedBaseModel">
+              <mat-option *ngFor="let model of krakenBaseModels" [value]="model.id">
+                {{ model.name }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Output Model Name</mat-label>
+            <input matInput [(ngModel)]="trainingModelName" placeholder="e.g., RoyalInscriptions">
+          </mat-form-field>
+
+          <div class="config-section">
+            <h4>Training Configuration</h4>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Epochs</mat-label>
+                <input matInput type="number" [(ngModel)]="krakenEpochs" min="10" max="1000">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Batch Size</mat-label>
+                <input matInput type="number" [(ngModel)]="krakenBatchSize" min="1" max="64">
+              </mat-form-field>
+            </div>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Early Stopping Patience</mat-label>
+                <input matInput type="number" [(ngModel)]="krakenPatience" min="3" max="50">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Device</mat-label>
+                <mat-select [(ngModel)]="krakenDevice">
+                  <mat-option value="auto">Auto (GPU if available)</mat-option>
+                  <mat-option value="cpu">CPU</mat-option>
+                  <mat-option value="0">CUDA:0</mat-option>
+                  <mat-option value="1">CUDA:1</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+
+          <button mat-raised-button color="primary" (click)="startOcrTraining()"
+                  [disabled]="!trainingStatus.isReady || !trainingModelName?.trim() || isOcrTraining">
+            <mat-icon>play_arrow</mat-icon> Start Kraken Training
+          </button>
+
+          <button mat-stroked-button color="warn" *ngIf="isOcrTraining" (click)="cancelOcrTraining()">
+            <mat-icon>cancel</mat-icon> Cancel Training
+          </button>
+        </ng-container>
+
+        <!-- DeepSeek Config -->
+        <ng-container *ngIf="trainingEngine === TrainingEngine.DeepSeek">
+          <div class="readiness-section"
+               [class.ready]="deepseekTrainingStatus.isReady" [class.not-ready]="!deepseekTrainingStatus.isReady">
+            <mat-icon>{{ deepseekTrainingStatus.isReady ? 'check_circle' : 'warning' }}</mat-icon>
+            <span>{{ deepseekTrainingStatus.isReady ? 'Training data ready' : 'Not enough training data' }}</span>
+            <span class="readiness-detail">{{ deepseekTrainingStatus.totalLines }} lines · {{ deepseekTrainingStatus.curatedTexts }} curated texts</span>
+          </div>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Output Mode</mat-label>
+            <mat-select [(ngModel)]="deepseekOutputMode">
+              <mat-option *ngFor="let mode of deepseekOutputModes | keyvalue" [value]="mode.key">
+                {{ mode.value }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Output Model Name</mat-label>
+            <input matInput [(ngModel)]="deepseekModelName" placeholder="e.g., AHw_dictionary">
+          </mat-form-field>
+
+          <div class="config-section">
+            <h4>Training Configuration</h4>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Epochs</mat-label>
+                <input matInput type="number" [(ngModel)]="deepseekEpochs" min="1" max="100">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Batch Size</mat-label>
+                <mat-select value="1" disabled>
+                  <mat-option value="1">1</mat-option>
+                </mat-select>
+                <mat-hint>VLM processes one image at a time</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Early Stopping Patience</mat-label>
+                <input matInput type="number" [(ngModel)]="deepseekPatience" min="1" max="20">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Device</mat-label>
+                <mat-select [(ngModel)]="deepseekDevice">
+                  <mat-option value="auto">Auto (GPU if available)</mat-option>
+                  <mat-option value="0">CUDA:0</mat-option>
+                  <mat-option value="1">CUDA:1</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+
+          <button mat-raised-button color="primary" (click)="startDeepSeekTraining()"
+                  [disabled]="!deepseekTrainingStatus.isReady || !deepseekModelName?.trim() || isDeepSeekTraining">
+            <mat-icon>play_arrow</mat-icon> Start DeepSeek Training
+          </button>
+
+          <button mat-stroked-button color="warn" *ngIf="isDeepSeekTraining" (click)="cancelDeepSeekTraining()">
+            <mat-icon>cancel</mat-icon> Cancel Training
+          </button>
+        </ng-container>
+
+        <!-- Qwen Config -->
+        <ng-container *ngIf="trainingEngine === TrainingEngine.Qwen">
+          <div class="readiness-section"
+               [class.ready]="qwenTrainingStatus.isReady" [class.not-ready]="!qwenTrainingStatus.isReady">
+            <mat-icon>{{ qwenTrainingStatus.isReady ? 'check_circle' : 'warning' }}</mat-icon>
+            <span>{{ qwenTrainingStatus.isReady ? 'Training data ready' : 'Not enough training data' }}</span>
+            <span class="readiness-detail">{{ qwenTrainingStatus.totalLines }} lines · {{ qwenTrainingStatus.curatedTexts }} curated texts</span>
+          </div>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Base Model</mat-label>
+            <mat-select [(ngModel)]="qwenBaseModel">
+              <mat-option *ngFor="let model of qwenBaseModels" [value]="model.id">
+                {{ model.name }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Output Mode</mat-label>
+            <mat-select [(ngModel)]="qwenOutputMode">
+              <mat-option *ngFor="let mode of qwenOutputModes | keyvalue" [value]="mode.key">
+                {{ mode.value }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Output Model Name</mat-label>
+            <input matInput [(ngModel)]="qwenModelName" placeholder="e.g., qwen_cuneiform">
+          </mat-form-field>
+
+          <div class="config-section">
+            <h4>Training Configuration</h4>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Epochs</mat-label>
+                <input matInput type="number" [(ngModel)]="qwenEpochs" min="1" max="100">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Batch Size</mat-label>
+                <mat-select value="1" disabled>
+                  <mat-option value="1">1</mat-option>
+                </mat-select>
+                <mat-hint>VLM processes one image at a time</mat-hint>
+              </mat-form-field>
+            </div>
+            <div class="config-row">
+              <mat-form-field appearance="outline">
+                <mat-label>Early Stopping Patience</mat-label>
+                <input matInput type="number" [(ngModel)]="qwenPatience" min="1" max="20">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Device</mat-label>
+                <mat-select [(ngModel)]="qwenDevice">
+                  <mat-option value="auto">Auto (GPU if available)</mat-option>
+                  <mat-option value="0">CUDA:0</mat-option>
+                  <mat-option value="1">CUDA:1</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+
+          <button mat-raised-button color="primary" (click)="startQwenTraining()"
+                  [disabled]="!qwenTrainingStatus.isReady || !qwenModelName?.trim() || isQwenTraining">
+            <mat-icon>play_arrow</mat-icon> Start Qwen Training
+          </button>
+
+          <button mat-stroked-button color="warn" *ngIf="isQwenTraining" (click)="cancelQwenTraining()">
+            <mat-icon>cancel</mat-icon> Cancel Training
+          </button>
+        </ng-container>
+      </div>
+
+      <!-- Right Panel: Tabbed (Progress / Recent Jobs) -->
+      <div class="training-right-panel">
+        <div class="training-right-tabs">
+          <button [class.active]="trainingRightTab === 'progress'" (click)="trainingRightTab = 'progress'">
+            <mat-icon>trending_up</mat-icon> Progress
+            <span class="tab-badge" *ngIf="isOcrTraining || isDeepSeekTraining || isQwenTraining">1</span>
+          </button>
+          <button [class.active]="trainingRightTab === 'jobs'" (click)="trainingRightTab = 'jobs'">
+            <mat-icon>list</mat-icon> Recent Jobs
+          </button>
+        </div>
+
+        <!-- Progress Tab -->
+        <div class="training-right-content" *ngIf="trainingRightTab === 'progress'">
+          <!-- Kraken Progress -->
+          <div class="progress-card large" *ngIf="ocrTrainingProgress && trainingEngine === TrainingEngine.Kraken">
+            <div class="progress-header">
+              <span class="training-id">{{ ocrTrainingProgress.model_name || 'Kraken Training' }}</span>
+              <span class="training-status" [style.color]="getTrainingStatusColor(ocrTrainingProgress.status)">
+                {{ ocrTrainingProgress.status }}
+              </span>
+            </div>
+
+            <mat-progress-bar mode="determinate"
+              [value]="ocrTrainingProgress.total_epochs > 0 ? (ocrTrainingProgress.current_epoch / ocrTrainingProgress.total_epochs) * 100 : 0">
+            </mat-progress-bar>
+
+            <div class="progress-stats">
+              <div class="stat">
+                <span class="label">Epoch</span>
+                <span class="value">{{ ocrTrainingProgress.current_epoch }} / {{ ocrTrainingProgress.total_epochs }}</span>
+              </div>
+              <div class="stat" *ngIf="ocrTrainingProgress.accuracy">
+                <span class="label">Char Acc</span>
+                <span class="value">{{ (ocrTrainingProgress.accuracy * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="stat" *ngIf="ocrTrainingProgress.word_accuracy">
+                <span class="label">Word Acc</span>
+                <span class="value">{{ (ocrTrainingProgress.word_accuracy * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="stat" *ngIf="ocrTrainingProgress.training_speed">
+                <span class="label">Speed</span>
+                <span class="value">{{ ocrTrainingProgress.training_speed.toFixed(1) }} it/s</span>
+              </div>
+            </div>
+
+            <div class="error-message" *ngIf="ocrTrainingProgress.error">
+              <mat-icon>error</mat-icon>
+              {{ ocrTrainingProgress.error }}
+            </div>
+          </div>
+
+          <!-- DeepSeek Progress -->
+          <div class="progress-card large" *ngIf="deepseekTrainingProgress && trainingEngine === TrainingEngine.DeepSeek">
+            <div class="progress-header">
+              <span class="training-id">{{ deepseekTrainingProgress.model_name || 'DeepSeek Training' }}</span>
+              <span class="training-status" [style.color]="getTrainingStatusColor(deepseekTrainingProgress.status)">
+                {{ deepseekTrainingProgress.status }}
+              </span>
+            </div>
+
+            <mat-progress-bar mode="determinate"
+              [value]="deepseekTrainingProgress.total_epochs > 0 ? (deepseekTrainingProgress.current_epoch / deepseekTrainingProgress.total_epochs) * 100 : 0">
+            </mat-progress-bar>
+
+            <div class="progress-stats">
+              <div class="stat">
+                <span class="label">Epoch</span>
+                <span class="value">{{ deepseekTrainingProgress.current_epoch }} / {{ deepseekTrainingProgress.total_epochs }}</span>
+              </div>
+              <div class="stat" *ngIf="deepseekTrainingProgress.accuracy">
+                <span class="label">Accuracy</span>
+                <span class="value">{{ (deepseekTrainingProgress.accuracy * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="stat" *ngIf="deepseekTrainingProgress.loss">
+                <span class="label">Loss</span>
+                <span class="value">{{ deepseekTrainingProgress.loss.toFixed(4) }}</span>
+              </div>
+            </div>
+
+            <div class="error-message" *ngIf="deepseekTrainingProgress.error">
+              <mat-icon>error</mat-icon>
+              {{ deepseekTrainingProgress.error }}
+            </div>
+          </div>
+
+          <!-- Qwen Progress -->
+          <div class="progress-card large" *ngIf="qwenTrainingProgress && trainingEngine === TrainingEngine.Qwen">
+            <div class="progress-header">
+              <span class="training-id">{{ qwenTrainingProgress.model_name || 'Qwen Training' }}</span>
+              <span class="training-status" [style.color]="getTrainingStatusColor(qwenTrainingProgress.status)">
+                {{ qwenTrainingProgress.status }}
+              </span>
+            </div>
+
+            <mat-progress-bar mode="determinate"
+              [value]="qwenTrainingProgress.total_epochs > 0 ? (qwenTrainingProgress.current_epoch / qwenTrainingProgress.total_epochs) * 100 : 0">
+            </mat-progress-bar>
+
+            <div class="progress-stats">
+              <div class="stat">
+                <span class="label">Epoch</span>
+                <span class="value">{{ qwenTrainingProgress.current_epoch }} / {{ qwenTrainingProgress.total_epochs }}</span>
+              </div>
+              <div class="stat" *ngIf="qwenTrainingProgress.accuracy">
+                <span class="label">Accuracy</span>
+                <span class="value">{{ (qwenTrainingProgress.accuracy * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="stat" *ngIf="qwenTrainingProgress.loss">
+                <span class="label">Loss</span>
+                <span class="value">{{ qwenTrainingProgress.loss.toFixed(4) }}</span>
+              </div>
+            </div>
+
+            <div class="error-message" *ngIf="qwenTrainingProgress.error">
+              <mat-icon>error</mat-icon>
+              {{ qwenTrainingProgress.error }}
+            </div>
+          </div>
+
+          <div class="empty-state" *ngIf="!ocrTrainingProgress && !deepseekTrainingProgress && !qwenTrainingProgress">
+            No active training. Start one from the configuration panel.
+          </div>
+
+          <!-- Epoch History Table -->
+          <div class="epoch-history" *ngIf="epochHistory.length > 0 && trainingEngine === TrainingEngine.Kraken">
+            <h4>Epoch History</h4>
+            <div class="epoch-table-container">
+              <table class="epoch-table">
+                <thead>
+                  <tr>
+                    <th>Epoch</th>
+                    <th>Char Acc</th>
+                    <th>Word Acc</th>
+                    <th>Time</th>
+                    <th>Speed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ep of epochHistory" [class.best-epoch]="ep.accuracy === ocrTrainingProgress?.best_accuracy">
+                    <td>{{ ep.epoch }}</td>
+                    <td>{{ (ep.accuracy * 100).toFixed(2) }}%</td>
+                    <td>{{ ep.word_accuracy ? (ep.word_accuracy * 100).toFixed(2) + '%' : '-' }}</td>
+                    <td>{{ formatEpochTime(ep.epoch_time) }}</td>
+                    <td>{{ ep.training_speed ? ep.training_speed.toFixed(1) + ' it/s' : '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="epoch-history" *ngIf="deepseekEpochHistory.length > 0 && trainingEngine === TrainingEngine.DeepSeek">
+            <h4>Epoch History</h4>
+            <div class="epoch-table-container">
+              <table class="epoch-table">
+                <thead>
+                  <tr>
+                    <th>Epoch</th>
+                    <th>Loss</th>
+                    <th>Val Loss</th>
+                    <th>Accuracy</th>
+                    <th>Val Accuracy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ep of deepseekEpochHistory" [class.best-epoch]="ep.val_accuracy === deepseekTrainingProgress?.best_accuracy">
+                    <td>{{ ep.epoch }}</td>
+                    <td>{{ ep.loss.toFixed(4) }}</td>
+                    <td>{{ ep.val_loss.toFixed(4) }}</td>
+                    <td>{{ (ep.accuracy * 100).toFixed(2) }}%</td>
+                    <td>{{ (ep.val_accuracy * 100).toFixed(2) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="epoch-history" *ngIf="qwenEpochHistory.length > 0 && trainingEngine === TrainingEngine.Qwen">
+            <h4>Epoch History</h4>
+            <div class="epoch-table-container">
+              <table class="epoch-table">
+                <thead>
+                  <tr>
+                    <th>Epoch</th>
+                    <th>Loss</th>
+                    <th>Val Loss</th>
+                    <th>Accuracy</th>
+                    <th>Val Accuracy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ep of qwenEpochHistory" [class.best-epoch]="ep.val_accuracy === qwenTrainingProgress?.best_accuracy">
+                    <td>{{ ep.epoch }}</td>
+                    <td>{{ ep.loss.toFixed(4) }}</td>
+                    <td>{{ ep.val_loss.toFixed(4) }}</td>
+                    <td>{{ (ep.accuracy * 100).toFixed(2) }}%</td>
+                    <td>{{ (ep.val_accuracy * 100).toFixed(2) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Jobs Tab -->
+        <div class="training-right-content" *ngIf="trainingRightTab === 'jobs'">
+          <div class="jobs-table">
+            <div class="job-row header">
+              <span>Model</span>
+              <span>Engine</span>
+              <span>Status</span>
+              <span>Accuracy</span>
+            </div>
+
+            <!-- Kraken completed trainings shown from epoch history -->
+            <div class="job-row" *ngIf="ocrTrainingProgress?.status === 'completed'">
+              <span>{{ ocrTrainingProgress.model_name }}</span>
+              <span>Kraken</span>
+              <span [style.color]="getTrainingStatusColor('completed')">completed</span>
+              <span>{{ ocrTrainingProgress.best_accuracy ? (ocrTrainingProgress.best_accuracy * 100).toFixed(1) + '%' : '-' }}</span>
+            </div>
+
+            <div class="job-row" *ngIf="deepseekTrainingProgress?.status === 'completed'">
+              <span>{{ deepseekTrainingProgress.model_name }}</span>
+              <span>DeepSeek</span>
+              <span [style.color]="getTrainingStatusColor('completed')">completed</span>
+              <span>{{ deepseekTrainingProgress.best_accuracy ? (deepseekTrainingProgress.best_accuracy * 100).toFixed(1) + '%' : '-' }}</span>
+            </div>
+
+            <div class="job-row" *ngIf="qwenTrainingProgress?.status === 'completed'">
+              <span>{{ qwenTrainingProgress.model_name }}</span>
+              <span>Qwen</span>
+              <span [style.color]="getTrainingStatusColor('completed')">completed</span>
+              <span>{{ qwenTrainingProgress.best_accuracy ? (qwenTrainingProgress.best_accuracy * 100).toFixed(1) + '%' : '-' }}</span>
+            </div>
+
+            <div class="empty-row" *ngIf="!ocrTrainingProgress && !deepseekTrainingProgress && !qwenTrainingProgress">
+              No training jobs yet.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== EXPORT VIEW ====== -->
+  <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Export">
+    <app-production (viewModeChange)="onProductionViewModeChange($event)"></app-production>
+  </div>
+</div>

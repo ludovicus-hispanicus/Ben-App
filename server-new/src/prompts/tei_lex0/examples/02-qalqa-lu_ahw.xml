@@ -1,0 +1,41 @@
+<entry xmlns="http://www.tei-c.org/ns/1.0" xml:id="qalqa-lu_ahw" xml:lang="akk" type="mainEntry">
+<note type="ahwPage">895</note>
+<form type="lemma">
+<orth type="normalized">qalqālu</orth>
+</form>
+<etym xml:id="qalqa-lu_ahw_etymology">
+<lang norm="sux"/>
+<lbl corresp="ahw_abbreviations_taxonomy.xml#Fw"/>
+</etym>
+<sense xml:id="qalqa-lu_ahw_sense_general">
+<def xml:lang="de" cert="low">eine Mehlart</def>
+</sense>
+<sense xml:id="qalqa-lu_ahw_sense_lexical">
+<usg corresp="lad_period_taxonomy.xml#sb" type="temporal">jB</usg>
+<cit xml:id="att-qalqa-lu_ahw_am-302-7" type="example">
+<lbl corresp="ahw_abbreviations_taxonomy.xml#Wz"/>
+<quote>
+<seg type="logogram">ZÌ.GAL.GAL(.LA)</seg>
+</quote>
+<usg type="hint">in Rit.</usg>
+<bibl source="#RN1271c">BAM 302, 7</bibl>
+<ref n="BAM-3_302" resp="#LAD" source="bam" type="source">BAM 3, 302</ref>
+<cit xml:id="att-qalqa-lu_ahw_fallback-1770724236603" subtype="seeAlso" type="example">
+<lbl corresp="ahw_abbreviations_taxonomy.xml#Gl"/>
+<quote>
+<seg xml:lang="akk">akal qa-al-qa-lu</seg>
+</quote>
+</cit>
+</cit>
+<cit xml:id="att-qalqa-lu_ahw_pkt-bi-24-9" type="example">
+<bibl source="#ebeling1950parfumrezepte">PKT BI. 24, 9</bibl>
+<cit xml:id="att-qalqa-lu_ahw_fallback-1770724236603-2" subtype="seeAlso" type="example">
+<quote>
+<seg xml:lang="akk">
+          q.</seg>
+<seg type="determinative">meš</seg>
+</quote>
+</cit>
+</cit>
+</sense>
+</entry>

@@ -1,0 +1,71 @@
+<mat-dialog-content class="browser-content">
+  <!-- Top bar: title left, actions right -->
+  <div class="top-bar">
+    <button *ngIf="selectedProject" mat-icon-button (click)="goBack()" matTooltip="Back to projects">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <h2 *ngIf="!selectedProject">Browse Server Images</h2>
+    <span class="breadcrumb" *ngIf="selectedProject">{{selectedProject.name}}</span>
+    <span class="spacer"></span>
+    <button mat-stroked-button (click)="uploadInput.click()" [disabled]="isUploading">
+      <mat-icon>cloud_upload</mat-icon> Upload
+    </button>
+    <input #uploadInput type="file" hidden accept=".pdf,.png,.jpg,.jpeg" (change)="onUploadFile($event)">
+    <mat-spinner *ngIf="isUploading" diameter="24"></mat-spinner>
+    <button mat-button (click)="onCancel()">Cancel</button>
+  </div>
+
+  <!-- Scrollable content area -->
+  <div class="scrollable-area">
+    <!-- Loading -->
+    <div *ngIf="isLoading" class="loading">
+      <mat-spinner diameter="30"></mat-spinner>
+    </div>
+
+    <!-- Project List View -->
+    <ng-container *ngIf="!isLoading && !selectedProject">
+      <div *ngIf="projects.length === 0" class="empty">
+        No projects found. Upload a PDF or image.
+      </div>
+      <div *ngFor="let project of projects" class="project-row" (click)="openProject(project)">
+        <mat-icon class="folder-icon">folder</mat-icon>
+        <span class="project-name">{{project.name}}</span>
+        <span class="project-count">{{project.image_count}} pages</span>
+        <mat-icon class="chevron">chevron_right</mat-icon>
+      </div>
+    </ng-container>
+
+    <!-- Pages Grid View -->
+    <ng-container *ngIf="!isLoading && selectedProject">
+      <div *ngIf="selectedProject.pages.length === 0" class="empty">
+        No pages in this project.
+      </div>
+      <div class="thumb-grid">
+        <div *ngFor="let page of selectedProject.pages"
+             class="thumb-item"
+             [class.selected]="isPageSelected(page)"
+             (click)="selectPage(page, $event)"
+             matTooltip="{{page.filename}}">
+          <div class="select-check" *ngIf="isPageSelected(page)">
+            <mat-icon>check_circle</mat-icon>
+          </div>
+          <img [src]="getThumbnailUrl(page)" [alt]="page.filename" loading="lazy">
+          <span class="thumb-label">{{page.filename}}</span>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Selection bar -->
+  <div class="selection-bar" *ngIf="selectedProject && selectedPages.size > 0">
+    <span class="selection-count">{{ selectedPages.size }} selected</span>
+    <span class="selection-hint">Ctrl+click to toggle, Shift+click for range</span>
+    <span class="spacer"></span>
+    <button mat-stroked-button (click)="selectAll()">
+      {{ selectedPages.size === selectedProject.pages.length ? 'Deselect All' : 'Select All' }}
+    </button>
+    <button mat-flat-button color="primary" (click)="loadSelected()">
+      Load {{ selectedPages.size }} Image{{ selectedPages.size > 1 ? 's' : '' }}
+    </button>
+  </div>
+</mat-dialog-content>

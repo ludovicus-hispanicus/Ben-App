@@ -1,0 +1,462 @@
+<div class="annotation-container">
+  <!-- Left Panel - Classes & Annotations -->
+  <div class="left-panel" [class.collapsed]="leftPanelCollapsed">
+    <div class="panel-header">
+      <h3 *ngIf="!leftPanelCollapsed">Classes</h3>
+      <button mat-icon-button class="panel-toggle" (click)="leftPanelCollapsed = !leftPanelCollapsed">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+    </div>
+
+    <div class="panel-content">
+      <div class="class-list">
+        <div class="class-item"
+             *ngFor="let cls of classes"
+             [class.selected]="selectedClassId === cls.id"
+             (click)="selectClass(cls.id)">
+          <input type="color"
+                 class="class-color-picker"
+                 [value]="getClassColor(cls.name)"
+                 (input)="onClassColorChange(cls, $event)"
+                 (click)="$event.stopPropagation()"
+                 title="Change color">
+          <span class="class-name"
+                *ngIf="editingClassId !== cls.id"
+                (dblclick)="startEditClassName(cls, $event)">{{ cls.name }}</span>
+          <input *ngIf="editingClassId === cls.id"
+                 class="class-name-input"
+                 [value]="cls.name"
+                 (blur)="finishEditClassName(cls, $event)"
+                 (keyup.enter)="$any($event.target).blur()"
+                 (keyup.escape)="cancelEditClassName()"
+                 (click)="$event.stopPropagation()"
+                 #classNameInput>
+          <span class="class-count">
+            {{ (annotations | filter:'classId':cls.id).length || 0 }}
+          </span>
+        </div>
+
+        <!-- Add new class inline -->
+        <div class="add-class-row">
+          <input type="color" class="color-picker" [(ngModel)]="newClassColor" title="Pick class color">
+          <input type="text" class="class-input" [(ngModel)]="newClassName"
+                 placeholder="New class..."
+                 (keyup.enter)="addNewClass()">
+          <button mat-icon-button class="add-class-btn" (click)="addNewClass()" [disabled]="!newClassName.trim()" matTooltip="Add class">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="annotation-list-section">
+        <h4>Annotations ({{ annotations.length }})</h4>
+        <div class="annotation-list">
+          <div class="annotation-item"
+               *ngFor="let ann of annotations"
+               [class.selected]="selectedAnnotation?.id === ann.id"
+               (click)="canvas?.setActiveObject(ann.fabricRect); selectedAnnotation = ann;">
+            <span class="ann-color" [style.background-color]="getClassColor(ann.className)"></span>
+            <span class="ann-class">{{ ann.className }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side Toolbar -->
+  <div class="side-toolbar">
+    <button mat-icon-button (click)="cancel()" matTooltip="Back" matTooltipPosition="right">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="triggerFileInput()" matTooltip="Load PDF/Image" matTooltipPosition="right">
+      <mat-icon>upload</mat-icon>
+    </button>
+    <button mat-icon-button (click)="browseServer()" matTooltip="Browse Server" matTooltipPosition="right">
+      <mat-icon>folder_open</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="zoomOut()" matTooltip="Zoom Out (-)" matTooltipPosition="right">
+      <mat-icon>zoom_out</mat-icon>
+    </button>
+    <span class="zoom-level">{{ (zoomLevel * 100) | number:'1.0-0' }}%</span>
+    <button mat-icon-button (click)="zoomIn()" matTooltip="Zoom In (+)" matTooltipPosition="right">
+      <mat-icon>zoom_in</mat-icon>
+    </button>
+    <button mat-icon-button (click)="resetZoom()" matTooltip="Reset Zoom (0)" matTooltipPosition="right">
+      <mat-icon>fit_screen</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button
+            (click)="togglePanMode()"
+            [class.active]="panModeActive"
+            matTooltip="Pan Mode" matTooltipPosition="right">
+      <mat-icon>pan_tool</mat-icon>
+    </button>
+    <button mat-icon-button
+            (click)="toggleCrosshair()"
+            [class.active]="crosshairEnabled"
+            matTooltip="Crosshair Guide" matTooltipPosition="right">
+      <mat-icon>add</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="deleteSelected()" [disabled]="!selectedAnnotation" matTooltip="Delete Selected (Del)" matTooltipPosition="right">
+      <mat-icon>delete</mat-icon>
+    </button>
+    <button mat-icon-button (click)="clearAnnotations()" [disabled]="annotations.length === 0" matTooltip="Clear All" matTooltipPosition="right">
+      <mat-icon>clear_all</mat-icon>
+    </button>
+    <button mat-icon-button (click)="cropSnippets()" [disabled]="annotations.length === 0 || !currentImage" matTooltip="Crop Snippets" matTooltipPosition="right">
+      <mat-icon>content_cut</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <div class="split-toggle">
+      <mat-button-toggle-group [(ngModel)]="split" vertical="true">
+        <mat-button-toggle value="train" matTooltip="Training set" matTooltipPosition="right">T</mat-button-toggle>
+        <mat-button-toggle value="val" matTooltip="Validation set" matTooltipPosition="right">V</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+
+    <span class="toolbar-spacer"></span>
+
+    <!-- File info -->
+    <div class="toolbar-info" *ngIf="currentImage">
+      <span class="toolbar-info-text" matTooltip="{{ imageFile?.name }}" matTooltipPosition="right">{{ annotations.length }}</span>
+    </div>
+
+    <span class="toolbar-divider"></span>
+
+    <!-- Save actions -->
+    <button mat-icon-button (click)="saveAnnotations()" [disabled]="isLoading || !imageFile"
+            matTooltip="Save" matTooltipPosition="right" class="save-btn">
+      <mat-icon>save</mat-icon>
+    </button>
+    <button mat-icon-button (click)="saveAllAnnotatedImages()" [disabled]="isLoading || getTotalAnnotatedImages() === 0"
+            matTooltip="Save All ({{ getTotalAnnotatedImages() }})" matTooltipPosition="right" class="save-all-btn">
+      <mat-icon>save_alt</mat-icon>
+    </button>
+    <button mat-icon-button
+            *ngIf="viewingSavedImageId"
+            (click)="updateSavedImageAnnotations()"
+            [disabled]="isLoading || !viewingSavedImageId || annotations.length === 0"
+            matTooltip="Update" matTooltipPosition="right" class="update-btn">
+      <mat-icon>edit</mat-icon>
+    </button>
+    <button mat-icon-button
+            *ngIf="viewingSavedImageId"
+            (click)="toggleImageCurated()"
+            [matTooltip]="(viewingSavedImageCurated ? 'Mark as not curated' : 'Mark as curated') + ' (Ctrl+Shift+C)'"
+            matTooltipPosition="right"
+            [class.curated-active]="viewingSavedImageCurated">
+      <mat-icon>{{ viewingSavedImageCurated ? 'verified' : 'task_alt' }}</mat-icon>
+    </button>
+    <button mat-icon-button (click)="goToNextImage()" [disabled]="imageQueue.length <= 1"
+            matTooltip="Next Image" matTooltipPosition="right">
+      <mat-icon>skip_next</mat-icon>
+    </button>
+  </div>
+
+  <!-- Main Canvas Area -->
+  <div class="canvas-area">
+    <input #fileInput type="file" accept=".pdf,.png,.jpg,.jpeg,image/*,application/pdf" (change)="onFileSelected($event)" multiple hidden>
+
+    <!-- Canvas Wrapper -->
+    <div class="canvas-wrapper" #canvasContainer>
+      <canvas id="annotationCanvas"></canvas>
+
+      <div class="empty-state" *ngIf="!currentImage && !showPdfSelector">
+        <mat-icon>image</mat-icon>
+        <p>Load a PDF or image to start annotating</p>
+        <div class="empty-state-actions">
+          <button mat-raised-button (click)="triggerFileInput()">
+            <mat-icon>upload</mat-icon> Load PDF/Image
+          </button>
+          <button mat-raised-button (click)="browseServer()">
+            <mat-icon>folder_open</mat-icon> Load from Server
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right Panel - Images & Help -->
+  <div class="right-panel" [class.collapsed]="rightPanelCollapsed"
+       [style.width.px]="rightPanelCollapsed ? 48 : rightPanelWidth">
+    <div class="resize-handle" *ngIf="!rightPanelCollapsed"
+         (mousedown)="startResizeRightPanel($event)"></div>
+    <div class="panel-header">
+      <h3 *ngIf="!rightPanelCollapsed" class="dataset-header" [matTooltip]="datasetName">{{ datasetName || 'Annotations' }}</h3>
+      <button mat-icon-button class="header-refresh-btn"
+              *ngIf="!rightPanelCollapsed && rightPanelTab === 'saved'"
+              (click)="loadSavedImages()"
+              matTooltip="Refresh">
+        <mat-icon>refresh</mat-icon>
+      </button>
+      <button mat-icon-button class="panel-toggle" (click)="rightPanelCollapsed = !rightPanelCollapsed">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="panel-tabs" *ngIf="!rightPanelCollapsed">
+      <button class="panel-tab" [class.active]="rightPanelTab === 'images'" (click)="rightPanelTab = 'images'">
+        <mat-icon>collections</mat-icon>
+        Queue ({{ imageQueue.length }})
+      </button>
+      <button class="panel-tab" [class.active]="rightPanelTab === 'saved'" (click)="rightPanelTab = 'saved'; loadSavedImages()">
+        <mat-icon>folder</mat-icon>
+        Saved ({{ savedImagesCount }})
+      </button>
+      <button class="panel-tab" [class.active]="rightPanelTab === 'snippets'" (click)="rightPanelTab = 'snippets'">
+        <mat-icon>content_cut</mat-icon>
+        Snippets ({{ snippets.length }})
+      </button>
+      <button class="panel-tab" [class.active]="rightPanelTab === 'help'" (click)="rightPanelTab = 'help'">
+        <mat-icon>help_outline</mat-icon>
+        Help
+      </button>
+    </div>
+
+    <!-- Images Tab Content -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'images'">
+      <div class="image-queue" *ngIf="imageQueue.length > 0">
+        <div class="image-queue-grid">
+          <div class="image-queue-item"
+               *ngFor="let img of imageQueue"
+               [class.active]="activeImageId === img.id"
+               [class.annotated]="img.annotated || img.savedAnnotations.length > 0"
+               (click)="selectQueuedImage(img.id)">
+            <img [src]="img.thumbnailUrl" alt="Image">
+            <span class="annotation-badge" *ngIf="img.savedAnnotations.length > 0 || (activeImageId === img.id && annotations.length > 0)">
+              {{ activeImageId === img.id ? annotations.length : img.savedAnnotations.length }}
+            </span>
+            <span class="image-status"></span>
+            <div class="image-remove" (click)="removeFromQueue(img.id, $event)">
+              <mat-icon>close</mat-icon>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="image-queue-empty" *ngIf="imageQueue.length === 0">
+        <mat-icon>add_photo_alternate</mat-icon>
+        <p>No images loaded.<br>Click "Load PDF/Image" to add images.</p>
+      </div>
+    </div>
+
+    <!-- Help Tab Content -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'help'">
+      <div class="instructions">
+        <ol>
+          <li>Load images or PDF</li>
+          <li>Select a class from left panel</li>
+          <li>Click and drag to draw boxes</li>
+          <li>Click a box to select it</li>
+          <li>Save when done</li>
+        </ol>
+      </div>
+
+      <div class="keyboard-shortcuts">
+        <h4>Shortcuts</h4>
+        <div class="shortcut">
+          <span class="key">Del</span>
+          <span class="action">Delete box</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">1-4</span>
+          <span class="action">Select class</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Esc</span>
+          <span class="action">Deselect</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">+/-</span>
+          <span class="action">Zoom in/out</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">0</span>
+          <span class="action">Reset zoom</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Space</span>
+          <span class="action">Pan (hold)</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Hand</span>
+          <span class="action">Toggle pan mode</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">2-finger</span>
+          <span class="action">Pan (trackpad)</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Wheel</span>
+          <span class="action">Zoom (mouse)</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Pinch</span>
+          <span class="action">Zoom (trackpad)</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">Ctrl+Shift+C</span>
+          <span class="action">Toggle curated</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved Tab Content -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'saved'">
+      <div class="saved-images-loading" *ngIf="loadingSavedImages">
+        <mat-spinner diameter="24"></mat-spinner>
+        <span>Loading...</span>
+      </div>
+
+      <div class="saved-images-list" *ngIf="!loadingSavedImages && savedImages.length > 0">
+        <div class="saved-image-item"
+             *ngFor="let img of savedImages"
+             [class.active]="isViewingSavedImage(img.image_id, img.split)"
+             [class.split-train]="img.split === 'train'"
+             [class.split-val]="img.split === 'val'"
+             (click)="viewSavedImage(img.image_id, img.split)">
+          <div class="saved-image-info">
+            <span class="saved-image-name" [title]="img.filename">
+              {{ img.filename }}
+              <mat-icon *ngIf="img.curated" class="curated-icon" matTooltip="Curated">verified</mat-icon>
+            </span>
+            <span class="saved-image-meta">
+              <span class="split-badge" [class.train]="img.split === 'train'" [class.val]="img.split === 'val'">
+                {{ img.split }}
+              </span>
+              <span class="annotation-count">{{ img.annotation_count }} boxes</span>
+            </span>
+          </div>
+          <button mat-icon-button class="delete-saved-btn" (click)="deleteSavedImage(img.image_id, $event)" matTooltip="Delete">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="saved-images-empty" *ngIf="!loadingSavedImages && savedImages.length === 0">
+        <mat-icon>folder_open</mat-icon>
+        <p>No images saved yet.<br>Annotate images and click Save.</p>
+      </div>
+
+    </div>
+
+    <!-- Snippets Tab Content -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'snippets'">
+      <button mat-stroked-button class="download-all-btn" (click)="downloadAllSnippets()" *ngIf="snippets.length > 0">
+        <mat-icon>archive</mat-icon> Download ZIP ({{ snippets.length }})
+      </button>
+
+      <div class="snippets-grid" *ngIf="snippets.length > 0">
+        <div class="snippet-item" *ngFor="let snippet of snippets; let i = index"
+             (click)="downloadSnippet(snippet, i)"
+             matTooltip="Click to download">
+          <img [src]="snippet.dataUrl" alt="Snippet">
+          <span class="snippet-label"
+                [style.background-color]="getClassColor(snippet.className)">
+            {{ snippet.className }}
+          </span>
+          <span class="snippet-size">{{ snippet.width }}x{{ snippet.height }}</span>
+        </div>
+      </div>
+
+      <div class="snippets-empty" *ngIf="snippets.length === 0">
+        <mat-icon>content_cut</mat-icon>
+        <p>No snippets yet.<br>Annotate an image and click the scissors button.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Processing...</span>
+  </div>
+
+  <!-- PDF Page Selector Overlay -->
+  <div class="pdf-selector-overlay" *ngIf="showPdfSelector">
+    <div class="pdf-selector-content">
+      <div class="pdf-header">
+        <h3>Select pages to annotate</h3>
+        <span class="pdf-info">{{ pdfFile?.name }} - {{ totalPages }} pages | {{ selectedPdfPages.length }} selected</span>
+        <button mat-icon-button (click)="closePdfSelector()" class="close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Page Navigation -->
+      <div class="page-navigation">
+        <button mat-icon-button (click)="navigatePages(-1)" [disabled]="currentPage <= pagesPerSide">
+          <mat-icon>chevron_left</mat-icon>
+        </button>
+
+        <div class="page-input-group">
+          <span>Go to page:</span>
+          <input type="number"
+                 [(ngModel)]="pageInputValue"
+                 min="1"
+                 [max]="totalPages"
+                 (keyup.enter)="goToPage()">
+          <button mat-raised-button color="primary" (click)="goToPage()">Go</button>
+        </div>
+
+        <button mat-icon-button (click)="navigatePages(1)" [disabled]="currentPage + pagesPerSide >= totalPages">
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+
+      <div class="pdf-thumbnails">
+        <div class="thumbnail-item"
+             *ngFor="let page of visiblePages"
+             (click)="togglePdfPageSelection(page)"
+             (dblclick)="selectPdfPageSingle(page)"
+             [class.selected]="isPageSelected(page)">
+          <pdf-viewer
+            [src]="pdfSrc"
+            [page]="page"
+            [show-all]="false"
+            [render-text]="false"
+            [zoom]="0.25"
+            [original-size]="false"
+            style="width: 120px; height: 160px;">
+          </pdf-viewer>
+          <span class="page-number">Page {{ page }}</span>
+        </div>
+      </div>
+
+      <div class="pdf-actions">
+        <button mat-button (click)="closePdfSelector()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="loadSelectedPdfPages()" [disabled]="selectedPdfPages.length === 0">
+          <mat-icon>check</mat-icon> Load {{ selectedPdfPages.length }} Page{{ selectedPdfPages.length !== 1 ? 's' : '' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden PDF viewer for loading (positioned off-screen) -->
+  <pdf-viewer
+    *ngIf="pdfSrc && showPdfSelector"
+    [src]="pdfSrc"
+    [render-text]="false"
+    [show-all]="false"
+    [page]="1"
+    (after-load-complete)="onPdfLoadComplete($event)"
+    style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;">
+  </pdf-viewer>
+</div>

@@ -1,0 +1,58 @@
+YOLO + DeepSeek OCR Pipeline Results
+Image: yolo_dataset/images/train/page_3.png
+Total entries: 10
+Processed: 10
+YOLO time: 0.25s
+OCR time: 0.4s
+======================================================================
+
+=== Entry 1 ===
+Box: (709,158) -> (1284,348)
+Confidence: 1.00
+
+
+=== Entry 2 ===
+Box: (110,161) -> (674,748)
+Confidence: 0.89
+
+
+=== Entry 3 ===
+Box: (698,361) -> (1292,1060)
+Confidence: 1.00
+
+
+=== Entry 4 ===
+Box: (118,701) -> (671,780)
+Confidence: 0.76
+
+
+=== Entry 5 ===
+Box: (107,788) -> (673,1467)
+Confidence: 0.99
+
+
+=== Entry 6 ===
+Box: (700,1057) -> (1285,1569)
+Confidence: 1.00
+
+
+=== Entry 7 ===
+Box: (106,1473) -> (670,1875)
+Confidence: 0.92
+
+
+=== Entry 8 ===
+Box: (697,1585) -> (1275,1765)
+Confidence: 1.00
+
+
+=== Entry 9 ===
+Box: (685,1814) -> (1270,1883)
+Confidence: 1.00
+
+
+=== Entry 10 ===
+Box: (696,1823) -> (1266,1957)
+Confidence: 0.56
+
+

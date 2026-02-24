@@ -1,0 +1,71 @@
+<entry xmlns="http://www.tei-c.org/ns/1.0" xml:id="qabux_1_ahw" xml:lang="akk" type="mainEntry">
+<note type="ahwPage">889</note>
+<form type="lemma">
+<orth type="normalized">qabû I</orth>
+</form>
+<etym xml:id="qabux_1_ahw_etymology">
+<lang norm="syc"/>
+<seg xml:lang="syc">qeḇjā</seg>
+<def xml:lang="deu">Behälter</def>
+<pc>;</pc>
+<xr type="related">
+<lbl>#V</lbl>
+<ref target="#qabuttu_ahw" type="entry">
+<seg xml:lang="akk">qabuttu</seg>
+</ref>
+</xr>
+</etym>
+<sense xml:id="qabux_1_ahw_sense_general">
+<def xml:lang="de">Geflügelstall</def>
+<pc>,</pc>
+<usg corresp="lad_periods_taxonomy.xml#sb lad_period_taxonomy.xml#LB" type="temporal">j/spB</usg>
+<cit xml:id="att-qabux_1_ahw_tul-19-14" rend="no-sep" type="example">
+<quote>
+<seg xml:lang="akk">us qa-bé-e</seg>
+<seg xml:lang="deu">Stallgans</seg>
+</quote>
+<bibl source="#RN199">TuL 19, 14</bibl>
+</cit>
+<pc>.</pc>
+<cit xml:id="att-qabux_1_ahw_camb-194-2" type="example">
+<xr type="related">
+<lbl>#V</lbl>
+<ref target="#paspas_ahw" type="entry">
+<seg xml:lang="akk">paspas</seg>
+</ref>
+</xr>
+<quote>
+<seg xml:lang="akk">qa-bé-e</seg>
+</quote>
+<bibl source="#RN2702xxr">Camb. 194, 2</bibl>
+</cit>
+<cit xml:id="att-qabux_1_ahw_nbn-558-12" rend="no-sep" type="example">
+<quote>
+<seg xml:lang="akk">
+                ša qa-bu
+                <hi rend="sup">!</hi>
+                -e
+              </seg>
+</quote>
+<bibl source="#RN2702zzz">Nbn. 558, 12</bibl>
+</cit>
+<pc>.</pc>
+<cit xml:id="att-qabux_1_ahw_mdp-23-309-9" cert="low" type="example">
+<usg corresp="lad_period_taxonomy.xml#ob" type="temporal">aB</usg>
+<usg corresp="lad_GN_ataxonomy.xml#susa" type="geographic"/>
+<quote>
+<seg xml:lang="akk">5 qa-b/pu-ú</seg>
+<seg xml:lang="deu">nebst ihren Säcken</seg>
+</quote>
+<bibl source="#scheil1930actes">MDP 23, 309, 9</bibl>
+<lbl corresp="ahw_abbreviations_taxonomy.xml#unkl"/>
+</cit>
+</sense>
+<xr type="related">
+<lbl>#V</lbl>
+<ref target="#qurbu_ahw_sense_4_d_beta" type="entry">
+<seg xml:lang="akk">qurbu</seg>
+            4 d β
+          </ref>
+</xr>
+</entry>

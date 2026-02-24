@@ -1,0 +1,774 @@
+<div class="production-container">
+    <!-- Dashboard View -->
+    <div class="dashboard-view" *ngIf="viewMode === 'dashboard'">
+        <div class="loading-indicator" *ngIf="isLoading">
+            <mat-spinner diameter="40"></mat-spinner>
+            <span>Loading...</span>
+        </div>
+
+        <div class="two-column-layout" *ngIf="!isLoading">
+            <!-- Left: Museum list -->
+            <div class="column-left-card">
+                <h3>Collections</h3>
+                <mat-form-field appearance="outline">
+                    <mat-label>Search identifier or content</mat-label>
+                    <input matInput [(ngModel)]="searchQuery"
+                           (ngModelChange)="applyFilter()"
+                           (keyup.enter)="searchKwic()"
+                           placeholder="Type and press Enter for KWIC search">
+                    <button matSuffix mat-icon-button (click)="searchKwic()"
+                            [disabled]="searchQuery.trim().length < 2"
+                            matTooltip="Search transliteration content (KWIC)">
+                        <mat-icon>search</mat-icon>
+                    </button>
+                </mat-form-field>
+
+                <!-- Filter badges -->
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <span class="filter-label">Identifier</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.identifierTypes.has('museum')"
+                                  (click)="toggleIdentifierType('museum')">Museum</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.identifierTypes.has('p_number')"
+                                  (click)="toggleIdentifierType('p_number')">P-number</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.identifierTypes.has('publication')"
+                                  (click)="toggleIdentifierType('publication')">Publication</span>
+                        </div>
+                    </div>
+
+                    <div class="filter-group" *ngIf="availableLabels.length > 0">
+                        <span class="filter-label">Label</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip" *ngFor="let label of availableLabels"
+                                  [class.active]="activeFilters.labels.has(label)"
+                                  (click)="toggleLabel(label)">{{ label }}</span>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <span class="filter-label">Training curation</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.curation === 'curated'"
+                                  (click)="toggleCuration('curated')">Curated</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.curation === 'not_curated'"
+                                  (click)="toggleCuration('not_curated')">Not curated</span>
+                        </div>
+                    </div>
+
+                    <div class="filter-group" *ngIf="availableProjects.length > 0">
+                        <span class="filter-label">Project</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.projectId === -1"
+                                  (click)="toggleProject(-1)">Unassigned</span>
+                            <span class="filter-chip" *ngFor="let proj of availableProjects"
+                                  [class.active]="activeFilters.projectId === proj.project_id"
+                                  (click)="toggleProject(proj.project_id)">{{ proj.name }}</span>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <span class="filter-label">Modified</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.dateRange === 'today'"
+                                  (click)="toggleDateRange('today')">Today</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.dateRange === 'week'"
+                                  (click)="toggleDateRange('week')">Last 7 days</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.dateRange === 'month'"
+                                  (click)="toggleDateRange('month')">Last 30 days</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.dateRange === 'year'"
+                                  (click)="toggleDateRange('year')">Last year</span>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <span class="filter-label">Status</span>
+                        <div class="filter-chips">
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.status === 'not_merged'"
+                                  (click)="toggleStatus('not_merged')">Not merged</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.status === 'merged'"
+                                  (click)="toggleStatus('merged')">Merged</span>
+                            <span class="filter-chip"
+                                  [class.active]="activeFilters.status === 'exported'"
+                                  (click)="toggleStatus('exported')">Exported</span>
+                        </div>
+                    </div>
+
+                    <span class="clear-filters" *ngIf="hasActiveFilters()" (click)="clearFilters()">Clear all</span>
+                </div>
+
+                <div class="filter-stats" *ngIf="filteredGroups.length !== groupedTexts.length">
+                    {{ filteredGroups.length }} of {{ groupedTexts.length }} texts
+                </div>
+            </div>
+
+            <!-- Right: All filtered texts or KWIC results -->
+            <div class="column-right">
+                <!-- KWIC Concordance Results -->
+                <div *ngIf="kwicSearchActive || isSearchingKwic" class="kwic-results-panel">
+                    <div class="detail-header">
+                        <h3>Concordance</h3>
+                        <span class="items-count" *ngIf="!isSearchingKwic">{{ kwicResults.length }} matches for "{{ kwicSearchQuery }}"</span>
+                        <span class="spacer"></span>
+                        <button mat-stroked-button (click)="clearKwicSearch(); searchQuery = ''; applyFilter()">
+                            <mat-icon>arrow_back</mat-icon>
+                            Back to grid
+                        </button>
+                    </div>
+
+                    <div class="kwic-loading" *ngIf="isSearchingKwic">
+                        <mat-spinner diameter="24"></mat-spinner>
+                        <span>Searching transliterations...</span>
+                    </div>
+
+                    <div class="kwic-list" *ngIf="!isSearchingKwic && kwicResults.length > 0">
+                        <div class="kwic-entry" *ngFor="let result of kwicResults"
+                             (click)="openKwicResult(result)">
+                            <div class="kwic-header">
+                                <span class="kwic-identifier">{{ result.identifier }}</span>
+                                <span class="kwic-part" *ngIf="result.part">{{ result.part }}</span>
+                                <span class="kwic-line-num">line {{ result.line_index + 1 }}</span>
+                            </div>
+                            <div class="kwic-context">
+                                <div class="kwic-line context" *ngIf="result.line_before">{{ result.line_before }}</div>
+                                <div class="kwic-line match" [innerHTML]="highlightKwicMatch(result.matching_line)"></div>
+                                <div class="kwic-line context" *ngIf="result.line_after">{{ result.line_after }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="empty-state" *ngIf="!isSearchingKwic && kwicResults.length === 0">
+                        <mat-icon>search_off</mat-icon>
+                        <p>No matches found for "{{ kwicSearchQuery }}"</p>
+                    </div>
+                </div>
+
+                <!-- Normal Grid View -->
+                <div *ngIf="!kwicSearchActive && !isSearchingKwic">
+                    <div class="detail-header">
+                        <h3>Texts</h3>
+                        <span class="items-count">{{ filteredGroups.length }} texts</span>
+                    </div>
+                    <div class="museum-items-grid" *ngIf="filteredGroups.length > 0">
+                        <div class="grid-item" *ngFor="let group of filteredGroups"
+                             (click)="openGroup(group)"
+                             [class.merged]="group.has_production_text && !group.is_exported"
+                             [class.exported]="group.is_exported"
+                             [matTooltip]="getCardTooltip(group)">
+                            <div class="card-header">
+                                <span class="museum-number">{{ group.identifier }}</span>
+                                <span class="status-icon"
+                                      [class.not-merged]="!group.has_production_text"
+                                      [class.merged]="group.has_production_text && !group.is_exported"
+                                      [class.exported]="group.is_exported">
+                                    <svg *ngIf="!group.has_production_text" class="status-svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <circle cx="5.5" cy="8" r="4"/>
+                                        <circle cx="10.5" cy="8" r="4"/>
+                                    </svg>
+                                    <svg *ngIf="group.has_production_text && !group.is_exported" class="status-svg" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M4 2h5l3 3v9H4V2z"/>
+                                        <path d="M9 2v3h3" fill="none" stroke="currentColor" stroke-width="1"/>
+                                        <rect x="5.5" y="7" width="5" height="1" fill="white"/>
+                                        <rect x="5.5" y="9" width="5" height="1" fill="white"/>
+                                        <rect x="5.5" y="11" width="3" height="1" fill="white"/>
+                                    </svg>
+                                    <svg *ngIf="group.is_exported" class="status-svg" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M8 2L4 6h2.5v5h3V6H12L8 2z"/>
+                                        <rect x="3" y="12" width="10" height="1.5" rx="0.5"/>
+                                    </svg>
+                                </span>
+                            </div>
+                            <div class="card-info">
+                                <span class="info-line transliteration">
+                                    <span class="icon-letter">A</span>
+                                    {{ getPartsInfo(group) }}
+                                </span>
+                                <span class="info-line translation">
+                                    <span class="icon-letter">T</span>
+                                    {{ getTranslationInfo(group) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="empty-state" *ngIf="filteredGroups.length === 0">
+                        <mat-icon>filter_list_off</mat-icon>
+                        <p>No texts match the current filters</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Editor View -->
+    <div class="editor-view" *ngIf="viewMode === 'editor'">
+        <div class="editor-header">
+            <button mat-icon-button (click)="backToDashboard()" matTooltip="Back to dashboard">
+                <mat-icon>arrow_back</mat-icon>
+            </button>
+            <h2>{{ currentIdentifier }}</h2>
+            <span class="type-badge">{{ currentIdentifierType }}</span>
+            <div class="spacer"></div>
+            <span class="unsaved-indicator" *ngIf="hasUnsavedChanges">Unsaved changes</span>
+            <input #imageFileInput
+                   (change)="handleImageFileInput($event)"
+                   type="file"
+                   accept=".pdf,.png,.jpg,.jpeg"
+                   style="display:none"/>
+
+            <!-- eBL Integration -->
+            <div class="ebl-actions">
+                <button mat-stroked-button
+                        (click)="toggleLiveValidation()"
+                        [class.active]="liveValidationEnabled"
+                        matTooltip="Toggle live ATF validation">
+                    <mat-icon>{{ liveValidationEnabled ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+                    Live
+                </button>
+                <button mat-stroked-button
+                        (click)="pullFromEbl()"
+                        [disabled]="!eblConnected || isPullingFromEbl"
+                        [matTooltip]="eblConnected ? 'Pull current version from eBL' : 'eBL not configured'">
+                    <mat-icon>{{ isPullingFromEbl ? 'hourglass_empty' : 'cloud_download' }}</mat-icon>
+                    {{ isPullingFromEbl ? 'Pulling...' : 'Pull' }}
+                </button>
+                <button mat-stroked-button
+                        color="accent"
+                        (click)="exportToEbl()"
+                        [disabled]="!eblConnected || isExporting"
+                        [matTooltip]="eblConnected ? 'Export to eBL platform' : 'eBL not configured - click settings'">
+                    <mat-icon>{{ isExporting ? 'hourglass_empty' : 'cloud_upload' }}</mat-icon>
+                    {{ isExporting ? 'Exporting...' : 'Push' }}
+                </button>
+                <button mat-icon-button
+                        (click)="openEblSettings()"
+                        [matTooltip]="eblConnected ? 'eBL connected' : 'Configure eBL credentials'"
+                        [class.ebl-connected]="eblConnected">
+                    <mat-icon>{{ eblConnected ? 'cloud_done' : 'cloud_off' }}</mat-icon>
+                </button>
+            </div>
+
+            <button mat-raised-button color="primary" (click)="saveContent()" [disabled]="!hasUnsavedChanges && !!currentProductionText">
+                <mat-icon>save</mat-icon>
+                Save
+            </button>
+
+            <!-- ATF Help (F1) -->
+            <button mat-icon-button
+                    (click)="toggleAtfHelp()"
+                    matTooltip="ATF Reference Guide (F1)"
+                    [class.active]="showAtfHelp">
+                <mat-icon>help_outline</mat-icon>
+            </button>
+        </div>
+
+        <div class="editor-content">
+            <!-- Image tabs on the left -->
+            <div class="source-panel" [style.width.%]="leftPanelWidth">
+                <div class="source-tabs">
+                    <button *ngFor="let source of currentSources; let i = index"
+                            class="source-tab"
+                            [class.active]="selectedSourceIndex === i"
+                            (click)="selectSource(i)">
+                        Part {{ source.part || (i + 1) }}
+                    </button>
+                </div>
+                <div class="source-canvas-wrapper">
+                    <!-- Left Toolbar -->
+                    <div class="visualizer-toolbar">
+                        <button class="tool-btn" [class.active]="sourceCanvas?.selectedMode === CanvasMode.Pan"
+                                (click)="sourceCanvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan">
+                            <mat-icon>pan_tool</mat-icon>
+                        </button>
+
+                        <div class="toolbar-divider"></div>
+
+                        <button class="tool-btn" (click)="sourceCanvas?.zoomIn()" matTooltip="Zoom in">
+                            <mat-icon>zoom_in</mat-icon>
+                        </button>
+                        <button class="tool-btn" (click)="sourceCanvas?.zoomOut()" matTooltip="Zoom out">
+                            <mat-icon>zoom_out</mat-icon>
+                        </button>
+                        <button class="tool-btn" (click)="sourceCanvas?.forceZoomOut(1)" matTooltip="Reset zoom">
+                            <mat-icon>fit_screen</mat-icon>
+                        </button>
+
+                        <div class="toolbar-divider"></div>
+
+                        <button class="tool-btn" [class.active]="sourceCanvas?.crosshairEnabled"
+                                (click)="sourceCanvas?.toggleCrosshair()" matTooltip="Toggle crosshair">
+                            <mat-icon>add</mat-icon>
+                        </button>
+                    </div>
+
+                    <div class="source-canvas-container">
+                        <fabric-canvas #sourceCanvas
+                            [canvasType]="canvasTypeViewOnly"
+                            [isLoading]="!sourceImageDataUrls.has(selectedSourceIndex)">
+                        </fabric-canvas>
+                        <div class="no-image" *ngIf="!sourceImageDataUrls.has(selectedSourceIndex) && !isLoading">
+                            <mat-icon>image_not_supported</mat-icon>
+                            <span>No image available</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="source-info" *ngIf="currentSources[selectedSourceIndex]">
+                    <span class="info-label">Lines:</span>
+                    <span>{{ currentSources[selectedSourceIndex].lines?.length || 0 }}</span>
+                </div>
+            </div>
+
+            <!-- Resizer -->
+            <div class="panel-resizer"
+                 (mousedown)="startResize($event)"
+                 (touchstart)="startResize($event)">
+                <div class="resizer-handle"></div>
+            </div>
+
+            <!-- Text editor on the right -->
+            <div class="text-panel" [style.width.%]="100 - leftPanelWidth">
+                <!-- Action Tabs -->
+                <div class="text-panel-actions">
+                    <button class="action-tab" (click)="regenerateContent()" matTooltip="Regenerate from sources">
+                        <mat-icon>refresh</mat-icon> Regenerate
+                    </button>
+                    <button class="action-tab" (click)="exportContent()" matTooltip="Export content">
+                        <mat-icon>download</mat-icon> Export
+                    </button>
+                    <button class="action-tab" (click)="imageFileInput.click()" matTooltip="Add image (copy/photo)">
+                        <mat-icon>add_photo_alternate</mat-icon> Add Image
+                    </button>
+                    <button class="action-tab" (click)="browseServerImages()" matTooltip="Browse server images">
+                        <mat-icon>folder_open</mat-icon> Browse Server
+                    </button>
+                    <button class="action-tab" *ngIf="hasTranslations()" (click)="insertTranslation()"
+                            matTooltip="Insert translation lines into transliteration">
+                        <mat-icon>merge_type</mat-icon> Insert Translation
+                    </button>
+                </div>
+
+                <!-- Editor Mode Toggle -->
+                <div class="editor-mode-toggle" *ngIf="hasTranslations()">
+                    <button class="mode-btn"
+                            [class.active]="editorMode === 'transliteration'"
+                            (click)="setEditorMode('transliteration')">
+                        <mat-icon>text_snippet</mat-icon>
+                        <span>Transliteration</span>
+                        <span class="line-count">{{ getTransliterationLineCount() }}</span>
+                    </button>
+                    <button class="mode-btn translation"
+                            [class.active]="editorMode === 'translation'"
+                            (click)="setEditorMode('translation')">
+                        <mat-icon>translate</mat-icon>
+                        <span>Translation</span>
+                        <span class="line-count">{{ getTranslationLineCount() }}</span>
+                    </button>
+                </div>
+
+                <!-- Transliteration Editor -->
+                <text-editor
+                    *ngIf="editorMode === 'transliteration'"
+                    #textEditor
+                    [plainTextMode]="true"
+                    [initialText]="editorContent"
+                    [canEdit]="true"
+                    [validationErrors]="validationResult?.errors || []"
+                    [isValidating]="isValidating"
+                    [validationValid]="validationResult?.valid ?? null"
+                    [validationParsedLines]="validationResult?.parsed_lines || 0"
+                    [validationErrorCount]="validationResult?.errors?.length || 0"
+                    [validationWarningCount]="validationResult?.warnings?.length || 0"
+                    [validationSourceLabel]="getValidationSourceLabel()"
+                    (textContentChanged)="onEditorContentChange($event)">
+                </text-editor>
+
+                <!-- Translation Editor -->
+                <text-editor
+                    *ngIf="editorMode === 'translation'"
+                    [plainTextMode]="true"
+                    [initialText]="translationContent"
+                    [canEdit]="true"
+                    [disableNormalization]="true"
+                    (textContentChanged)="onTranslationContentChange($event)">
+                </text-editor>
+
+                <!-- eBL Content Panel (shows intro/notes from eBL when pulled) -->
+                <div class="live-validation-panel" *ngIf="(pulledIntroduction || pulledNotes) && editorMode === 'transliteration'" [style.height.px]="validationPanelHeight">
+                    <div class="validation-resize-handle" (mousedown)="onValidationResizeStart($event)"></div>
+                    <div class="validation-header">
+                        <span class="validation-title">
+                            <mat-icon>article</mat-icon>
+                            eBL Content
+                        </span>
+                    </div>
+
+                    <div class="ebl-content-sections">
+                        <div class="ebl-section" *ngIf="pulledIntroduction">
+                            <div class="ebl-section-header">
+                                <mat-icon>description</mat-icon>
+                                <span>Introduction</span>
+                            </div>
+                            <div class="ebl-section-content">{{ pulledIntroduction }}</div>
+                        </div>
+                        <div class="ebl-section" *ngIf="pulledNotes">
+                            <div class="ebl-section-header">
+                                <mat-icon>note</mat-icon>
+                                <span>Notes</span>
+                            </div>
+                            <div class="ebl-section-content">{{ pulledNotes }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- eBL Settings Dialog -->
+    <div class="ebl-settings-overlay" *ngIf="showEblSettings" (click)="closeEblSettings()">
+        <div class="ebl-settings-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
+                <h3>eBL Connection</h3>
+                <button mat-icon-button (click)="closeEblSettings()">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </div>
+            <div class="dialog-content">
+
+                <!-- Connected State -->
+                <div class="connected-info" *ngIf="eblConnected">
+                    <div class="connected-status">
+                        <mat-icon class="connected">check_circle</mat-icon>
+                        <span>Connected to eBL</span>
+                    </div>
+                    <div class="connected-details">
+                        <span class="auth-badge" [ngClass]="authMethod || ''">
+                            {{ authMethod === 'oauth' ? 'OAuth Login' : 'Manual Token' }}
+                        </span>
+                        <span class="token-expiry" *ngIf="eblStatus?.token_info?.exp">
+                            Token expires: {{ eblStatus.token_info.exp * 1000 | date:'dd/MM/yyyy' }}
+                        </span>
+                    </div>
+                    <button mat-stroked-button color="warn" (click)="disconnectEbl()" class="disconnect-btn">
+                        <mat-icon>logout</mat-icon> Disconnect
+                    </button>
+                </div>
+
+                <!-- OAuth Pending State -->
+                <div class="oauth-pending-section" *ngIf="isOAuthPending && !eblConnected">
+                    <mat-spinner diameter="36"></mat-spinner>
+                    <h4>Waiting for login...</h4>
+                    <p>A browser window has been opened. Complete the login there.</p>
+                    <button mat-stroked-button (click)="cancelOAuth()">Cancel</button>
+                </div>
+
+                <!-- Not Connected State -->
+                <div *ngIf="!eblConnected && !isOAuthPending">
+                    <div class="token-instructions">
+                        <h4>How to get your eBL access token:</h4>
+                        <ol>
+                            <li>Go to <a href="https://www.ebl.lmu.de" target="_blank">ebl.lmu.de</a> and log in</li>
+                            <li>Press F12 to open DevTools</li>
+                            <li>Go to <strong>Application</strong> tab (or Storage in Firefox)</li>
+                            <li>Expand <strong>Local Storage</strong> &rarr; click on <strong>https://www.ebl.lmu.de</strong></li>
+                            <li>Find the key containing <code>access_token</code> and copy its value</li>
+                        </ol>
+                    </div>
+
+                    <mat-form-field appearance="outline" class="full-width">
+                        <mat-label>Access Token</mat-label>
+                        <textarea matInput
+                                  [(ngModel)]="eblConfig.access_token"
+                                  placeholder="Paste your access token here..."
+                                  rows="4"></textarea>
+                        <mat-hint>Token expires after some time — you may need to refresh it</mat-hint>
+                    </mat-form-field>
+
+                    <div class="advanced-toggle">
+                        <button mat-button (click)="showAdvancedEblSettings = !showAdvancedEblSettings">
+                            <mat-icon>{{ showAdvancedEblSettings ? 'expand_less' : 'expand_more' }}</mat-icon>
+                            {{ showAdvancedEblSettings ? 'Hide' : 'Show' }} Advanced Settings
+                        </button>
+                    </div>
+
+                    <div *ngIf="showAdvancedEblSettings" class="advanced-settings">
+                        <mat-form-field appearance="outline" class="full-width">
+                            <mat-label>API URL</mat-label>
+                            <input matInput [(ngModel)]="eblConfig.api_url" placeholder="https://www.ebl.lmu.de/api">
+                        </mat-form-field>
+                    </div>
+                </div>
+
+            </div>
+            <div class="dialog-actions">
+                <button mat-button (click)="closeEblSettings()">{{ eblConnected ? 'Close' : 'Cancel' }}</button>
+                <button mat-raised-button color="primary" *ngIf="!eblConnected"
+                        (click)="saveEblConfig()" [disabled]="isSavingEblConfig">
+                    {{ isSavingEblConfig ? 'Saving...' : 'Save & Connect' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Results Dialog -->
+    <div class="validation-overlay" *ngIf="showValidationResults" (click)="closeValidationResults()">
+        <div class="validation-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
+                <h3>
+                    <mat-icon [class.valid]="validationResult?.valid" [class.invalid]="!validationResult?.valid">
+                        {{ validationResult?.valid ? 'check_circle' : 'error' }}
+                    </mat-icon>
+                    ATF Validation {{ validationResult?.valid ? 'Passed' : 'Failed' }}
+                </h3>
+                <button mat-icon-button (click)="closeValidationResults()">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <div class="validation-info-row">
+                    <p class="parsed-lines">Parsed {{ validationResult?.parsed_lines }} lines</p>
+                    <span class="validation-source-badge dialog-badge"
+                          *ngIf="validationResult"
+                          [class.ebl-api]="validationResult.validation_source === 'ebl_api'"
+                          [class.local-lark]="validationResult.validation_source === 'local_lark'"
+                          [class.local-basic]="validationResult.validation_source === 'local_basic' || validationResult.validation_source === 'local'"
+                          [matTooltip]="getValidationSourceTooltip()">
+                        {{ getValidationSourceLabel() }}
+                    </span>
+                </div>
+
+                <div class="validation-errors" *ngIf="validationResult && validationResult.errors && validationResult.errors.length > 0">
+                    <h4>Errors ({{ validationResult.errors.length }})</h4>
+                    <ul>
+                        <li *ngFor="let errorStr of getErrorStrings()">{{ errorStr }}</li>
+                    </ul>
+                </div>
+
+                <div class="validation-warnings" *ngIf="validationResult && validationResult.warnings && validationResult.warnings.length > 0">
+                    <h4>Warnings ({{ validationResult.warnings.length }})</h4>
+                    <ul>
+                        <li *ngFor="let warning of validationResult.warnings">{{ warning }}</li>
+                    </ul>
+                </div>
+
+                <div class="validation-success" *ngIf="validationResult && validationResult.valid && (!validationResult.errors || validationResult.errors.length === 0)">
+                    <mat-icon>check_circle</mat-icon>
+                    <span>No errors found. The ATF is valid.</span>
+                </div>
+            </div>
+            <div class="dialog-actions">
+                <button mat-raised-button color="primary" (click)="closeValidationResults()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Error Overlay -->
+    <div class="export-error-overlay" *ngIf="showExportErrorOverlay" (click)="closeExportErrorOverlay()">
+        <div class="export-error-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header error-header">
+                <h3>
+                    <mat-icon class="error-icon">error</mat-icon>
+                    {{ exportErrorTitle }}
+                </h3>
+                <button mat-icon-button (click)="closeExportErrorOverlay()">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <div class="error-message">
+                    <p>{{ exportErrorMessage }}</p>
+                </div>
+
+                <div class="error-help" *ngIf="exportErrorHelp">
+                    <mat-icon>help_outline</mat-icon>
+                    <span>{{ exportErrorHelp }}</span>
+                </div>
+
+                <div class="export-validation-errors" *ngIf="exportValidationErrors.length > 0">
+                    <h4>
+                        <mat-icon>warning</mat-icon>
+                        Validation Errors ({{ exportValidationErrors.length }})
+                    </h4>
+                    <p class="error-hint">These errors must be fixed before the text can be exported to eBL:</p>
+                    <ul class="error-list">
+                        <li *ngFor="let err of exportValidationErrors">{{ err }}</li>
+                    </ul>
+                </div>
+
+                <div class="error-actions-hint" *ngIf="exportValidationErrors.length > 0">
+                    <mat-icon>lightbulb</mat-icon>
+                    <span>The errors have been added to the Live Validation panel below the editor for easy reference while editing.</span>
+                </div>
+            </div>
+            <div class="dialog-actions">
+                <button mat-raised-button color="primary" (click)="closeExportErrorOverlay()">
+                    <mat-icon>edit</mat-icon>
+                    Fix Errors
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Page Selection Overlay (only shown when a PDF is selected) -->
+    <div class="pdf-page-overlay" *ngIf="showPdfPageSelector" (click)="closePdfPageSelector()">
+        <div class="pdf-page-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
+                <h3>
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    Select Page
+                </h3>
+                <button mat-icon-button (click)="closePdfPageSelector()">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <div class="pdf-header">
+                    <span class="pdf-info">{{ pdfFile?.name }} - {{ pdfTotalPages }} pages</span>
+                </div>
+
+                <!-- Navigation Controls -->
+                <div class="pdf-navigation" *ngIf="pdfTotalPages > 0">
+                    <button mat-stroked-button (click)="prevPdfPageWindow()" [disabled]="pdfVisiblePageNumbers[0] <= 1">
+                        <mat-icon>chevron_left</mat-icon>
+                    </button>
+
+                    <div class="page-jump">
+                        <span>Page:</span>
+                        <input type="number"
+                               [(ngModel)]="pdfGoToPageInput"
+                               min="1"
+                               [max]="pdfTotalPages"
+                               (keyup.enter)="jumpToPdfPage()">
+                        <span>/ {{ pdfTotalPages }}</span>
+                        <button mat-stroked-button color="primary" (click)="jumpToPdfPage()">Go</button>
+                    </div>
+
+                    <button mat-stroked-button (click)="nextPdfPageWindow()" [disabled]="pdfVisiblePageNumbers[pdfVisiblePageNumbers.length - 1] >= pdfTotalPages">
+                        <mat-icon>chevron_right</mat-icon>
+                    </button>
+                </div>
+
+                <!-- PDF Thumbnails -->
+                <div class="pdf-thumbnails" *ngIf="pdfTotalPages > 0">
+                    <div *ngFor="let page of pdfVisiblePageNumbers"
+                         class="pdf-thumbnail"
+                         [class.loading]="isUploadingImage"
+                         (click)="selectPdfPage(page)">
+                        <pdf-viewer [src]="pdfSrc"
+                                    [page]="page"
+                                    [show-all]="false"
+                                    [render-text]="false"
+                                    [fit-to-page]="true"
+                                    style="width: 180px; height: 240px;">
+                        </pdf-viewer>
+                        <span class="page-number">Page {{ page }}</span>
+                    </div>
+                </div>
+
+                <!-- Loading indicator for page conversion -->
+                <div class="pdf-loading" *ngIf="isUploadingImage">
+                    <mat-spinner diameter="24"></mat-spinner>
+                    <span>Converting page...</span>
+                </div>
+
+                <!-- Hidden PDF viewer for page count -->
+                <pdf-viewer *ngIf="pdfSrc && pdfTotalPages === 0"
+                            [src]="pdfSrc"
+                            [show-all]="false"
+                            [render-text]="false"
+                            (after-load-complete)="afterPdfLoadComplete($event)"
+                            style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;">
+                </pdf-viewer>
+            </div>
+            <div class="dialog-actions">
+                <button mat-button (click)="closePdfPageSelector()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ATF Help Drawer -->
+    <div class="atf-help-drawer" *ngIf="showAtfHelp">
+        <div class="drawer-header">
+            <h3>eBL-ATF Reference Guide</h3>
+            <button mat-icon-button (click)="toggleAtfHelp()">
+                <mat-icon>close</mat-icon>
+            </button>
+        </div>
+
+        <!-- Search Box -->
+        <div class="drawer-search">
+            <mat-form-field appearance="outline" class="search-field">
+                <mat-icon matPrefix>search</mat-icon>
+                <input matInput
+                       [(ngModel)]="atfHelpSearchQuery"
+                       (ngModelChange)="filterAtfHelp()"
+                       placeholder="Search (e.g., erasure, bracket, divine)">
+                <button mat-icon-button matSuffix *ngIf="atfHelpSearchQuery" (click)="atfHelpSearchQuery = ''; filterAtfHelp()">
+                    <mat-icon>clear</mat-icon>
+                </button>
+            </mat-form-field>
+        </div>
+
+        <div class="drawer-content">
+            <!-- Table of Contents (only when not searching) -->
+            <div class="toc-section" *ngIf="!atfHelpSearchQuery">
+                <h4 class="toc-title">Table of Contents</h4>
+                <ul class="toc-list">
+                    <li *ngFor="let section of atfHelpSections">
+                        <a (click)="scrollToSection(section.id)">{{ section.title }}</a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Dynamic sections from filtered data -->
+            <div class="help-section" *ngFor="let section of atfHelpSections" [id]="'help-' + section.id">
+                <h4 class="section-title" [innerHTML]="highlightText(section.title)"></h4>
+                <p class="section-intro" [innerHTML]="highlightText(section.introduction)"></p>
+                <table class="help-table">
+                    <thead>
+                        <tr>
+                            <th class="notation-header">Notation</th>
+                            <th class="description-header">Description</th>
+                            <th class="example-header">Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let item of section.items">
+                            <td class="notation" [innerHTML]="highlightText(item.notation)"></td>
+                            <td class="description" [innerHTML]="highlightText(item.description)"></td>
+                            <td class="example" [innerHTML]="highlightText(item.example || '')"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- No results -->
+            <div class="no-results" *ngIf="atfHelpSections.length === 0">
+                <mat-icon>search_off</mat-icon>
+                <p>No matches found for "{{ atfHelpSearchQuery }}"</p>
+                <p class="hint">Try: erasure, bracket, divine, obverse, broken, ruling</p>
+            </div>
+
+            <!-- Footer with external link -->
+            <div class="help-footer" *ngIf="atfHelpSections.length > 0">
+                <a href="https://github.com/ElectronicBabylonianLiterature/ebl-api/blob/master/docs/ebl-atf.md"
+                   target="_blank"
+                   class="help-link">
+                    <mat-icon>open_in_new</mat-icon>
+                    Full eBL-ATF Specification on GitHub
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="drawer-backdrop" *ngIf="showAtfHelp" (click)="toggleAtfHelp()"></div>
+</div>
