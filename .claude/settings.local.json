@@ -210,7 +210,8 @@
       "Bash(\"/c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe\" -c:*)",
       "Bash(PYTHONIOENCODING=utf-8 python3:*)",
       "Bash(/c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
-      "Bash(PYTHONIOENCODING=utf-8 /c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)"
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
+      "Bash(# Test: write an annotation to page_0003 and check if file is modified stat \"\"c:/Users/wende/Documents/GitHub/BEn-app/server-new/src/data/yolo/datasets/ahw_dictionary/labels/val/page_0003.txt\"\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\wende\\Documents\\GitHub\\BEn-app-native\\server\\src\\entities"
