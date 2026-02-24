@@ -68,6 +68,10 @@ runs/
 deepseek-ocr/
 vlm-ocr/
 
+# Secrets
+.env
+*.env
+
 # Misc
 *.log
 .build-analytics
