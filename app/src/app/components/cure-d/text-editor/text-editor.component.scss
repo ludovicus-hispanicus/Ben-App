@@ -93,7 +93,7 @@ $border-dark: #444;
         color: #ccc;
         &:hover { background: #4a4a4a; }
         &.active { background: #555; color: #fff; }
-        &:first-child { border-right: none; }
+        &:not(:last-child) { border-right: none; }
       }
     }
   }
@@ -219,6 +219,9 @@ $border-dark: #444;
 
   &:first-child {
     border-radius: 4px 0 0 4px;
+  }
+
+  &:not(:last-child) {
     border-right: none;
   }
 
@@ -498,6 +501,12 @@ $border-dark: #444;
   .hl-half {
     color: #e65100;
   }
+
+  // Italic formatting for markdown (norm mode)
+  .hl-italic {
+    font-style: italic;
+    font-weight: 500;
+  }
 }
 
 // Dark mode highlight colors
@@ -520,6 +529,11 @@ $border-dark: #444;
 
   .hl-half {
     color: #ffb74d;
+  }
+
+  .hl-italic {
+    font-style: italic;
+    font-weight: 500;
   }
 }
 

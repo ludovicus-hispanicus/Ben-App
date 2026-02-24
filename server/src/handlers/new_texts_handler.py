@@ -1,6 +1,6 @@
 import datetime
 from random import randint
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import math
 import time
@@ -332,6 +332,53 @@ class NewTextsHandler:
         labels = self._collection.distinct("label", {"label": {"$ne": "", "$exists": True}})
         return sorted(labels)
 
+    def find_translation_by_museum_number(self, museum_name: str, museum_number: int) -> Optional[NewText]:
+        """
+        Find a text with the same museum identifier but labeled as 'translation'.
+        This is used to link transliterations with their translations for the CuReD toggle feature.
+
+        Args:
+            museum_name: The museum abbreviation (e.g., "BM", "K")
+            museum_number: The museum accession number
+
+        Returns:
+            NewText if a matching translation is found, None otherwise
+        """
+        cursor = self._collection.find_one({
+            "text_identifiers.museum.name": museum_name,
+            "text_identifiers.museum.number": museum_number,
+            "label": "translation"
+        })
+
+        if cursor:
+            return NewText.parse_obj(cursor)
+        return None
+
+    def find_transliteration_by_museum_number(self, museum_name: str, museum_number: int) -> Optional[NewText]:
+        """
+        Find a text with the same museum identifier that is NOT a translation.
+        This is used to link translations back to their source transliteration.
+
+        Args:
+            museum_name: The museum abbreviation (e.g., "BM", "K")
+            museum_number: The museum accession number
+
+        Returns:
+            NewText if a matching transliteration is found, None otherwise
+        """
+        cursor = self._collection.find_one({
+            "text_identifiers.museum.name": museum_name,
+            "text_identifiers.museum.number": museum_number,
+            "$or": [
+                {"label": {"$exists": False}},
+                {"label": {"$ne": "translation"}}
+            ]
+        })
+
+        if cursor:
+            return NewText.parse_obj(cursor)
+        return None
+
     def get_amendment_stats(self) -> AmendmentStats:
         completed_text_amount = self._collection.count_documents({"is_fixed": True})
         path = StorageUtils.get_confirmed_signs_path()
@@ -346,20 +393,28 @@ class NewTextsHandler:
                               saved_signs=signs_amount)
 
     def get_curated_training_stats(self) -> dict:
-        """Get statistics about curated texts for training the Kraken OCR model."""
+        """Get statistics about curated texts for training the Kraken OCR model.
+        Excludes texts with label="translation" (used for translation workflow, not training).
+        """
         # Simpler approach: count texts with is_fixed=True at the document level
         # and also count texts that have CuReD transliterations with is_fixed edits
 
         curated_texts = 0
         total_lines = 0
+        all_characters = set()
 
-        # Find all texts with CuReD transliterations
+        # Find all texts with CuReD transliterations, excluding translations
         cursor = self._collection.find({
             "transliterations": {
                 "$elemMatch": {
                     "source": TransliterationSource.CURED.value
                 }
-            }
+            },
+            # Exclude texts labeled as "translation" - they are NOT for training
+            "$or": [
+                {"label": {"$exists": False}},
+                {"label": {"$ne": "translation"}}
+            ]
         })
 
         for doc in cursor:
@@ -378,26 +433,50 @@ class NewTextsHandler:
                     lines = latest_edit.get("lines", [])
                     total_lines += len(lines)
 
-        logging.info(f"Curated training stats: {curated_texts} texts, {total_lines} lines")
+                    # Collect unique characters from all lines
+                    for line in lines:
+                        # Lines can be strings or dicts with "text" key
+                        if isinstance(line, str):
+                            text = line
+                        else:
+                            text = line.get("text", "")
+                        all_characters.update(text)
 
-        return {"curated_texts": curated_texts, "total_lines": total_lines}
+        # Sort characters for consistent display
+        unique_chars = sorted(list(all_characters))
+        codec_size = len(unique_chars)
+
+        logging.info(f"Curated training stats: {curated_texts} texts, {total_lines} lines, {codec_size} unique chars")
+
+        return {
+            "curated_texts": curated_texts,
+            "total_lines": total_lines,
+            "codec_size": codec_size,
+            "unique_characters": unique_chars
+        }
 
     def get_curated_training_data(self) -> list:
         """
         Get all curated training data for Kraken OCR training.
         Returns a list of dicts with image_path, lines, and boxes.
+        Excludes texts with label="translation" (used for translation workflow, not training).
         """
         from utils.storage_utils import StorageUtils
 
         training_data = []
 
-        # Find all texts with CuReD transliterations
+        # Find all texts with CuReD transliterations, excluding translations
         cursor = self._collection.find({
             "transliterations": {
                 "$elemMatch": {
                     "source": TransliterationSource.CURED.value
                 }
-            }
+            },
+            # Exclude texts labeled as "translation" - they are NOT for training
+            "$or": [
+                {"label": {"$exists": False}},
+                {"label": {"$ne": "translation"}}
+            ]
         })
 
         for doc in cursor:
@@ -414,10 +493,11 @@ class NewTextsHandler:
                 # Check the latest edit for is_fixed status
                 latest_edit = edit_history[-1] if edit_history else None
                 if latest_edit and latest_edit.get("is_fixed", False):
-                    # Get the image path
+                    # Get the image path - use full-size training image, not preview
+                    # Bounding boxes are drawn on original images, not thumbnails
                     image_name = trans.get("image_name", "")
                     if image_name:
-                        image_path = StorageUtils.build_preview_image_path(image_name)
+                        image_path = StorageUtils.build_cured_train_image_path(image_name)
                     else:
                         image_path = ""
 

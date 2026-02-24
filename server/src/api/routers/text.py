@@ -89,7 +89,7 @@ async def get_random_texts() -> List[NewTextPreviewDto]:
 
 @router.post("/create")
 async def create(request: Request, dto: CreateTextDto) -> int:
-    user_id = request.state.user_id
+    user_id = request.state.user_id or "admin"  # Default to admin if not authenticated
 
     text_id = global_new_text_handler.create_new_text(identifiers=dto.text_identifiers, metadata=dto.metadata,
                                                       uploader_id=user_id)

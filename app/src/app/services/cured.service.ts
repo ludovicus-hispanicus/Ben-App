@@ -87,10 +87,13 @@ export class CuredService {
         }>(`${environment.apiUrl}${this.baseUrl}/training/status`);
     }
 
-    startTraining(epochs: number = 50, modelName: string = null) {
+    startTraining(epochs: number = 50, modelName: string = null, baseModel: string = null) {
         const params: any = { epochs };
         if (modelName) {
             params.model_name = modelName;
+        }
+        if (baseModel) {
+            params.base_model = baseModel;
         }
         return this.http.post<{ message: string; epochs: number; model_name: string }>(
             `${environment.apiUrl}${this.baseUrl}/training/start`,
@@ -105,6 +108,10 @@ export class CuredService {
 
     cancelTraining() {
         return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/cancel`, null);
+    }
+
+    getBaseModelsMetadata() {
+        return this.http.get<{ [key: string]: BaseModelMetadata }>(`${environment.apiUrl}${this.baseUrl}/training/base-models`);
     }
 
     listModels() {
@@ -126,6 +133,34 @@ export class CuredService {
         return this.http.post<PostProcessingResult>(
             `${environment.apiUrl}${this.baseUrl}/postprocessor/apply`,
             { lines }
+        );
+    }
+
+    getAvailableOcrModels() {
+        return this.http.get<{ models: OcrModelOption[] }>(
+            `${environment.apiUrl}${this.baseUrl}/available-models`
+        );
+    }
+
+    /**
+     * Find a translation for a given museum identifier.
+     * Used to enable translation toggle mode in CuReD.
+     */
+    findTranslation(museumName: string, museumNumber: number) {
+        return this.http.get<TranslationLookupResult>(
+            `${environment.apiUrl}${this.baseUrl}/translation/find`,
+            { params: { museum_name: museumName, museum_number: museumNumber.toString() } }
+        );
+    }
+
+    /**
+     * Find the source transliteration for a given museum identifier.
+     * Used when viewing a translation to navigate back to its source.
+     */
+    findTransliteration(museumName: string, museumNumber: number) {
+        return this.http.get<TransliterationLookupResult>(
+            `${environment.apiUrl}${this.baseUrl}/transliteration/find`,
+            { params: { museum_name: museumName, museum_number: museumNumber.toString() } }
         );
     }
 
@@ -154,10 +189,29 @@ export interface TrainingProgress {
     current_epoch: number;
     total_epochs: number;
     accuracy: number;
+    val_accuracy: number;
+    loss: number;
     model_name: string | null;
     error: string | null;
     started_at: string | null;
     completed_at: string | null;
+    epoch_history: EpochRecord[];
+    best_accuracy: number;
+    no_improve_count: number;
+    early_stopped: boolean;
+}
+
+export interface EpochRecord {
+    epoch: number;
+    accuracy: number;
+    val_accuracy: number;
+    loss: number;
+}
+
+export interface OcrModelOption {
+    value: string;
+    label: string;
+    is_custom: boolean;
 }
 
 export interface TrainedModel {
@@ -174,4 +228,25 @@ export interface ActiveModelInfo {
     is_pretrained: boolean;
     size_mb: number;
     last_modified: string | null;
+}
+
+export interface BaseModelMetadata {
+    size_mb: number;
+    best_accuracy: number;
+    last_accuracy: number;
+    completed_epochs: number;
+    alphabet_size: number;
+}
+
+export interface TranslationLookupResult {
+    found: boolean;
+    text_id?: number;
+    transliteration_id?: number;
+    lines?: string[];
+}
+
+export interface TransliterationLookupResult {
+    found: boolean;
+    text_id?: number;
+    transliteration_id?: number;
 }

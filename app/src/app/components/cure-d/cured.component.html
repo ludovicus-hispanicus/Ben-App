@@ -37,15 +37,31 @@
       <!-- Table header -->
       <div class="work-table-header" *ngIf="filteredTexts.length > 0">
         <div class="col-thumbnail"></div>
-        <div class="col-identifier">Identifier</div>
+        <div class="col-identifier sortable" (click)="toggleSort('identifier')" [class.sorted]="sortColumn === 'identifier'">
+          Identifier <span class="sort-arrow" *ngIf="sortColumn === 'identifier'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
         <div class="col-separator">|</div>
-        <div class="col-date">Date</div>
+        <div class="col-part sortable" (click)="toggleSort('part')" [class.sorted]="sortColumn === 'part'">
+          Part <span class="sort-arrow" *ngIf="sortColumn === 'part'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
         <div class="col-separator">|</div>
-        <div class="col-ben-id">BEN ID</div>
+        <div class="col-date sortable" (click)="toggleSort('last_modified')" [class.sorted]="sortColumn === 'last_modified'">
+          Date <span class="sort-arrow" *ngIf="sortColumn === 'last_modified'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
         <div class="col-separator">|</div>
-        <div class="col-label">Label</div>
+        <div class="col-ben-id sortable" (click)="toggleSort('text_id')" [class.sorted]="sortColumn === 'text_id'">
+          BEN ID <span class="sort-arrow" *ngIf="sortColumn === 'text_id'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
+        <div class="col-separator">|</div>
+        <div class="col-label sortable" (click)="toggleSort('label')" [class.sorted]="sortColumn === 'label'">
+          Label <span class="sort-arrow" *ngIf="sortColumn === 'label'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
         <div class="col-separator">|</div>
         <div class="col-status">Status</div>
+        <div class="col-separator">|</div>
+        <div class="col-lines sortable" (click)="toggleSort('lines_count')" [class.sorted]="sortColumn === 'lines_count'">
+          Lines <span class="sort-arrow" *ngIf="sortColumn === 'lines_count'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+        </div>
         <div class="col-separator">|</div>
         <div class="col-actions">Actions</div>
       </div>
@@ -59,7 +75,9 @@
           </div>
           <div class="col-identifier">{{ getItemIdentifier(item) }}</div>
           <div class="col-separator">|</div>
-          <div class="col-date">{{ item.last_modified | date:'d MMM yyyy' }}</div>
+          <div class="col-part">{{ item.part || '—' }}</div>
+          <div class="col-separator">|</div>
+          <div class="col-date">{{ item.last_modified | date:'d MMM yyyy, HH:mm' }}</div>
           <div class="col-separator">|</div>
           <div class="col-ben-id">{{ item.text_id }}</div>
           <div class="col-separator">|</div>
@@ -76,6 +94,8 @@
             <span *ngIf="item.latest_transliteration_id && !item.is_curated" class="status-saved">saved</span>
             <span *ngIf="!item.latest_transliteration_id" class="status-unsaved">no save</span>
           </div>
+          <div class="col-separator">|</div>
+          <div class="col-lines">{{ item.lines_count || '—' }}</div>
           <div class="col-separator">|</div>
           <div class="col-actions">
             <button mat-icon-button color="warn" (click)="deleteListItem(item, $event)" matTooltip="Delete">
@@ -122,20 +142,35 @@
     <div class="model-section">
       <div class="model-header">
         <mat-icon>model_training</mat-icon>
-        <h3>OCR Model</h3>
+        <h3>Base Model for Training</h3>
       </div>
       <div class="model-details">
-        <div class="model-stat">
-          <span class="stat-label">Active Model</span>
-          <span class="stat-value">{{ modelInfo.name }}</span>
-        </div>
-        <div class="model-stat">
-          <span class="stat-label">Type</span>
-          <span class="stat-value">{{ modelInfo.isPretrained ? 'Pre-trained' : 'Fine-tuned' }}</span>
-        </div>
-        <div class="model-stat">
-          <span class="stat-label">Size</span>
-          <span class="stat-value">{{ modelInfo.sizeMb }} MB</span>
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Fine-tune from</mat-label>
+          <mat-select [(ngModel)]="selectedBaseModel">
+            <mat-option *ngFor="let model of availableOcrModels" [value]="model.value">
+              {{ model.label }}
+            </mat-option>
+          </mat-select>
+          <mat-hint>Select the pre-trained model to fine-tune</mat-hint>
+        </mat-form-field>
+        <div class="model-meta" *ngIf="baseModelsMetadata[selectedBaseModel]" style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;">
+          <div class="model-stat">
+            <span class="stat-label">Accuracy</span>
+            <span class="stat-value">{{ baseModelsMetadata[selectedBaseModel].last_accuracy }}%</span>
+          </div>
+          <div class="model-stat">
+            <span class="stat-label">Epochs</span>
+            <span class="stat-value">{{ baseModelsMetadata[selectedBaseModel].completed_epochs }}</span>
+          </div>
+          <div class="model-stat">
+            <span class="stat-label">Alphabet</span>
+            <span class="stat-value">{{ baseModelsMetadata[selectedBaseModel].alphabet_size }} chars</span>
+          </div>
+          <div class="model-stat">
+            <span class="stat-label">Size</span>
+            <span class="stat-value">{{ baseModelsMetadata[selectedBaseModel].size_mb }} MB</span>
+          </div>
         </div>
       </div>
     </div>
@@ -181,39 +216,144 @@
             <span *ngIf="trainingProgress.status === 'preparing'">Preparing training data...</span>
             <span *ngIf="trainingProgress.status === 'training'">
               Training: Epoch {{ trainingProgress.current_epoch }} / {{ trainingProgress.total_epochs }}
+              <span *ngIf="trainingProgress.accuracy"> | Char: {{ (trainingProgress.accuracy * 100).toFixed(1) }}%</span>
+              <span *ngIf="trainingProgress.word_accuracy"> | Word: {{ (trainingProgress.word_accuracy * 100).toFixed(1) }}%</span>
+              <span *ngIf="trainingProgress.training_speed"> | {{ trainingProgress.training_speed.toFixed(1) }} it/s</span>
             </span>
           </span>
         </div>
         <div class="training-progress-bar" *ngIf="trainingProgress.status === 'training'">
           <div class="progress-fill" [style.width.%]="(trainingProgress.current_epoch / trainingProgress.total_epochs) * 100"></div>
         </div>
+
+        <!-- Batch progress within epoch -->
+        <div class="batch-progress" *ngIf="trainingProgress.batch_total > 0 && trainingProgress.status === 'training'">
+          <span class="batch-text">Batch {{ trainingProgress.batch_current }} / {{ trainingProgress.batch_total }}</span>
+          <span class="epoch-time" *ngIf="trainingProgress.epoch_time">{{ trainingProgress.epoch_time }}</span>
+        </div>
+
+        <!-- Early stopping indicator -->
+        <div class="early-stop-indicator" *ngIf="trainingProgress.no_improve_count > 0">
+          <mat-icon>warning</mat-icon>
+          <span>No improvement for {{ trainingProgress.no_improve_count }}/5 epochs</span>
+        </div>
+
         <button mat-stroked-button color="warn" (click)="cancelTraining()">
           <mat-icon>cancel</mat-icon>
           Cancel Training
         </button>
       </div>
 
-      <!-- Start training button -->
+      <!-- Start training form -->
       <div *ngIf="!isTraining">
+        <mat-form-field appearance="outline" style="width: 100%; max-width: 300px;">
+          <mat-label>Model Name (e.g. book name)</mat-label>
+          <input matInput [(ngModel)]="trainingModelName" placeholder="e.g. RoyalInscriptions">
+          <mat-hint>Final name: {{ selectedBaseModel | titlecase }}_{{ trainingModelName || '...' }}</mat-hint>
+        </mat-form-field>
+
         <button mat-stroked-button
-                [disabled]="!trainingStatus.isReady"
-                [color]="trainingStatus.isReady ? 'primary' : undefined"
+                [disabled]="!trainingStatus.isReady || !trainingModelName?.trim()"
+                [color]="trainingStatus.isReady && trainingModelName?.trim() ? 'primary' : undefined"
                 (click)="startTraining()"
-                [matTooltip]="trainingStatus.isReady ? 'Start training with ' + trainingStatus.totalLines + ' curated lines' : 'Need at least 100 curated lines to start training'">
+                [matTooltip]="trainingStatus.isReady ? 'Start training with ' + trainingStatus.totalLines + ' curated lines' : 'Need at least 1000 curated lines to start training'"
+                style="margin-top: 0.5em;">
           <mat-icon>play_arrow</mat-icon>
           Start Training
         </button>
         <span class="training-hint" *ngIf="!trainingStatus.isReady">Mark transliterations as "Curated" to contribute training data</span>
-        <span class="training-hint ready" *ngIf="trainingStatus.isReady">Ready to train with {{ trainingStatus.totalLines }} lines!</span>
+        <span class="training-hint ready" *ngIf="trainingStatus.isReady && !trainingModelName?.trim()">Enter a model name and click Start Training</span>
+        <span class="training-hint ready" *ngIf="trainingStatus.isReady && trainingModelName?.trim()">Ready to train with {{ trainingStatus.totalLines }} lines!</span>
       </div>
     </div>
+
+    <!-- Training Results Section -->
+    <div class="training-results" *ngIf="epochHistory.length > 0 || trainingProgress?.status === 'completed'">
+      <div class="training-results-header">
+        <mat-icon>assessment</mat-icon>
+        <h3>Training Results</h3>
+      </div>
+
+      <!-- Early stopping warning -->
+      <div class="early-stop-warning">
+        <mat-icon>info</mat-icon>
+        <span>Training will automatically stop if no improvement after 5 consecutive epochs.</span>
+      </div>
+
+      <!-- Per-epoch accuracy table -->
+      <div class="epoch-table-container" *ngIf="epochHistory.length > 0">
+        <table class="epoch-table">
+          <thead>
+            <tr>
+              <th>Epoch</th>
+              <th>Char Acc</th>
+              <th>Word Acc</th>
+              <th>Time</th>
+              <th>Speed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let ep of epochHistory"
+                [class.best-epoch]="ep.accuracy === trainingProgress?.best_accuracy">
+              <td>{{ ep.epoch }}</td>
+              <td>{{ (ep.accuracy * 100).toFixed(2) }}%</td>
+              <td>{{ ep.word_accuracy ? (ep.word_accuracy * 100).toFixed(2) + '%' : '-' }}</td>
+              <td>{{ ep.epoch_time || '-' }}</td>
+              <td>{{ ep.training_speed ? ep.training_speed.toFixed(1) + ' it/s' : '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Training complete report -->
+      <div class="training-complete-report" *ngIf="trainingProgress?.status === 'completed'">
+        <div class="report-card success">
+          <mat-icon>check_circle</mat-icon>
+          <div class="report-content">
+            <h4>Training Complete!</h4>
+            <p>
+              Model <strong>{{ trainingProgress.model_name }}</strong> trained for
+              {{ epochHistory.length }} epochs.
+              <span *ngIf="trainingProgress.early_stopped"> (Early stopped - no improvement for 5 epochs)</span>
+            </p>
+            <p>Best accuracy: <strong>{{ (trainingProgress.best_accuracy * 100).toFixed(2) }}%</strong></p>
+            <p class="ready-message">Model is ready to test - select it from the OCR Model dropdown.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- Stage 1: PDF Page Selection - Thumbnail View -->
+<!-- Stage 1: PDF Page Selection - Thumbnail View (Paginated) -->
 <div *ngIf="stage == 1" style="padding: 2em;">
+  <!-- Navigation Controls -->
+  <div class="pdf-navigation" style="display: flex; align-items: center; justify-content: center; gap: 1em; margin-bottom: 1em; flex-wrap: wrap;">
+    <button mat-raised-button (click)="prevPageWindow()" [disabled]="visiblePageNumbers[0] <= 1">
+      <mat-icon>chevron_left</mat-icon> Previous
+    </button>
+
+    <div style="display: flex; align-items: center; gap: 0.5em;">
+      <span>Go to page:</span>
+      <input type="number" [(ngModel)]="goToPageInput" min="1" [max]="totalPages"
+             style="width: 70px; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px;"
+             (keyup.enter)="jumpToPage()">
+      <button mat-raised-button color="primary" (click)="jumpToPage()">Go</button>
+    </div>
+
+    <span style="color: #666;">
+      Showing pages {{visiblePageNumbers[0]}} - {{visiblePageNumbers[visiblePageNumbers.length - 1]}} of {{totalPages}}
+    </span>
+
+    <button mat-raised-button (click)="nextPageWindow()" [disabled]="visiblePageNumbers[visiblePageNumbers.length - 1] >= totalPages">
+      Next <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  <!-- Page Thumbnails (only visible pages) -->
   <div class="pdf-thumbnails">
-    <div *ngFor="let page of pageNumbers; let i = index"
+    <div *ngFor="let page of visiblePageNumbers; let i = index"
          class="pdf-thumbnail"
          [class.selected]="currentpage === page"
          (click)="selectPageFromThumbnail(page)">
@@ -322,10 +462,29 @@
       </div>
 
       <!-- Status info bar -->
-      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed)" class="results-info">
+      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed || hasLinkedTranslation)" class="results-info">
         <span class="info-item" *ngIf="textId">BEN: {{textId}}</span>
         <span class="info-item" *ngIf="transliterationId">Trans: {{transliterationId}}</span>
         <span class="status-badge" *ngIf="isTextFixed">Curated</span>
+        <span class="status-badge translation-badge" *ngIf="currentLabel === 'translation'">Translation</span>
+
+        <!-- Translation toggle buttons (only show if linked translation exists) -->
+        <div class="translation-controls" *ngIf="hasLinkedTranslation && !viewOnly">
+          <button mat-stroked-button
+                  [class.active]="showingTranslation"
+                  (click)="toggleTranslationView()"
+                  matTooltip="Toggle between transliteration and translation view">
+            <mat-icon>{{ showingTranslation ? 'translate' : 'text_fields' }}</mat-icon>
+            {{ showingTranslation ? 'Translation' : 'Transliteration' }}
+          </button>
+          <button mat-stroked-button
+                  color="primary"
+                  (click)="insertTranslation()"
+                  matTooltip="Insert translation lines with #tr.en: prefix">
+            <mat-icon>playlist_add</mat-icon>
+            Insert Translation
+          </button>
+        </div>
       </div>
 
       <!-- Text editor after detection -->

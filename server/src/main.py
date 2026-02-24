@@ -13,7 +13,7 @@ from auth.auth_bearer import JWTBearer
 from auth.auth_handler import decode_jwt
 from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
-from api.routers import cured, about, yolo_training
+from api.routers import cured, about, yolo_training, ebl, cloud_ocr
 from api.routers import users, amendment, detexify, text
 from utils.storage_utils import StorageUtils
 
@@ -39,6 +39,8 @@ app.include_router(about.router)
 if vlm_ocr_available:
     app.include_router(vlm_ocr.router)  # Dictionary OCR (Beta)
 app.include_router(yolo_training.router)  # YOLO Layout Detection Training
+app.include_router(ebl.router)  # eBL (Electronic Babylonian Literature) Integration
+app.include_router(cloud_ocr.router)  # Cloud API OCR (OpenAI, Anthropic, Google)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,14 +71,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def add_process_time_header(request: Request, call_next):
     start_time = time.time()
 
-    user_id = None
+    # Standalone app - no auth required, use default admin user
+    user_id = "admin"
     logging.debug("=============================")
     logging.debug(f">> request from ip {request.client.host}:{request.client.port} <<")
-    try:
-        user_id = decode_jwt(token=await JWTBearer().__call__(request))['user_id']
-        logging.info(f"request by user: {user_id if user_id else 'Unknown user'}")
-    except:
-        pass
 
     logging.info(f"{request.method} {request.url}")
     request.state.user_id = user_id

@@ -110,7 +110,7 @@ async def submit(request: Request, submit_dto: SubmitDto):
     logging.info(f"submit text id, {submit_dto.text_id}")
     logging.debug(f"submit text id, {submit_dto}")
 
-    global_texts_handler.process_text_result(submit_dto=submit_dto, user_id=request.state.user_id)
+    global_texts_handler.process_text_result(submit_dto=submit_dto, user_id=request.state.user_id or "admin")
     global_ai_handler.process_submit_result(submit_dto=submit_dto)
     return global_texts_handler.get_amendment_stats()
 
@@ -124,7 +124,7 @@ async def set_in_progress(request: Request, text_id: int):
 async def stage_one_file(request: Request, file: UploadFile = File(...), old_text_id=Form(...),
                          use_detectron: bool = Form(True),
                          detectron_sensitivity: float = Form(0.5)) -> StageOneDto:
-    user_id = request.state.user_id
+    user_id = request.state.user_id or "admin"  # Default to admin if not authenticated
 
     StorageUtils.validate_image_file_type(file=file)
 

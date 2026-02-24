@@ -72,6 +72,7 @@ class NewTextPreviewDto(BaseModel):
     label: str = ""
     part: str = ""
     is_curated: bool = False
+    lines_count: int = 0
 
     # uploader: Uploader = Uploader.ADMIN
 
@@ -79,8 +80,13 @@ class NewTextPreviewDto(BaseModel):
     def from_new_text(new_text: NewText):
         latest_trans_id = None
         is_curated = False
+        lines_count = 0
         if new_text.transliterations:
             latest_trans_id = new_text.transliterations[-1].transliteration_id
+            # Get line count from the latest edit of the latest transliteration
+            latest_trans = new_text.transliterations[-1]
+            if latest_trans.edit_history:
+                lines_count = len(latest_trans.edit_history[-1].lines)
             # Check if any transliteration has is_fixed=True in its latest edit
             for trans in new_text.transliterations:
                 if trans.edit_history:
@@ -103,5 +109,6 @@ class NewTextPreviewDto(BaseModel):
             latest_transliteration_id=latest_trans_id,
             label=getattr(new_text, 'label', '') or '',
             part=getattr(new_text, 'part', '') or '',
-            is_curated=is_curated
+            is_curated=is_curated,
+            lines_count=lines_count
         )

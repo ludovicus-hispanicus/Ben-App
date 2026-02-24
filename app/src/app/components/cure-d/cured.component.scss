@@ -275,6 +275,34 @@
         border-radius: 4px;
         font-size: 0.75em;
         font-weight: 500;
+
+        &.translation-badge {
+            background: #3498db;
+        }
+    }
+
+    .translation-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        margin-left: auto;
+
+        button {
+            font-size: 0.8em;
+            padding: 0.3em 0.8em;
+
+            mat-icon {
+                font-size: 18px;
+                height: 18px;
+                width: 18px;
+                margin-right: 4px;
+            }
+
+            &.active {
+                background: #3498db;
+                color: white;
+            }
+        }
     }
 }
 
@@ -689,6 +717,7 @@ p {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding: 30px;
 
     .list-header {
         display: flex;
@@ -761,8 +790,16 @@ p {
         white-space: nowrap;
     }
 
+    .col-part {
+        width: 80px;
+        flex-shrink: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .col-date {
-        width: 100px;
+        width: 130px;
         flex-shrink: 0;
     }
 
@@ -778,6 +815,12 @@ p {
 
     .col-status {
         width: 80px;
+        flex-shrink: 0;
+        text-align: center;
+    }
+
+    .col-lines {
+        width: 50px;
         flex-shrink: 0;
         text-align: center;
     }
@@ -808,6 +851,25 @@ p {
         color: #666;
         text-transform: uppercase;
         letter-spacing: 0.03em;
+
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s;
+
+            &:hover {
+                color: #333;
+            }
+
+            &.sorted {
+                color: #1976d2;
+            }
+        }
+
+        .sort-arrow {
+            font-size: 0.7em;
+            margin-left: 2px;
+        }
     }
 
     .work-list {
@@ -853,8 +915,14 @@ p {
             margin-left: 10px;
         }
 
-        .col-date {
+        .col-part {
             font-size: 0.85em;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .col-date {
+            font-size: 0.8em;
             color: #888;
         }
 
@@ -907,6 +975,11 @@ p {
                 color: #bbb;
                 font-size: 0.8em;
             }
+        }
+
+        .col-lines {
+            font-size: 0.85em;
+            color: #888;
         }
 
         .col-actions {
@@ -1157,7 +1230,166 @@ p {
                     transition: width 0.3s ease;
                 }
             }
+
+            .batch-progress {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.8em;
+                color: #666;
+                padding: 0.25em 0;
+
+                .batch-text {
+                    color: #888;
+                }
+
+                .epoch-time {
+                    color: #2196f3;
+                    font-weight: 500;
+                }
+            }
         }
+    }
+}
+
+// Training Results Section
+.training-results {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 1.5em;
+    margin-top: 1.5em;
+
+    .training-results-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        margin-bottom: 1em;
+
+        mat-icon {
+            color: #1976d2;
+        }
+
+        h3 {
+            margin: 0;
+            font-size: 1em;
+            font-weight: 500;
+        }
+    }
+
+    .early-stop-warning {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.75em 1em;
+        background: #fff3e0;
+        border-radius: 8px;
+        margin-bottom: 1em;
+        font-size: 0.85em;
+        color: #e65100;
+
+        mat-icon {
+            color: #ff9800;
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+        }
+    }
+
+    .epoch-table-container {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 1em;
+    }
+
+    .epoch-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+
+        th {
+            background: #f5f5f5;
+            padding: 0.6em 1em;
+            text-align: left;
+            font-weight: 600;
+            color: #555;
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 0.5em 1em;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .best-epoch {
+            background: #e8f5e9;
+            font-weight: 500;
+
+            td {
+                color: #2e7d32;
+            }
+        }
+    }
+
+    .training-complete-report {
+        .report-card {
+            display: flex;
+            gap: 1em;
+            padding: 1em 1.5em;
+            border-radius: 8px;
+            align-items: flex-start;
+
+            &.success {
+                background: #e8f5e9;
+                border: 1px solid #c8e6c9;
+
+                mat-icon {
+                    color: #4caf50;
+                    font-size: 32px;
+                    width: 32px;
+                    height: 32px;
+                }
+            }
+
+            .report-content {
+                h4 {
+                    margin: 0 0 0.5em 0;
+                    color: #2e7d32;
+                }
+
+                p {
+                    margin: 0.25em 0;
+                    font-size: 0.9em;
+                    color: #333;
+                }
+
+                .ready-message {
+                    margin-top: 0.75em;
+                    padding: 0.5em 0.75em;
+                    background: rgba(255, 255, 255, 0.7);
+                    border-radius: 4px;
+                    color: #1976d2;
+                    font-weight: 500;
+                }
+            }
+        }
+    }
+}
+
+// Early stopping indicator during training
+.early-stop-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.8em;
+    color: #ff9800;
+    padding: 0.25em 0;
+
+    mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
     }
 }
 

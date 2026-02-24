@@ -290,6 +290,9 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.cdref.detectChanges();
   }
 
+  // Track if wheel zoom/pan has been set up
+  private wheelZoomSetup = false;
+
   initAll() {
     this.canvas = new fabric.Canvas(this.htmlCanvas.nativeElement, {
       hoverCursor: 'pointer',
@@ -298,7 +301,13 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
       preserveObjectStacking: true,
       uniformScaling: false,
     });
-    
+
+    // Always set up wheel zoom/pan for all canvas types (except Drawing)
+    // This ensures consistent behavior whether canvas is initialized via canvasType or externally
+    if (this.canvasType !== CanvasType.Drawing) {
+      this.setWheelZooming();
+    }
+
     if(this.canvasType) {
       this.updateActionsAccordingToType();
     }
@@ -345,6 +354,8 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
 
   hardReset() {
     this.canvas.clear();
+    // Reset wheel zoom setup so it can be re-initialized
+    this.wheelZoomSetup = false;
   }
 
   getCanvas() {
@@ -376,11 +387,16 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   }
 
   setWheelZooming() {
+    // Avoid setting up wheel zoom multiple times
+    if (this.wheelZoomSetup) return;
+
     // Use shared service for consistent zoom/pan behavior
     this.canvasBoxService.setupWheelZoomPan(this.canvas, {
       minZoom: this.props.minZoom,
       maxZoom: this.props.maxZoom
     });
+
+    this.wheelZoomSetup = true;
   }
 
   setCanvasSize() {
@@ -458,8 +474,8 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
       return;
     }
 
-    // Left click on empty area = start drawing a box
-    if (evt.button === 0) {
+    // Shift + left click on empty area = draw new box (unified with YOLO annotation)
+    if (evt.shiftKey && evt.button === 0) {
       this.canvas.discardActiveObject();
 
       const pointer = this.canvas.getPointer(e.e);
@@ -472,6 +488,15 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
         this.DEFAULT_RECT_FILL, this.DEFAULT_RECT_STROKE, false
       );
       this.canvas.add(this.newRect);
+      this.canvas.renderAll();
+      return;
+    }
+
+    // Plain left click on empty area = start panning
+    if (evt.button === 0) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      this.canvas.defaultCursor = 'grabbing';
       this.canvas.renderAll();
     }
   }

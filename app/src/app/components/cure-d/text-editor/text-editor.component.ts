@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy, Output, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { Index, Letter, LetterHover } from 'src/app/models/letter';
 
@@ -27,7 +27,7 @@ export class TextEditorComponent implements AfterViewInit, OnDestroy {
   public lineCount: number = 0;
   public numberStyle: 'plain' | 'prime' = 'plain';
   public startNumber: number = 1;
-  public viewMode: 'raw' | 'atf' = 'raw';
+  public viewMode: 'raw' | 'norm' | 'atf' = 'raw';
   public darkMode: boolean = false;
 
   // Normalization (Akkadian post-processing)
@@ -51,7 +51,9 @@ export class TextEditorComponent implements AfterViewInit, OnDestroy {
   constructor(
     private atfConverter: AtfConverterService,
     private curedService: CuredService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) { }
 
   // --- Public API (called by parent CuredComponent) ---
@@ -99,7 +101,10 @@ export class TextEditorComponent implements AfterViewInit, OnDestroy {
   onViewModeChange(): void {
     if (this.viewMode === 'atf') {
       this.textContent = this.atfConverter.toAtf(this.textContent);
+    } else if (this.viewMode === 'norm') {
+      // Norm mode just renders markdown formatting, no text conversion needed
     } else {
+      // raw mode
       const rawText = this.atfConverter.fromAtf(this.textContent);
       this.textContent = rawText;
       this.refreshLinesFromText();
@@ -149,6 +154,13 @@ export class TextEditorComponent implements AfterViewInit, OnDestroy {
 
     const html = this.getHighlightedHtml();
     editor.innerHTML = html;
+
+    // Force browser reflow to ensure styles are applied immediately
+    // This fixes the issue where monospace font isn't applied until window focus changes
+    void editor.offsetHeight;
+
+    // Trigger Angular change detection
+    this.cdr.detectChanges();
   }
 
   private getPlainTextFromEditor(editor: HTMLElement): string {
@@ -431,6 +443,27 @@ export class TextEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     let html = this.escapeHtml(this.textContent);
+
+    // Markdown formatting for 'norm' mode
+    if (this.viewMode === 'norm') {
+      // Bold notation **text** - render as bold (must be before italic to avoid conflicts)
+      html = html.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+
+      // Italic notation _text_ (Nemotron format) - render as italics
+      html = html.replace(/_([^_\n]+)_/g, '<i class="hl-italic">$1</i>');
+
+      // Italic notation *text* (alternative format) - render as italics
+      html = html.replace(/\*([^*\n]+)\*/g, '<i class="hl-italic">$1</i>');
+
+      // Superscript <sup>text</sup> - render as superscript (escaped version)
+      html = html.replace(/&lt;sup&gt;([^&]+)&lt;\/sup&gt;/g, '<sup>$1</sup>');
+
+      // Subscript <sub>text</sub> - render as subscript (escaped version)
+      html = html.replace(/&lt;sub&gt;([^&]+)&lt;\/sub&gt;/g, '<sub>$1</sub>');
+
+      // Line break <br> - render as line break (escaped version)
+      html = html.replace(/&lt;br&gt;/g, '<br>');
+    }
 
     // Square brackets (damage/break) - red
     html = html.replace(/\[/g, '<span class="hl-square">[</span>');

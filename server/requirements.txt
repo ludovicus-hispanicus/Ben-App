@@ -14,7 +14,7 @@ uvicorn~=0.15.0
 PyJWT>=2.2.0
 pyopenssl>=23.0.0  # Compatible with cryptography 46.x
 starlette>=0.14.2
-pdf2image>=1.16.0
+PyMuPDF>=1.23.0  # PDF to PNG conversion (standalone, no Poppler needed)
 kraken>=5.2.0,<6.0.0  # Kraken 5.2.x with PyTorch 2.x support
 opencv-python-headless
 python-dotenv
@@ -23,4 +23,9 @@ httpx>=0.24.0  # Async HTTP client for VLM OCR
 pygit2
 pgzip
 ultralytics>=8.0.0  # YOLOv8 for layout detection training
+
+# DeepSeek-OCR-2 in-process inference (optional - for VLM-based OCR)
+transformers>=4.37.0  # For AutoModelForVision2Seq
+bitsandbytes>=0.41.0  # For 4-bit quantization (CUDA required)
+accelerate>=0.25.0  # For device_map="auto"
 

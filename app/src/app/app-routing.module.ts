@@ -27,6 +27,14 @@ const routes: Routes = [
     component: CuredComponent
   },
   {
+    path: 'cured/select-page',
+    component: CuredComponent
+  },
+  {
+    path: 'cured/editor',
+    component: CuredComponent
+  },
+  {
     path: 'dashboard',
     component: AdminPanelComponent
   },

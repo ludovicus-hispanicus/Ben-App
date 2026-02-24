@@ -14,6 +14,7 @@ import { SaveDialogComponent, SaveDialogResult } from '../common/save-dialog/sav
 import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.component';
 import { LabelDialogComponent } from '../common/label-dialog/label-dialog.component';
 import { AuthService } from 'src/app/auth/auth.service';
+import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ToolbarService } from 'src/app/services/toolbar.service';
@@ -72,6 +73,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public currentpage = 1;
   public totalPages = 0;
   public pageNumbers: number[] = [];
+  public visiblePageNumbers: number[] = [];  // Only the pages currently displayed
+  public goToPageInput: number = 1;  // Input field for jumping to a page
+  public readonly PAGE_WINDOW_SIZE = 10;  // Number of pages to show at once
   public isCropImage = false;
   public result: SelectedPdf
 
@@ -100,6 +104,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public highlightQuery: string = null;
   public isDragOver: boolean = false;
 
+  private popStateSub: VoidFunction = null;
+  private suppressPopState: boolean = false;
+
   // Save dialog
   public isSaving: boolean = false;
   public existingLabels: string[] = [];
@@ -117,6 +124,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public curedTexts: TextPreview[] = [];
   public selectedLabelFilter: string | null = null;
   public searchQuery: string = '';
+  public sortColumn: string = 'last_modified';
+  public sortDirection: 'asc' | 'desc' = 'desc';
 
   // Model info
   public modelInfo: ModelInfo = {
@@ -128,11 +137,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // OCR model selection for inference
   public selectedOcrModel: string = 'latest';
-  public availableOcrModels = [
+  public availableOcrModels: Array<{value: string; label: string}> = [
     { value: 'latest', label: 'Latest (Pennsylvania Sumerian Dictionary)' },
     { value: 'dillard', label: 'Dillard (Typewriter texts)' },
-    { value: 'base', label: 'Base (SAA Corpus)' }
+    { value: 'base', label: 'Base (SAA Corpus)' },
   ];
+
+  // Base model selection for training (fine-tune from)
+  public selectedBaseModel: string = 'latest';
+  public baseModelsMetadata: { [key: string]: { size_mb: number; best_accuracy: number; last_accuracy: number; completed_epochs: number; alphabet_size: number } } = {};
 
   public trainingStatus: TrainingStatus = {
     curatedTexts: 0,
@@ -150,6 +163,17 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public isTraining: boolean = false;
   public trainingProgress: any = null;
   private trainingProgressInterval: any = null;
+  public trainingModelName: string = '';
+  public epochHistory: Array<{epoch: number; accuracy: number; val_accuracy: number; loss: number}> = [];
+
+  // Translation toggle mode
+  public hasLinkedTranslation: boolean = false;
+  public linkedTranslationLines: string[] = [];
+  public linkedTranslationTextId: number = null;
+  public linkedTranslationId: number = null;
+  public showingTranslation: boolean = false;  // Toggle state: false = transliteration, true = translation
+  public currentMuseumName: string = '';
+  public currentMuseumNumber: number = 0;
 
   @ViewChild('canvas') canvas: FabricCanvasComponent;
   @ViewChild('lineEditor', { static: false }) lineEditor: TextEditorComponent;
@@ -263,6 +287,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // Set stage to 5 FIRST so lineEditor gets rendered
       this.stage = 5;
+      this.updateUrl();
       this.isLoading = false;
       this.toolbarService.setLoading(false);
 
@@ -295,7 +320,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     private toolbarService: ToolbarService,
     private atfConverter: AtfConverterService,
     private textService: TextService,
-    private sanitizer: DomSanitizer) {
+    private sanitizer: DomSanitizer,
+    private location: Location) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];
@@ -330,11 +356,32 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     // Load training status and models
     this.loadTrainingStatus();
     this.loadModels();
+    this.loadBaseModelsMetadata();
+    this.loadAvailableOcrModels();
 
     // Subscribe to query param changes to handle navigation within the same route
     this.queryParamsSub = this.route.queryParams.subscribe(params => {
       this.handleQueryParams(params);
     });
+
+    // Listen for browser back/forward button
+    this.popStateSub = this.location.subscribe((event) => {
+      if (this.suppressPopState) {
+        return;
+      }
+      const urlPath = (event.url || '').split('?')[0];
+      const targetStage = this.stageFromPath(urlPath);
+      if (targetStage < this.stage) {
+        // Browser already changed the URL, so use replaceUrl mode to avoid pushing duplicates
+        this.goBack(true);
+      }
+    }) as unknown as VoidFunction;
+  }
+
+  private stageFromPath(urlPath: string): number {
+    if (urlPath === '/cured/editor') return 2;
+    if (urlPath === '/cured/select-page') return 1;
+    return 0;
   }
 
   /**
@@ -369,10 +416,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.textId = +textId;
       this.stage = 0;
     } else {
-      // No params - show dashboard
-      this.resetToCleanState();
-      this.stage = 0;
-      this.loadTransliterationList();
+      // Determine stage from the URL path
+      const urlPath = this.router.url.split('?')[0];
+      if (urlPath === '/cured/select-page') {
+        // Direct navigation to select-page without context — redirect to dashboard
+        this.stage = 0;
+        this.updateUrl();
+      } else if (urlPath === '/cured/editor') {
+        // Direct navigation to editor without textId/transId — redirect to dashboard
+        this.stage = 0;
+        this.updateUrl();
+      } else {
+        // Dashboard
+        this.resetToCleanState();
+        this.stage = 0;
+        this.loadTransliterationList();
+      }
     }
   }
 
@@ -390,6 +449,48 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       // Canvas not ready yet, wait for Angular to render it
       setTimeout(() => this.waitForCanvasAndLoad(), 50);
     }
+  }
+
+  /**
+   * Sync the browser URL to match the current stage without triggering a full reload.
+   * Uses Location.replaceState so Angular doesn't destroy/recreate the component.
+   */
+  private updateUrl(replace: boolean = false) {
+    let path: string;
+
+    switch (this.stage) {
+      case 1:
+        path = '/cured/select-page';
+        break;
+      case 2:
+      case 4:
+      case 5:
+        path = '/cured/editor';
+        if (this.isLoadedFromServer && this.textId != null && this.transliterationId != null) {
+          const params = new URLSearchParams();
+          params.set('textId', String(this.textId));
+          params.set('transId', String(this.transliterationId));
+          if (this.viewOnly) {
+            params.set('viewOnly', 'true');
+          }
+          if (this.highlightQuery) {
+            params.set('query', this.highlightQuery);
+          }
+          path += '?' + params.toString();
+        }
+        break;
+      default:
+        path = '/cured';
+        break;
+    }
+
+    this.suppressPopState = true;
+    if (replace) {
+      this.location.replaceState(path);
+    } else {
+      this.location.go(path);
+    }
+    setTimeout(() => this.suppressPopState = false);
   }
 
   /**
@@ -426,6 +527,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.toolbarService.setLoading(false);
     if (this.queryParamsSub) {
       this.queryParamsSub.unsubscribe();
+    }
+    if (this.popStateSub) {
+      (this.popStateSub as any).unsubscribe?.() || this.popStateSub();
     }
     this.stopTrainingProgressPolling();
   }
@@ -695,6 +799,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   findATransliteration() {
     this.stage = 5;
+    this.updateUrl();
     const dialogRef = this.dialog.open(TextCreatorComponent);
     dialogRef.componentInstance.selectTransliteration = true;
     dialogRef.componentInstance.showCreateOnNoResult = false;
@@ -707,6 +812,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.loadTransliteration();
       } else {
         this.stage = 0;
+        this.updateUrl();
         this.toolbarService.clearButtons();
       }
 
@@ -720,6 +826,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.highlightQuery) {
         this.setHighlightByQuery(this.highlightQuery);
       }
+
+      // Load text metadata to check for linked translations
+      this.loadTextMetadata();
     });
   }
 
@@ -791,6 +900,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       var typedarray = new Uint8Array(fileReader.result as ArrayBufferLike);
       this.pdfSrc = typedarray;
       this.stage = 1;
+      this.updateUrl();
       this.updateToolbarButtons();
     });
 
@@ -833,6 +943,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.uploadedImageBlob = file;
       // Set stage first so canvas gets rendered
       this.stage = 2;
+      this.updateUrl();
       // Wait for Angular to render the canvas component
       setTimeout(() => {
         if (this.canvas) {
@@ -874,6 +985,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       var typedarray = new Uint8Array(fileReader.result as ArrayBufferLike);
       this.pdfSrc = typedarray;
       this.stage = 1;
+      this.updateUrl();
       this.updateToolbarButtons();
     });
 
@@ -901,6 +1013,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.canvas.forceCanvasSize();
       this.canvas.forceZoomOut();
       this.stage = 2;
+      this.updateUrl();
       this.updateToolbarButtons();
     }, false);
 
@@ -925,7 +1038,64 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   afterLoadComplete(pdf: PDFDocumentProxy) {
     this.totalPages = pdf.numPages;
     this.pageNumbers = Array.from({ length: pdf.numPages }, (_, i) => i + 1);
+    this.goToPageInput = 1;
+    // Only show first PAGE_WINDOW_SIZE pages initially
+    this.updateVisiblePages(1);
     this.isLoading = false;
+  }
+
+  /**
+   * Update the visible pages window centered around a target page.
+   * Shows 4 pages before and 5 pages after the target (10 total).
+   */
+  updateVisiblePages(targetPage: number) {
+    if (this.totalPages === 0) return;
+
+    // Calculate window: 4 before, target, 5 after (10 total)
+    let startPage = Math.max(1, targetPage - 4);
+    let endPage = Math.min(this.totalPages, startPage + this.PAGE_WINDOW_SIZE - 1);
+
+    // Adjust start if we're near the end
+    if (endPage - startPage + 1 < this.PAGE_WINDOW_SIZE) {
+      startPage = Math.max(1, endPage - this.PAGE_WINDOW_SIZE + 1);
+    }
+
+    this.visiblePageNumbers = [];
+    for (let i = startPage; i <= endPage; i++) {
+      this.visiblePageNumbers.push(i);
+    }
+  }
+
+  /**
+   * Jump to a specific page (from input field)
+   */
+  jumpToPage() {
+    const page = Math.max(1, Math.min(this.totalPages, this.goToPageInput || 1));
+    this.goToPageInput = page;
+    this.updateVisiblePages(page);
+  }
+
+  /**
+   * Navigate to next window of pages
+   */
+  nextPageWindow() {
+    const lastVisible = this.visiblePageNumbers[this.visiblePageNumbers.length - 1];
+    if (lastVisible < this.totalPages) {
+      this.updateVisiblePages(lastVisible + 1);
+      this.goToPageInput = this.visiblePageNumbers[0];
+    }
+  }
+
+  /**
+   * Navigate to previous window of pages
+   */
+  prevPageWindow() {
+    const firstVisible = this.visiblePageNumbers[0];
+    if (firstVisible > 1) {
+      const newTarget = Math.max(1, firstVisible - this.PAGE_WINDOW_SIZE);
+      this.updateVisiblePages(newTarget);
+      this.goToPageInput = this.visiblePageNumbers[0];
+    }
   }
 
   selectPageFromThumbnail(page: number) {
@@ -934,6 +1104,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Move to stage 2 first so the canvas component is rendered
     this.stage = 2;
+    this.updateUrl();
 
     let selectedPdf = new SelectedPdf(this.pdfFile, page);
 
@@ -1135,6 +1306,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isLoading = false;
     this.toolbarService.setLoading(false);
     this.stage = 5;
+    this.updateUrl();
     this.updateToolbarButtons();
     this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode];
     this.canvas.changeMode(CanvasMode.Pan);
@@ -1148,7 +1320,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  goBack() {
+  goBack(fromBrowser: boolean = false) {
+    // When triggered by browser back button, URL is already correct — use replaceState
+    const replace = fromBrowser;
     if (this.stage == 2) {
       // From visualizer back to thumbnails or upload
       this.backgroundImage = null;
@@ -1157,14 +1331,17 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode];
       if (this.pdfFile == null) {
         // Navigate to dashboard (clears query params)
-        this.router.navigate(['/cured']);
+        this.stage = 0;
+        this.updateUrl(replace);
       } else {
         this.stage = 1;
+        this.updateUrl(replace);
         this.updateToolbarButtons();
       }
     } else if (this.stage == 5) {
       // From results back to visualizer (stage 2)
       this.stage = 2;
+      this.updateUrl(replace);
       this.canvas.removeAllRects();
       this.boundingBoxes = [];
       this.lines = [];
@@ -1173,7 +1350,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.updateToolbarButtons();
     } else if (this.stage == 1) {
       // From thumbnails back to upload - navigate to dashboard
-      this.router.navigate(['/cured']);
+      this.stage = 0;
+      this.updateUrl(replace);
     }
   }
 
@@ -1355,10 +1533,46 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get filteredTexts(): TextPreview[] {
+    let items: TextPreview[];
     if (this.selectedLabelFilter === null) {
-      return this.curedTexts;
+      items = [...this.curedTexts];
+    } else {
+      items = this.curedTexts.filter(item => (item.label || '') === this.selectedLabelFilter);
     }
-    return this.curedTexts.filter(item => (item.label || '') === this.selectedLabelFilter);
+
+    if (this.sortColumn) {
+      const dir = this.sortDirection === 'asc' ? 1 : -1;
+      items.sort((a, b) => {
+        let valA: any = a[this.sortColumn];
+        let valB: any = b[this.sortColumn];
+
+        // Handle identifier column specially
+        if (this.sortColumn === 'identifier') {
+          valA = this.getItemIdentifier(a).toLowerCase();
+          valB = this.getItemIdentifier(b).toLowerCase();
+        }
+
+        if (valA == null) valA = '';
+        if (valB == null) valB = '';
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return (valA - valB) * dir;
+        }
+
+        return String(valA).localeCompare(String(valB)) * dir;
+      });
+    }
+
+    return items;
+  }
+
+  toggleSort(column: string): void {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = column === 'last_modified' ? 'desc' : 'asc';
+    }
   }
 
   setLabelFilter(label: string | null) {
@@ -1550,10 +1764,21 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    this.isTraining = true;
-    this.trainingProgress = { status: 'preparing', current_epoch: 0, total_epochs: 50 };
+    if (!this.trainingModelName || !this.trainingModelName.trim()) {
+      this.notificationService.showError('Please enter a name for this model (e.g. book name).');
+      return;
+    }
 
-    this.curedService.startTraining(50).subscribe(
+    // Build model name: {BaseModelKey}_{UserName}
+    const baseKey = this.selectedBaseModel.charAt(0).toUpperCase() + this.selectedBaseModel.slice(1);
+    const sanitizedName = this.trainingModelName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const modelName = `${baseKey}_${sanitizedName}`;
+
+    this.isTraining = true;
+    this.epochHistory = [];
+    this.trainingProgress = { status: 'preparing', current_epoch: 0, total_epochs: 50, epoch_history: [] };
+
+    this.curedService.startTraining(50, modelName, this.selectedBaseModel).subscribe(
       response => {
         this.notificationService.showSuccess('Training started!');
         this.startTrainingProgressPolling();
@@ -1597,12 +1822,19 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         progress => {
           this.trainingProgress = progress;
 
+          // Update epoch history from backend
+          if (progress.epoch_history && progress.epoch_history.length > 0) {
+            this.epochHistory = progress.epoch_history;
+          }
+
           if (progress.status === 'completed') {
             this.stopTrainingProgressPolling();
             this.isTraining = false;
-            this.notificationService.showSuccess(`Training completed! Model: ${progress.model_name}`);
+            const earlyStopped = progress.early_stopped ? ' (early stopped)' : '';
+            this.notificationService.showSuccess(`Training completed${earlyStopped}! Model: ${progress.model_name}`);
             this.loadTrainingStatus();
-            this.loadModels(); // Refresh model list
+            this.loadModels();
+            this.loadAvailableOcrModels(); // Refresh OCR dropdown with new model
           } else if (progress.status === 'failed') {
             this.stopTrainingProgressPolling();
             this.isTraining = false;
@@ -1640,6 +1872,163 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       () => {
         // Keep default model info on error
+      }
+    );
+  }
+
+  loadBaseModelsMetadata() {
+    this.curedService.getBaseModelsMetadata().subscribe(
+      response => {
+        this.baseModelsMetadata = response;
+      },
+      () => {
+        // Keep empty metadata on error
+      }
+    );
+  }
+
+  loadAvailableOcrModels() {
+    this.curedService.getAvailableOcrModels().subscribe(
+      response => {
+        this.availableOcrModels = response.models;
+      },
+      () => {
+        // Keep static defaults on error
+      }
+    );
+  }
+
+  // ============================================
+  // Translation Toggle Methods
+  // ============================================
+
+  /**
+   * Check if there's a linked translation for the current text.
+   * Called after loading a transliteration to enable translation toggle.
+   */
+  checkForLinkedTranslation() {
+    if (!this.textId || !this.currentMuseumName || !this.currentMuseumNumber) {
+      this.hasLinkedTranslation = false;
+      return;
+    }
+
+    this.curedService.findTranslation(this.currentMuseumName, this.currentMuseumNumber).subscribe(
+      result => {
+        if (result.found && result.lines && result.lines.length > 0) {
+          this.hasLinkedTranslation = true;
+          this.linkedTranslationLines = result.lines;
+          this.linkedTranslationTextId = result.text_id;
+          this.linkedTranslationId = result.transliteration_id;
+          console.log(`Found linked translation: ${result.lines.length} lines`);
+        } else {
+          this.hasLinkedTranslation = false;
+          this.linkedTranslationLines = [];
+        }
+      },
+      () => {
+        this.hasLinkedTranslation = false;
+        this.linkedTranslationLines = [];
+      }
+    );
+  }
+
+  /**
+   * Toggle between showing transliteration and translation.
+   */
+  toggleTranslationView() {
+    if (!this.hasLinkedTranslation) return;
+
+    this.showingTranslation = !this.showingTranslation;
+
+    if (this.showingTranslation) {
+      // Switch to translation view - show translation lines
+      const translationLetters = this.linkedTranslationLines.map(line => new Letter(line));
+      this.addIndexes(translationLetters);
+      if (this.lineEditor) {
+        this.lineEditor.setLines(translationLetters);
+      }
+      this.notificationService.showInfo('Showing translation');
+    } else {
+      // Switch back to transliteration view - restore original lines
+      if (this.lineEditor) {
+        this.lineEditor.setLines(this.lines);
+      }
+      this.notificationService.showInfo('Showing transliteration');
+    }
+  }
+
+  /**
+   * Insert the translation into the current text using ATF format.
+   * Adds #tr.en: or #tr: lines after each transliteration line.
+   */
+  insertTranslation() {
+    if (!this.hasLinkedTranslation || this.linkedTranslationLines.length === 0) {
+      this.notificationService.showError('No translation available to insert');
+      return;
+    }
+
+    // Make sure we're showing transliteration, not translation
+    if (this.showingTranslation) {
+      this.showingTranslation = false;
+      if (this.lineEditor) {
+        this.lineEditor.setLines(this.lines);
+      }
+    }
+
+    // Insert translation lines after each transliteration line
+    const mergedLines: Letter[] = [];
+    const maxLines = Math.max(this.lines.length, this.linkedTranslationLines.length);
+
+    for (let i = 0; i < maxLines; i++) {
+      // Add transliteration line if exists
+      if (i < this.lines.length) {
+        mergedLines.push(this.lines[i]);
+      }
+
+      // Add translation line with #tr.en: prefix if exists
+      if (i < this.linkedTranslationLines.length && this.linkedTranslationLines[i].trim()) {
+        const translationText = `#tr.en: ${this.linkedTranslationLines[i].trim()}`;
+        mergedLines.push(new Letter(translationText));
+      }
+    }
+
+    // Update indices
+    this.addIndexes(mergedLines);
+    this.lines = mergedLines;
+
+    if (this.lineEditor) {
+      this.lineEditor.setLines(this.lines);
+    }
+
+    this.notificationService.showSuccess('Translation inserted');
+  }
+
+  /**
+   * Load text metadata to get museum identifiers for translation lookup.
+   */
+  loadTextMetadata() {
+    if (!this.textId) return;
+
+    this.textService.getTextByBenId(this.textId).subscribe(
+      (text: any) => {
+        if (text?.text_identifiers?.museum) {
+          // Parse museum name - handle format like "BM - British Museum"
+          const fullName = text.text_identifiers.museum.name || '';
+          this.currentMuseumName = fullName.split(' - ')[0].trim();
+          this.currentMuseumNumber = text.text_identifiers.museum.number || 0;
+          console.log(`Loaded museum ID: ${this.currentMuseumName}.${this.currentMuseumNumber}`);
+
+          // Now check for linked translation
+          this.checkForLinkedTranslation();
+        }
+
+        // Also check the label to see if THIS is a translation
+        if (text?.label === 'translation') {
+          this.currentLabel = 'translation';
+        }
+      },
+      () => {
+        console.log('Could not load text metadata for translation lookup');
       }
     );
   }

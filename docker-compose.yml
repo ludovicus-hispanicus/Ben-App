@@ -48,6 +48,12 @@ services:
       USE_DETECTRON: "True"
       LOG_LEVEL: DEBUG
     deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
       restart_policy:
         condition: on-failure
     depends_on:

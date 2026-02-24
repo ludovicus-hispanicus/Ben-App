@@ -5,13 +5,13 @@
       Dictionary OCR
       <span class="beta-badge">BETA</span>
     </h2>
-    <p class="subtitle">Powered by DeepSeek-OCR for AHw/CAD dictionary digitization</p>
+    <p class="subtitle">OCR for AHw/CAD dictionary digitization</p>
   </div>
 
-  <!-- VLM Status Warning -->
-  <div *ngIf="vlmAvailable === false" class="status-warning">
+  <!-- VLM Status Warning (only for local mode) -->
+  <div *ngIf="selectedProvider === 'local' && vlmAvailable === false" class="status-warning">
     <mat-icon>warning</mat-icon>
-    <span>VLM OCR service is not available. Please start the vlm-ocr container.</span>
+    <span>Local DeepSeek-OCR is not available. Switch to a cloud API model below.</span>
   </div>
 
   <div class="main-content">
@@ -75,16 +75,82 @@
         </div>
       </div>
 
+      <!-- Model Picker -->
+      <div class="model-picker-section">
+        <h3>OCR Model</h3>
+
+        <!-- Provider Selection -->
+        <div class="provider-tabs">
+          <button class="provider-tab"
+                  [class.active]="selectedProvider === 'local'"
+                  (click)="selectedProvider = 'local'; onProviderChange()"
+                  matTooltip="Local DeepSeek-OCR (no API key needed)">
+            <mat-icon>computer</mat-icon>
+            <span>Local</span>
+          </button>
+          <button *ngFor="let provider of cloudProviders"
+                  class="provider-tab"
+                  [class.active]="selectedProvider === provider.id"
+                  (click)="selectedProvider = provider.id; onProviderChange()"
+                  [matTooltip]="provider.label">
+            <mat-icon>{{ provider.icon }}</mat-icon>
+            <span>{{ provider.label }}</span>
+          </button>
+        </div>
+
+        <!-- Local provider info -->
+        <div *ngIf="selectedProvider === 'local'" class="provider-info">
+          <div class="local-model-info">
+            <mat-icon>memory</mat-icon>
+            <div>
+              <strong>DeepSeek-OCR-2</strong>
+              <span class="model-detail">Local inference, no API key needed</span>
+            </div>
+            <span class="status-dot" [class.available]="vlmAvailable" [class.unavailable]="vlmAvailable === false"></span>
+          </div>
+        </div>
+
+        <!-- Cloud provider settings -->
+        <div *ngIf="selectedProvider !== 'local'" class="cloud-settings">
+          <!-- Model Selection -->
+          <div class="setting-item">
+            <label>Model</label>
+            <select [(ngModel)]="selectedModel" class="source-select">
+              <option *ngFor="let model of currentModels" [value]="model.id">
+                {{ model.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- API Key -->
+          <div class="setting-item api-key-field">
+            <label>API Key</label>
+            <div class="api-key-input">
+              <input
+                [type]="showApiKey ? 'text' : 'password'"
+                [value]="currentApiKey"
+                (input)="onApiKeyChange($any($event.target).value)"
+                placeholder="Enter your API key"
+                class="api-key-text-input">
+              <button mat-icon-button (click)="showApiKey = !showApiKey" matTooltip="Toggle visibility" class="toggle-visibility-btn">
+                <mat-icon>{{ showApiKey ? 'visibility_off' : 'visibility' }}</mat-icon>
+              </button>
+            </div>
+            <span class="api-key-hint">Stored locally in your browser</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Process Button -->
       <button
         mat-raised-button
         color="primary"
         class="process-btn"
-        [disabled]="!selectedFile || isLoading || vlmAvailable === false"
+        [disabled]="!canProcess"
         (click)="processOcr()">
         <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
         <mat-spinner *ngIf="isLoading" diameter="20"></mat-spinner>
-        {{ isLoading ? 'Processing...' : 'Process with DeepSeek-OCR' }}
+        {{ processButtonLabel }}
       </button>
 
       <!-- Processing Info -->
@@ -120,7 +186,7 @@
 
         <div *ngIf="isLoading" class="loading-state">
           <mat-spinner diameter="40"></mat-spinner>
-          <p>Processing with DeepSeek-OCR...</p>
+          <p>Processing with {{ selectedModel }}...</p>
           <p class="hint">This may take a few seconds for large images</p>
         </div>
 

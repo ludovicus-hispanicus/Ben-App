@@ -72,6 +72,20 @@ class TrainingProgress:
     error: str = None
     started_at: str = None
     completed_at: str = None
+    epoch_history: list = None
+    best_accuracy: float = 0.0
+    no_improve_count: int = 0
+    early_stopped: bool = False
+    # Extended metrics from ketos
+    word_accuracy: float = 0.0  # val_word_accuracy from ketos
+    batch_current: int = 0  # Current batch within epoch
+    batch_total: int = 0  # Total batches per epoch
+    epoch_time: float = 0.0  # Time elapsed for current epoch (seconds)
+    training_speed: float = 0.0  # Iterations per second
+
+    def __post_init__(self):
+        if self.epoch_history is None:
+            self.epoch_history = []
 
     def to_dict(self):
         return {
@@ -86,7 +100,17 @@ class TrainingProgress:
             "model_name": self.model_name,
             "error": self.error,
             "started_at": self.started_at,
-            "completed_at": self.completed_at
+            "completed_at": self.completed_at,
+            "epoch_history": self.epoch_history,
+            "best_accuracy": self.best_accuracy,
+            "no_improve_count": self.no_improve_count,
+            "early_stopped": self.early_stopped,
+            # Extended metrics
+            "word_accuracy": self.word_accuracy,
+            "batch_current": self.batch_current,
+            "batch_total": self.batch_total,
+            "epoch_time": self.epoch_time,
+            "training_speed": self.training_speed,
         }
 
 
@@ -103,10 +127,13 @@ class KrakenTrainingService:
     """Service for training Kraken OCR models."""
 
     TRAINING_DATA_DIR = "/data/server-storage/kraken-training"
-    MODELS_DIR = "/app/cured_models"
+    MODELS_DIR = "./cured_models"
     # Store history in parent dir so it doesn't get deleted when clearing training data
     TRAINING_HISTORY_FILE = "/data/server-storage/training_history.json"
     MIN_LINES = 1000
+    MIN_EPOCHS = 20  # Don't early stop before this many epochs (per Kraken docs)
+    PATIENCE = 10  # Stop if no improvement for this many consecutive epochs (was 5, docs recommend 10)
+    _pending_metric = None  # Tracks when a metric label appears without its value on the same line
 
     def __init__(self):
         self.progress = TrainingProgress(
@@ -155,6 +182,8 @@ class KrakenTrainingService:
         curated_stats = texts_handler.get_curated_training_stats()
         total_lines = curated_stats.get("total_lines", 0)
         total_texts = curated_stats.get("curated_texts", 0)
+        codec_size = curated_stats.get("codec_size", 0)
+        unique_characters = curated_stats.get("unique_characters", [])
 
         previous_lines = self._training_history.get("previous_lines", 0)
         new_lines = max(0, total_lines - previous_lines)
@@ -164,6 +193,8 @@ class KrakenTrainingService:
             "new_lines": new_lines,
             "total_lines": total_lines,
             "curated_texts": total_texts,
+            "codec_size": codec_size,
+            "unique_characters": unique_characters,
             "last_training": self._training_history.get("last_training_timestamp")
         }
 
@@ -182,6 +213,12 @@ class KrakenTrainingService:
         """
         Build ketos train command with version-aware flags.
         Supports both Kraken 5.x and 6.x.
+
+        Based on Kraken documentation best practices:
+        - Use --augment for data augmentation (essential for small datasets)
+        - Use --workers for parallel data loading
+        - Use --resize new for fine-tuning (not union/add)
+        - Use --precision bf16-mixed on GPU for speedup
         """
         cmd = ["ketos", "train"]
 
@@ -191,39 +228,67 @@ class KrakenTrainingService:
         # Number of epochs (same for both versions)
         cmd.extend(["-N", str(epochs)])
 
-        # Early stopping - syntax may vary
-        if KRAKEN_VERSION[0] >= 6:
-            # Kraken 6.x syntax
-            cmd.extend(["-q", "early", "--min-delta", "0.001", "--lag", "5"])
-        else:
-            # Kraken 5.x syntax
-            cmd.extend(["-q", "early", "--lag", "5"])
+        # Use fixed epochs for fine-tuning (early stopping compares against
+        # the base model's original accuracy which is measured on different data,
+        # so it always considers fine-tuned epochs as "worse")
+        # We implement our own early stopping with MIN_EPOCHS and PATIENCE
+        cmd.extend(["-q", "fixed"])
 
-        # Learning rate
+        # Learning rate for fine-tuning (docs recommend 0.0001 for fine-tuning)
         cmd.extend(["-r", "0.0001"])
 
-        # Device selection for GPU (Kraken 6.x has better GPU support)
-        if KRAKEN_VERSION[0] >= 6:
-            # Check if CUDA is available
-            try:
-                import torch
-                if torch.cuda.is_available():
+        # NOTE: --augment requires albumentations package which is not installed
+        # Skip augmentation for now - can be added later if albumentations is installed
+        # cmd.append("--augment")
+
+        # Use multiple workers for faster data loading
+        cmd.extend(["--workers", "4"])
+
+        # Force binarization: base models are trained on grayscale (mode L) but
+        # our training images may be binary (mode 1). This ensures compatibility.
+        cmd.append("--force-binarization")
+
+        # Device selection for GPU
+        use_cuda = False
+        try:
+            import torch
+            if torch.cuda.is_available():
+                use_cuda = True
+                if KRAKEN_VERSION[0] >= 6:
                     cmd.extend(["--device", "cuda:0"])
-                    logging.info("Using CUDA for training (Kraken 6.x)")
-            except ImportError:
-                pass
+                else:
+                    cmd.extend(["-d", "cuda:0"])
+                # NOTE: bf16 precision causes "not implemented for 'BFloat16'" error
+                # with LSTM layers on some GPUs. Use default precision (32) instead.
+                # cmd.extend(["--precision", "bf16"])
+                logging.info(f"Using CUDA (Kraken {KRAKEN_VERSION[0]}.x)")
+        except ImportError:
+            pass
+
+        if not use_cuda:
+            logging.info("Training on CPU (no CUDA available)")
 
         # Add base model for fine-tuning if provided
+        # Use --resize new (not add/union) per Kraken docs:
+        # "When fine-tuning, it is recommended to use new mode not union
+        # as the network will rapidly unlearn missing labels in the new dataset"
+        logging.info(f"[_build_training_command] base_model={base_model}")
+        logging.info(f"[_build_training_command] base_model exists: {base_model and os.path.exists(base_model)}")
+        logging.info(f"[_build_training_command] MODELS_DIR={self.MODELS_DIR}")
         if base_model and os.path.exists(base_model):
+            logging.info(f"[_build_training_command] Using provided base_model: {base_model}")
             cmd.extend(["-i", base_model])
+            cmd.extend(["--resize", "new"])
         elif os.path.exists(f"{self.MODELS_DIR}/model.mlmodel"):
             # Use default model as base
             cmd.extend(["-i", f"{self.MODELS_DIR}/model.mlmodel"])
+            cmd.extend(["--resize", "new"])
 
         # Add training data pattern
         cmd.append(training_pattern)
 
         logging.info(f"Built training command for Kraken {KRAKEN_VERSION[0]}.{KRAKEN_VERSION[1]}.{KRAKEN_VERSION[2]}")
+        logging.info(f"Training command: {' '.join(cmd)}")
 
         return cmd
 
@@ -278,6 +343,11 @@ class KrakenTrainingService:
 
                     line_image = full_image.crop((x, y, x + width, y + height))
 
+                    # Convert to grayscale (mode 'L') for Kraken compatibility
+                    # Base Kraken models are trained on grayscale images
+                    if line_image.mode != 'L':
+                        line_image = line_image.convert('L')
+
                     # Save line image as PNG
                     line_filename = f"text{text_id}_line{i:03d}.png"
                     line_image_path = training_dir / line_filename
@@ -310,7 +380,7 @@ class KrakenTrainingService:
     async def start_training(
         self,
         texts_handler,
-        epochs: int = 50,
+        epochs: int = 500,  # High limit - early stopping will decide when to stop
         model_name: Optional[str] = None,
         base_model: Optional[str] = None,
         progress_callback: Optional[Callable] = None
@@ -329,7 +399,8 @@ class KrakenTrainingService:
             dict with training results
         """
         try:
-            logging.info(f"=== Starting training: epochs={epochs}, model_name={model_name} ===")
+            logging.info(f"=== Starting training: epochs={epochs}, model_name={model_name}, base_model={base_model} ===")
+            logging.info(f"=== base_model exists check: {base_model and os.path.exists(base_model)} ===")
 
             self.progress.status = TrainingStatus.PREPARING
             self.progress.message = "Exporting training data..."
@@ -338,6 +409,15 @@ class KrakenTrainingService:
             self.progress.started_at = datetime.now().isoformat()
             self.progress.error = None
             self.progress.completed_at = None
+            self.progress.epoch_history = []
+            self.progress.best_accuracy = 0.0
+            self.progress.no_improve_count = 0
+            self.progress.early_stopped = False
+            self.progress.epoch = -1  # -1 = not started; ketos uses 0-indexed epochs
+            self.progress.accuracy = 0.0
+            self.progress.val_accuracy = 0.0
+            self.progress.loss = 0.0
+            self._pending_metric = None
 
             if progress_callback:
                 await progress_callback(self.progress)
@@ -389,14 +469,59 @@ class KrakenTrainingService:
             # Monitor progress
             for line in iter(self.process.stdout.readline, ''):
                 self._parse_progress(line.strip())
-                logging.info(f"[ketos] {line.strip()}")
 
                 if progress_callback:
                     await progress_callback(self.progress)
 
+                # Custom early stopping check
+                if self._should_early_stop():
+                    logging.info(f"Early stopping: no improvement for {self.PATIENCE} consecutive epochs")
+                    self.progress.early_stopped = True
+                    self.progress.message = f"Early stopped at epoch {self.progress.epoch} (no improvement for {self.PATIENCE} epochs)"
+                    self.process.terminate()
+                    break
+
+            # Record the final epoch if not yet recorded
+            if self.progress.epoch >= 0:
+                already_recorded = any(
+                    e["epoch"] == self.progress.epoch for e in self.progress.epoch_history
+                )
+                if not already_recorded:
+                    self._record_epoch()
+
             self.process.wait()
 
-            if self.process.returncode == 0:
+            if self.process.returncode == 0 or self.progress.early_stopped:
+                # Ketos saves models as {output}_0.mlmodel, {output}_best.mlmodel, etc.
+                # Rename the best model to the expected output path
+                best_model = Path(f"{output_path}_best.mlmodel")
+                if best_model.exists():
+                    shutil.move(str(best_model), str(output_path))
+                    logging.info(f"Renamed best model to {output_path}")
+                elif not output_path.exists():
+                    # Fall back to the last epoch model
+                    # Sort numerically by epoch number (not alphabetically!)
+                    # Filenames are like: model.mlmodel_0.mlmodel, model.mlmodel_10.mlmodel
+                    epoch_models = list(Path(self.MODELS_DIR).glob(f"{model_name}.mlmodel_*.mlmodel"))
+                    if epoch_models:
+                        # Extract epoch number from filename and sort numerically
+                        def get_epoch_num(path):
+                            try:
+                                # Extract number between last _ and .mlmodel
+                                name = path.stem  # e.g., "model.mlmodel_10"
+                                return int(name.split('_')[-1])
+                            except (ValueError, IndexError):
+                                return -1
+                        epoch_models.sort(key=get_epoch_num)
+                        last_model = epoch_models[-1]
+                        shutil.move(str(last_model), str(output_path))
+                        logging.info(f"Renamed {last_model} (epoch {get_epoch_num(last_model)}) to {output_path}")
+
+                # Clean up intermediate epoch models
+                for f in Path(self.MODELS_DIR).glob(f"{model_name}.mlmodel_*.mlmodel"):
+                    f.unlink()
+                    logging.info(f"Cleaned up intermediate model: {f}")
+
                 self.progress.status = TrainingStatus.COMPLETED
                 self.progress.message = f"Training completed! Model saved to {output_path}"
                 self.progress.completed_at = datetime.now().isoformat()
@@ -443,33 +568,164 @@ class KrakenTrainingService:
             self.process = None
 
     def _parse_progress(self, line: str):
-        """Parse Kraken/ketos training output for progress info."""
+        """Parse Kraken/ketos training output for progress info.
+
+        Ketos (via rich) may split metric labels from their values across lines
+        when the progress bar is long. For example:
+            stage 0/50 ━━━━━━━━━━━ 918/918 0:02:16 ... val_accuracy:
+            0.005
+        We handle this by tracking a pending metric name when the value
+        is not on the same line as the label.
+
+        Ketos output format (example):
+            stage 0/50 ━━━━━━━━━━━━━━━━━━━━━ 918/918 0:02:16 < 0:00:01 7.3 it/s loss: 2.500 val_accuracy: 0.879
+        """
         import re
 
-        # Example: "stage 1/50   [==========] loss: 0.234 accuracy: 0.891"
-        # Or: "Epoch 10: loss=0.234, accuracy=0.891"
+        # DEBUG: Log every line to a file for analysis
+        try:
+            with open("/data/server-storage/ketos_output.log", "a") as debug_file:
+                debug_file.write(f"{line}\n")
+        except:
+            pass
 
-        # Try to parse epoch
+        # Ketos uses \r for progress bar updates; take the last segment after \r
+        if '\r' in line:
+            line = line.split('\r')[-1]
+
+        # Check if previous line left a metric label waiting for its value
+        if self._pending_metric:
+            # The value line may have format: "0:00:00                    0.879"
+            # or just "0.879" - extract the last number on the line
+            value_match = re.search(r"(\d+\.\d+)\s*$", line)
+            if value_match:
+                value = float(value_match.group(1))
+                metric = self._pending_metric
+                if metric == "val_accuracy":
+                    self.progress.val_accuracy = value
+                    self.progress.accuracy = value  # Use val_accuracy as primary
+                    logging.info(f"[ACCURACY PARSED] val_accuracy={value} from continuation: {line}")
+                elif metric == "val_word_accuracy":
+                    self.progress.word_accuracy = value
+                    logging.info(f"[WORD_ACCURACY PARSED] val_word_accuracy={value} from continuation: {line}")
+                elif metric == "accuracy":
+                    self.progress.accuracy = value
+                elif metric == "loss":
+                    self.progress.loss = value
+                logging.info(f"Parsed {metric}={value} from continuation line")
+            self._pending_metric = None
+
+        # Try to parse epoch from "stage X/Y" or "Epoch X"
         epoch_match = re.search(r"(?:stage|epoch)\s*(\d+)(?:/(\d+))?", line, re.I)
         if epoch_match:
-            self.progress.epoch = int(epoch_match.group(1))
+            new_epoch = int(epoch_match.group(1))
             if epoch_match.group(2):
                 self.progress.total_epochs = int(epoch_match.group(2))
 
-        # Try to parse loss
+            # If epoch number advanced, record the previous epoch's metrics
+            # (epoch >= 0 because ketos uses 0-indexed epochs)
+            if new_epoch > self.progress.epoch and self.progress.epoch >= 0:
+                self._record_epoch()
+
+            self.progress.epoch = new_epoch
+
+        # Try to parse batch progress: "918/918" format after epoch info
+        # Pattern: digits/digits that appears after stage info
+        batch_match = re.search(r"(?:stage\s*\d+/\d+\s*[━\s]*)\s*(\d+)/(\d+)", line, re.I)
+        if batch_match:
+            self.progress.batch_current = int(batch_match.group(1))
+            self.progress.batch_total = int(batch_match.group(2))
+
+        # Try to parse epoch time: "0:02:16" format (H:MM:SS or M:SS)
+        time_match = re.search(r"\s(\d+:\d{2}:\d{2}|\d+:\d{2})\s", line)
+        if time_match:
+            time_str = time_match.group(1)
+            parts = time_str.split(':')
+            if len(parts) == 3:
+                self.progress.epoch_time = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:
+                self.progress.epoch_time = int(parts[0]) * 60 + int(parts[1])
+
+        # Try to parse training speed: "7.3 it/s" format
+        speed_match = re.search(r"(\d+\.?\d*)\s*it/s", line, re.I)
+        if speed_match:
+            self.progress.training_speed = float(speed_match.group(1))
+
+        # Try to parse accuracy on the same line (works when line isn't wrapped)
+        acc_match = re.search(r"val_accuracy[:\s=]+([0-9.]+)", line, re.I)
+        if acc_match:
+            val = float(acc_match.group(1))
+            self.progress.accuracy = val
+            self.progress.val_accuracy = val
+            logging.info(f"[ACCURACY PARSED] val_accuracy={val} from line: {line[:100]}")
+        else:
+            # Check for plain accuracy
+            acc_match2 = re.search(r"(?<!val_)accuracy[:\s=]+([0-9.]+)", line, re.I)
+            if acc_match2:
+                self.progress.accuracy = float(acc_match2.group(1))
+
+        # Try to parse word accuracy (val_word_accuracy from ketos)
+        word_acc_match = re.search(r"val_word_accuracy[:\s=]+([0-9.]+)", line, re.I)
+        if word_acc_match:
+            self.progress.word_accuracy = float(word_acc_match.group(1))
+            logging.info(f"[WORD_ACCURACY PARSED] val_word_accuracy={self.progress.word_accuracy} from line: {line[:100]}")
+
+        # Try to parse loss on the same line
         loss_match = re.search(r"loss[:\s=]+([0-9.]+)", line, re.I)
         if loss_match:
             self.progress.loss = float(loss_match.group(1))
 
-        # Try to parse accuracy
-        acc_match = re.search(r"accuracy[:\s=]+([0-9.]+)", line, re.I)
-        if acc_match:
-            self.progress.accuracy = float(acc_match.group(1))
+        # Detect if a metric label ends the line without a value (line was wrapped)
+        # e.g. "... val_accuracy:" at end of line, value on next line
+        if re.search(r"val_word_accuracy[:\s]*$", line, re.I):
+            self._pending_metric = "val_word_accuracy"
+        elif re.search(r"val_accuracy[:\s]*$", line, re.I):
+            self._pending_metric = "val_accuracy"
+        elif re.search(r"accuracy[:\s]*$", line, re.I):
+            self._pending_metric = "accuracy"
+        elif re.search(r"loss[:\s]*$", line, re.I):
+            self._pending_metric = "loss"
 
-        # Try to parse val accuracy
-        val_acc_match = re.search(r"val[_\s]*acc[uracy]*[:\s=]+([0-9.]+)", line, re.I)
-        if val_acc_match:
-            self.progress.val_accuracy = float(val_acc_match.group(1))
+    def _record_epoch(self):
+        """Record the current epoch's metrics in history and check early stopping."""
+        epoch_data = {
+            "epoch": self.progress.epoch,
+            "accuracy": self.progress.accuracy,
+            "val_accuracy": self.progress.val_accuracy,
+            "word_accuracy": self.progress.word_accuracy,
+            "loss": self.progress.loss,
+            "epoch_time": self.progress.epoch_time,
+            "training_speed": self.progress.training_speed,
+        }
+        self.progress.epoch_history.append(epoch_data)
+
+        # Custom early stopping logic
+        current_acc = self.progress.accuracy
+        if current_acc > self.progress.best_accuracy:
+            self.progress.best_accuracy = current_acc
+            self.progress.no_improve_count = 0
+        else:
+            self.progress.no_improve_count += 1
+
+        min_epochs_note = ""
+        if self.progress.epoch < self.MIN_EPOCHS:
+            min_epochs_note = f" (min epochs: {self.progress.epoch + 1}/{self.MIN_EPOCHS})"
+        logging.info(
+            f"Epoch {self.progress.epoch}: char_acc={current_acc:.4f}, word_acc={self.progress.word_accuracy:.4f}, "
+            f"best={self.progress.best_accuracy:.4f}, speed={self.progress.training_speed:.1f}it/s, "
+            f"no_improve={self.progress.no_improve_count}/{self.PATIENCE}{min_epochs_note}"
+        )
+
+    def _should_early_stop(self) -> bool:
+        """Check if training should be stopped due to no improvement.
+
+        Per Kraken docs: Don't stop before MIN_EPOCHS to give the model
+        enough time to converge, especially with data augmentation.
+        """
+        # Don't early stop before minimum epochs
+        if self.progress.epoch < self.MIN_EPOCHS:
+            return False
+        return self.progress.no_improve_count >= self.PATIENCE
 
     def _register_model(self, model_path: str, model_name: str, epochs: int):
         """Register a trained model in the registry."""
@@ -486,8 +742,8 @@ class KrakenTrainingService:
             "name": model_name,
             "path": model_path,
             "created": datetime.now().isoformat(),
-            "epochs": epochs,
-            "accuracy": self.progress.accuracy
+            "epochs": len(self.progress.epoch_history),
+            "accuracy": self.progress.best_accuracy
         })
 
         # Save registry

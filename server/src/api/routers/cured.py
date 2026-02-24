@@ -1,8 +1,11 @@
 # Auth removed for desktop app
 # from auth.auth_bearer import JWTBearer
+from typing import Optional
+
 from api.dto.get_predictions import CureDGetTransliterationsDto
 
 from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks, Request, HTTPException
+from pydantic import BaseModel
 
 from api.dto.submissions import TransliterationSubmitDto, CuredSubmissionDto, CuredTransliterationData
 from entities.new_text import TransliterationSource
@@ -22,6 +25,97 @@ router = APIRouter(
 
 
 # Static routes must come BEFORE parameterized routes
+
+@router.get("/museums")
+async def get_museums():
+    """
+    Get museum abbreviations and full names from museums.csv.
+    Returns a dictionary mapping abbreviation to full description.
+    """
+    import csv
+
+    museums = {}
+    csv_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "museums.csv")
+
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 2:
+                    # First column is abbreviation (may have spaces/slashes)
+                    # Second column is description
+                    abbrev = row[0].strip()
+                    description = row[1].strip()
+
+                    # Handle multiple abbreviations separated by " / "
+                    # e.g., "A / A." -> store under "A" and "A."
+                    parts = abbrev.split(" / ")
+                    for part in parts:
+                        clean_abbrev = part.strip().rstrip('.')
+                        if clean_abbrev:
+                            museums[clean_abbrev] = description
+    except FileNotFoundError:
+        logging.warning(f"museums.csv not found at {csv_path}")
+    except Exception as e:
+        logging.error(f"Error reading museums.csv: {e}")
+
+    return museums
+
+
+@router.get("/available-models")
+async def get_available_models():
+    """List all available OCR models (static + custom trained + VLM models)."""
+    from services.kraken_training_service import kraken_training_service
+    import json as _json
+
+    models = []
+
+    # Add static base models (Kraken)
+    static_labels = {
+        "latest": "Latest (Pennsylvania Sumerian Dictionary)",
+        "dillard": "Dillard (Typewriter texts)",
+        "base": "Base (SAA Corpus)",
+    }
+    for key, label in static_labels.items():
+        model_file = CuredHandler.MODEL_FILES.get(key)
+        if model_file and os.path.exists(f"./cured_models/{model_file}"):
+            models.append({"value": key, "label": label, "is_custom": False})
+
+    # Add DeepSeek-OCR-2 if available (VLM-based OCR)
+    try:
+        from services import deepseek_ocr_service
+        if deepseek_ocr_service.is_available():
+            models.append({
+                "value": "deepseek",
+                "label": "DeepSeek-OCR-2 (VLM, 3B params)",
+                "is_custom": False,
+                "is_vlm": True
+            })
+            logging.info("DeepSeek-OCR-2 added to available models")
+    except ImportError:
+        logging.debug("DeepSeek-OCR-2 not available")
+
+    # Add custom trained models from registry
+    registry_path = os.path.join(kraken_training_service.MODELS_DIR, "registry.json")
+    if os.path.exists(registry_path):
+        try:
+            with open(registry_path, "r") as f:
+                registry = _json.load(f)
+            for entry in registry:
+                name = entry.get("name", "")
+                if name not in CuredHandler.MODEL_FILES:
+                    model_path = f"./cured_models/{name}.mlmodel"
+                    if os.path.exists(model_path):
+                        accuracy = entry.get("accuracy", 0)
+                        epochs = entry.get("epochs", 0)
+                        label = f"{name} (Custom, {accuracy*100:.1f}% acc, {epochs} epochs)"
+                        models.append({"value": name, "label": label, "is_custom": True})
+        except Exception as e:
+            logging.warning(f"Could not read model registry: {e}")
+
+    return {"models": models}
+
+
 @router.get("/training/status")
 async def get_training_status():
     """Get the current training data status for Kraken OCR model."""
@@ -35,6 +129,8 @@ async def get_training_status():
     new_lines = stats.get("new_lines", 0)
     total_lines = stats.get("total_lines", 0)
     curated_texts = stats.get("curated_texts", 0)
+    codec_size = stats.get("codec_size", 0)
+    unique_characters = stats.get("unique_characters", [])
     last_training = stats.get("last_training")
     required_for_training = 1000  # Minimum lines required for training
 
@@ -52,6 +148,8 @@ async def get_training_status():
         "previousLines": previous_lines,
         "newLines": new_lines,
         "totalLines": total_lines,
+        "codecSize": codec_size,
+        "uniqueCharacters": unique_characters,
         "requiredForNextTraining": required_for_training,
         "progress": progress,
         "isReady": lines_for_progress >= required_for_training,
@@ -61,7 +159,7 @@ async def get_training_status():
 
 
 @router.post("/training/start")
-async def start_training(background_tasks: BackgroundTasks, epochs: int = 50, model_name: str = None):
+async def start_training(background_tasks: BackgroundTasks, epochs: int = 500, model_name: str = None, base_model: str = None):
     """Start Kraken OCR model training."""
     from services.kraken_training_service import kraken_training_service, TrainingStatus
     import asyncio
@@ -80,13 +178,26 @@ async def start_training(background_tasks: BackgroundTasks, epochs: int = 50, mo
             detail=f"Not enough training data. Need at least 1000 lines, got {total_lines}"
         )
 
+    # Resolve base_model key (e.g. "dillard") to actual file path
+    base_model_path = None
+    if base_model:
+        logging.info(f"[start_training] Received base_model key: {base_model}")
+        model_file = CuredHandler.MODEL_FILES.get(base_model)
+        logging.info(f"[start_training] MODEL_FILES lookup: {model_file}")
+        if model_file:
+            base_model_path = f"./cured_models/{model_file}"
+            logging.info(f"[start_training] Resolved base_model_path: {base_model_path}")
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown base model: {base_model}")
+
     # Start training in background
     # Use a sync wrapper with asyncio.run() since BackgroundTasks runs in a thread pool
     def run_training_sync():
         asyncio.run(kraken_training_service.start_training(
             texts_handler=global_new_text_handler,
             epochs=epochs,
-            model_name=model_name
+            model_name=model_name,
+            base_model=base_model_path
         ))
 
     background_tasks.add_task(run_training_sync)
@@ -117,6 +228,35 @@ async def cancel_training():
     return {"message": "Training cancelled"}
 
 
+@router.get("/training/base-models")
+async def get_base_models_metadata():
+    """Get metadata for all available base models (for the training selector)."""
+    from kraken.lib import vgsl
+    results = {}
+    for key, filename in CuredHandler.MODEL_FILES.items():
+        model_path = f"./cured_models/{filename}"
+        try:
+            if not os.path.exists(model_path):
+                continue
+            stat = os.stat(model_path)
+            nn = vgsl.TorchVGSLModel.load_model(model_path)
+            meta = nn.user_metadata if hasattr(nn, 'user_metadata') else {}
+            accuracy_list = meta.get("accuracy", [])
+            best_accuracy = max((a[1] for a in accuracy_list), default=0) if accuracy_list else 0
+            last_accuracy = accuracy_list[-1][1] if accuracy_list else 0
+            hyper = meta.get("hyper_params", {})
+            results[key] = {
+                "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                "best_accuracy": round(best_accuracy * 100, 1),
+                "last_accuracy": round(last_accuracy * 100, 1),
+                "completed_epochs": hyper.get("completed_epochs", 0),
+                "alphabet_size": len(nn.codec.c2l) if hasattr(nn, 'codec') else 0,
+            }
+        except Exception as e:
+            logging.warning(f"Could not load metadata for {key}: {e}")
+    return results
+
+
 @router.get("/training/models")
 async def list_models():
     """List available trained models."""
@@ -144,9 +284,85 @@ async def activate_model(model_name: str):
     return {"message": f"Model {model_name} activated"}
 
 
+# =============================================================================
+# Translation Workflow Endpoints
+# =============================================================================
+
+@router.get("/translation/find")
+async def find_translation_for_text(museum_name: str, museum_number: int):
+    """
+    Find a translation text matching the given museum identifier.
+    Used by CuReD to enable translation toggle mode.
+
+    Args:
+        museum_name: Museum abbreviation (e.g., "BM", "K")
+        museum_number: Museum accession number
+
+    Returns:
+        Translation text data if found, null otherwise
+    """
+    text = global_new_text_handler.find_translation_by_museum_number(
+        museum_name=museum_name,
+        museum_number=museum_number
+    )
+
+    if not text:
+        return {"found": False, "text": None}
+
+    # Get the latest transliteration data
+    transliterations = global_new_text_handler.get_text_cured_transliterations(text_id=text.text_id)
+    if not transliterations:
+        return {"found": True, "text_id": text.text_id, "lines": []}
+
+    latest_trans = transliterations[-1]
+    latest_edit = latest_trans.edit_history[-1] if latest_trans.edit_history else None
+
+    return {
+        "found": True,
+        "text_id": text.text_id,
+        "transliteration_id": latest_trans.transliteration_id,
+        "lines": latest_edit.lines if latest_edit else []
+    }
+
+
+@router.get("/transliteration/find")
+async def find_transliteration_for_translation(museum_name: str, museum_number: int):
+    """
+    Find the source transliteration for a given museum identifier.
+    Used when viewing a translation to navigate back to its source.
+
+    Args:
+        museum_name: Museum abbreviation (e.g., "BM", "K")
+        museum_number: Museum accession number
+
+    Returns:
+        Transliteration text data if found, null otherwise
+    """
+    text = global_new_text_handler.find_transliteration_by_museum_number(
+        museum_name=museum_name,
+        museum_number=museum_number
+    )
+
+    if not text:
+        return {"found": False, "text": None}
+
+    # Get the latest transliteration data
+    transliterations = global_new_text_handler.get_text_cured_transliterations(text_id=text.text_id)
+    if not transliterations:
+        return {"found": True, "text_id": text.text_id, "transliteration_id": None}
+
+    latest_trans = transliterations[-1]
+
+    return {
+        "found": True,
+        "text_id": text.text_id,
+        "transliteration_id": latest_trans.transliteration_id
+    }
+
+
 @router.post("/createSubmission")
 async def submit(request: Request, submit_dto: CuredSubmissionDto):
-    user_id = request.state.user_id
+    user_id = request.state.user_id or "admin"  # Default to admin if not authenticated
 
     submit_dto = TransliterationSubmitDto(
         text_id=submit_dto.text_id,
@@ -204,6 +420,87 @@ async def get_text_transliterations(ben_id: int):
 @router.post("/getTransliterations")
 async def get_transliterations(background_tasks: BackgroundTasks, dto: CureDGetTransliterationsDto):
     return CuredHandler.get_transliterations(dto=dto, background_tasks=background_tasks)
+
+
+# =============================================================================
+# DeepSeek OCR Endpoints (VLM-based OCR with XML output support)
+# =============================================================================
+
+@router.get("/deepseek/output-modes")
+async def get_deepseek_output_modes():
+    """Get available output modes for DeepSeek OCR (plain text, TEI XML, etc.)"""
+    try:
+        from services import deepseek_ocr_service
+        if not deepseek_ocr_service.is_available():
+            raise HTTPException(status_code=503, detail="DeepSeek OCR not available (no GPU)")
+        return {
+            "modes": deepseek_ocr_service.get_available_output_modes(),
+            "default": "plain"
+        }
+    except ImportError:
+        raise HTTPException(status_code=503, detail="DeepSeek OCR service not installed")
+
+
+@router.get("/deepseek/status")
+async def get_deepseek_status():
+    """Get DeepSeek OCR model status and memory usage"""
+    try:
+        from services import deepseek_ocr_service
+        return {
+            "available": deepseek_ocr_service.is_available(),
+            "loaded": deepseek_ocr_service.is_loaded(),
+            "info": deepseek_ocr_service.get_model_info()
+        }
+    except ImportError:
+        return {"available": False, "loaded": False, "info": {}}
+
+
+class DeepSeekOcrRequest(BaseModel):
+    image: str  # Base64 encoded image
+    output_mode: str = "plain"  # plain, tei_lex0, tei_epidoc
+    custom_prompt: Optional[str] = None
+
+
+@router.post("/deepseek/ocr")
+async def deepseek_ocr(request: DeepSeekOcrRequest):
+    """
+    Run DeepSeek OCR on an image with selectable output format.
+
+    Output modes:
+    - plain: Plain text transcription
+    - tei_lex0: TEI Lex-0 XML for dictionary entries
+    - tei_epidoc: TEI EpiDoc XML for cuneiform texts
+    """
+    try:
+        from services import deepseek_ocr_service
+
+        if not deepseek_ocr_service.is_available():
+            raise HTTPException(status_code=503, detail="DeepSeek OCR not available (no GPU)")
+
+        result = deepseek_ocr_service.ocr_from_base64(
+            image_base64=request.image,
+            prompt=request.custom_prompt,
+            output_mode=request.output_mode,
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result.get("error", "OCR failed"))
+
+        return result
+
+    except ImportError:
+        raise HTTPException(status_code=503, detail="DeepSeek OCR service not installed")
+
+
+@router.post("/deepseek/unload")
+async def unload_deepseek_model():
+    """Unload DeepSeek model to free GPU memory"""
+    try:
+        from services import deepseek_ocr_service
+        deepseek_ocr_service.unload_model()
+        return {"message": "Model unloaded", "info": deepseek_ocr_service.get_model_info()}
+    except ImportError:
+        raise HTTPException(status_code=503, detail="DeepSeek OCR service not installed")
 
 
 @router.get("/transliteration/{text_id}/{transliteration_id}")

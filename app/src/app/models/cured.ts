@@ -25,7 +25,8 @@ export class TextPreview {
         public latest_transliteration_id: number = null,
         public label: string = "",
         public part: string = "",
-        public is_curated: boolean = false
+        public is_curated: boolean = false,
+        public lines_count: number = 0
     ) {}
 }
 

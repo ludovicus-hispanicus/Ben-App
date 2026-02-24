@@ -53,6 +53,8 @@
     <div class="view-toggle">
       <button class="toggle-option" [class.active]="viewMode === 'raw'" (click)="viewMode = 'raw'; onViewModeChange()"
         matTooltip="Raw CuReD format">Raw</button>
+      <button class="toggle-option" [class.active]="viewMode === 'norm'" (click)="viewMode = 'norm'; onViewModeChange()"
+        matTooltip="Normalized view (renders markdown formatting)">Norm</button>
       <button class="toggle-option" [class.active]="viewMode === 'atf'" (click)="viewMode = 'atf'; onViewModeChange()"
         matTooltip="eBL-ATF format (Beta)">eBL</button>
     </div>

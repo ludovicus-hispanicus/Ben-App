@@ -1,10 +1,12 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { VlmOcrService, VlmOcrProcessResponse } from 'src/app/services/vlm-ocr.service';
+import { CloudOcrService, CloudProvider, CloudOcrProvider, CloudOcrModel, CLOUD_PROVIDERS } from 'src/app/services/cloud-ocr.service';
 import { NotificationService } from 'src/app/services/notification.service';
 import { ToolbarService } from 'src/app/services/toolbar.service';
 import { saveAs } from 'file-saver';
 
 type SourceType = 'ahw' | 'cad' | 'generic';
+type OcrProvider = 'local' | CloudProvider;
 
 @Component({
   selector: 'app-dictionary-ocr',
@@ -32,6 +34,13 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
     { value: 'generic', label: 'Generic Document' }
   ];
 
+  // Model picker
+  selectedProvider: OcrProvider = 'local';
+  selectedModel: string = 'deepseek-ocr';
+  cloudProviders = CLOUD_PROVIDERS;
+  apiKeys: { [provider: string]: string } = {};
+  showApiKey = false;
+
   // Results
   ocrResult: string = '';
   originalResult: string = '';
@@ -44,12 +53,14 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
 
   constructor(
     private vlmOcrService: VlmOcrService,
+    private cloudOcrService: CloudOcrService,
     private notificationService: NotificationService,
     private toolbarService: ToolbarService
   ) {}
 
   ngOnInit(): void {
     this.checkVlmHealth();
+    this.loadApiKeys();
     this.updateToolbar();
   }
 
@@ -57,13 +68,63 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
     this.toolbarService.clearButtons();
   }
 
+  // ============== Model Picker ==============
+
+  get currentCloudProvider(): CloudOcrProvider | null {
+    if (this.selectedProvider === 'local') return null;
+    return this.cloudProviders.find(p => p.id === this.selectedProvider) || null;
+  }
+
+  get currentModels(): CloudOcrModel[] {
+    return this.currentCloudProvider?.models || [];
+  }
+
+  get currentApiKey(): string {
+    return this.apiKeys[this.selectedProvider] || '';
+  }
+
+  get canProcess(): boolean {
+    if (!this.selectedFile) return false;
+    if (this.isLoading) return false;
+    if (this.selectedProvider === 'local') return this.vlmAvailable !== false;
+    return !!this.currentApiKey;
+  }
+
+  get processButtonLabel(): string {
+    if (this.isLoading) return 'Processing...';
+    if (this.selectedProvider === 'local') return 'Process with DeepSeek-OCR';
+    const model = this.currentModels.find(m => m.id === this.selectedModel);
+    return model ? `Process with ${model.label}` : 'Process';
+  }
+
+  onProviderChange(): void {
+    if (this.selectedProvider === 'local') {
+      this.selectedModel = 'deepseek-ocr';
+    } else {
+      const models = this.currentModels;
+      this.selectedModel = models.length > 0 ? models[0].id : '';
+    }
+    this.showApiKey = false;
+  }
+
+  onApiKeyChange(value: string): void {
+    this.apiKeys[this.selectedProvider] = value;
+    this.cloudOcrService.saveApiKeys(this.apiKeys);
+  }
+
+  private loadApiKeys(): void {
+    this.apiKeys = this.cloudOcrService.loadApiKeys();
+  }
+
+  // ============== Health Check ==============
+
   checkVlmHealth(): void {
     this.vlmOcrService.checkHealth().subscribe({
       next: (response) => {
         this.vlmAvailable = response.vlm_service_available;
         if (!this.vlmAvailable) {
           this.notificationService.showWarning(
-            'VLM OCR service is not available. Please ensure the vlm-ocr container is running.',
+            'Local DeepSeek-OCR is not available. Use a cloud API model instead.',
             10000
           );
         }
@@ -104,7 +165,7 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
 
     this.toolbarService.setToolbar({
       buttons,
-      message: this.isLoading ? 'Processing with DeepSeek-OCR...' : undefined
+      message: this.isLoading ? `Processing with ${this.selectedModel}...` : undefined
     });
   }
 
@@ -158,12 +219,9 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
     this.imageId = `${this.sourceType}_${Date.now()}`;
 
     if (this.isPdf) {
-      // For PDF, we'll process on button click
       this.imagePreview = null;
       this.currentPage = 0;
-      // TODO: Add PDF page count detection
     } else {
-      // For images, show preview
       const reader = new FileReader();
       reader.onload = (e) => {
         this.imagePreview = e.target?.result as string;
@@ -178,21 +236,31 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.selectedProvider !== 'local' && !this.currentApiKey) {
+      this.notificationService.showError('Please enter an API key for the selected provider.');
+      return;
+    }
+
     this.isLoading = true;
     this.toolbarService.setLoading(true);
     this.updateToolbar();
 
-    if (this.isPdf) {
-      this.processPdf();
+    if (this.selectedProvider === 'local') {
+      // Use existing DeepSeek-OCR flow
+      if (this.isPdf) {
+        this.processPdfLocal();
+      } else {
+        this.processImageLocal();
+      }
     } else {
-      this.processImage();
+      // Use cloud API
+      this.processImageCloud();
     }
   }
 
-  private processImage(): void {
+  private processImageLocal(): void {
     if (!this.imagePreview) return;
 
-    // Extract base64 data (remove data:image/xxx;base64, prefix)
     const base64Data = this.imagePreview.includes(',')
       ? this.imagePreview.split(',')[1]
       : this.imagePreview;
@@ -203,10 +271,38 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
     });
   }
 
-  private processPdf(): void {
+  private processPdfLocal(): void {
     if (!this.selectedFile) return;
 
     this.vlmOcrService.processPdf(this.selectedFile, this.currentPage, this.sourceType).subscribe({
+      next: (response) => this.handleOcrResponse(response),
+      error: (error) => this.handleOcrError(error)
+    });
+  }
+
+  private processImageCloud(): void {
+    // For cloud APIs, we need the base64 image data
+    if (this.isPdf) {
+      this.notificationService.showWarning('PDF processing is only supported with local DeepSeek-OCR for now.');
+      this.isLoading = false;
+      this.toolbarService.setLoading(false);
+      this.updateToolbar();
+      return;
+    }
+
+    if (!this.imagePreview) return;
+
+    const base64Data = this.imagePreview.includes(',')
+      ? this.imagePreview.split(',')[1]
+      : this.imagePreview;
+
+    this.cloudOcrService.processImage(
+      base64Data,
+      this.selectedProvider as CloudProvider,
+      this.selectedModel,
+      this.currentApiKey,
+      this.sourceType
+    ).subscribe({
       next: (response) => this.handleOcrResponse(response),
       error: (error) => this.handleOcrError(error)
     });
@@ -222,7 +318,7 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
       this.processingTimeMs = response.processing_time_ms;
       this.hasChanges = false;
       this.notificationService.showSuccess(
-        `OCR completed in ${(response.processing_time_ms / 1000).toFixed(1)}s`
+        `OCR completed in ${(response.processing_time_ms / 1000).toFixed(1)}s${response.model ? ' (' + response.model + ')' : ''}`
       );
     } else {
       this.notificationService.showError(response.error || 'OCR processing failed.');
@@ -312,7 +408,6 @@ export class DictionaryOcrComponent implements OnInit, OnDestroy {
     this.updateToolbar();
   }
 
-  // PDF navigation (for future implementation)
   previousPage(): void {
     if (this.currentPage > 0) {
       this.currentPage--;

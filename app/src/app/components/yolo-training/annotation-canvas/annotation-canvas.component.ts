@@ -228,7 +228,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       this.isPanning = false;
       if (this.canvas) {
         // Keep grab cursor if pan mode is active
-        this.canvas.defaultCursor = this.panModeActive ? 'grab' : 'crosshair';
+        this.canvas.defaultCursor = 'default';
         this.canvas.renderAll();
       }
     }
@@ -253,8 +253,11 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     this.canvas.on('mouse:move', (e) => this.onMouseMove(e));
     this.canvas.on('mouse:up', (e) => this.onMouseUp(e));
 
-    // Mouse wheel zoom
-    this.canvas.on('mouse:wheel', (opt) => this.onMouseWheel(opt));
+    // Mouse wheel zoom/pan - use shared service for consistent behavior
+    this.canvasBoxService.setupWheelZoomPan(this.canvas, {
+      minZoom: this.minZoom,
+      maxZoom: this.maxZoom
+    });
 
     // Selection events
     this.canvas.on('selection:created', (e) => this.onSelectionCreated(e));
@@ -689,51 +692,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
 
 
   // ============== Zoom and Pan ==============
-
-  onMouseWheel(opt: fabric.IEvent): void {
-    if (!this.canvas) return;
-
-    const evt = opt.e as WheelEvent;
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    // Pinch-to-zoom on trackpad sends ctrlKey
-    if (evt.ctrlKey || evt.metaKey) {
-      // Zoom
-      const delta = evt.deltaY;
-      let zoom = this.canvas.getZoom();
-      zoom *= 0.99 ** delta;
-      if (zoom > this.maxZoom) zoom = this.maxZoom;
-      if (zoom < this.minZoom) zoom = this.minZoom;
-      this.canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY }, zoom);
-      this.zoomLevel = zoom;
-      return;
-    }
-
-    // Detect trackpad vs mouse wheel:
-    // - Trackpad two-finger scroll: deltaMode 0 (pixels), often has deltaX
-    // - Mouse wheel: deltaMode 1 (lines) or deltaMode 0 with no deltaX
-    const isTrackpadPan = evt.deltaMode === 0 && (Math.abs(evt.deltaX) > 0 || Math.abs(evt.deltaY) < 40);
-
-    if (isTrackpadPan) {
-      // Two-finger scroll on trackpad = pan
-      const vpt = this.canvas.viewportTransform;
-      if (vpt) {
-        vpt[4] -= evt.deltaX;
-        vpt[5] -= evt.deltaY;
-        this.canvas.setViewportTransform(vpt);
-      }
-    } else {
-      // Mouse wheel = zoom
-      const delta = evt.deltaY;
-      let zoom = this.canvas.getZoom();
-      zoom *= 0.999 ** delta;
-      if (zoom > this.maxZoom) zoom = this.maxZoom;
-      if (zoom < this.minZoom) zoom = this.minZoom;
-      this.canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY }, zoom);
-      this.zoomLevel = zoom;
-    }
-  }
+  // Note: Mouse wheel zoom/pan is handled by canvasBoxService.setupWheelZoomPan()
 
   zoomIn(): void {
     if (!this.canvas) return;
@@ -773,7 +732,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
   togglePanMode(): void {
     this.panModeActive = !this.panModeActive;
     if (this.canvas) {
-      this.canvas.defaultCursor = this.panModeActive ? 'grab' : 'crosshair';
+      this.canvas.defaultCursor = 'default';
       this.canvas.renderAll();
     }
   }
@@ -794,31 +753,41 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       return;
     }
 
-    const pointer = this.canvas.getPointer(e.e);
-
     // Check if clicking on existing object
     const target = this.canvas.findTarget(e.e as MouseEvent, false);
     if (target && target !== this.currentImage) {
       return; // Let fabric handle selection
     }
 
-    // Start drawing new rectangle
-    this.isDrawing = true;
-    this.drawStart = { x: pointer.x, y: pointer.y };
+    // Shift + left click = draw new box (unified behavior with CuReD)
+    if (evt.shiftKey && evt.button === 0) {
+      const pointer = this.canvas.getPointer(e.e);
+      this.isDrawing = true;
+      this.drawStart = { x: pointer.x, y: pointer.y };
 
-    const color = getClassColor(this.getClassName(this.selectedClassId));
-    this.tempRect = new fabric.Rect({
-      left: pointer.x,
-      top: pointer.y,
-      width: 0,
-      height: 0,
-      fill: color + '33', // Semi-transparent
-      stroke: color,
-      strokeWidth: 2,
-      selectable: false
-    });
+      const color = getClassColor(this.getClassName(this.selectedClassId));
+      this.tempRect = new fabric.Rect({
+        left: pointer.x,
+        top: pointer.y,
+        width: 0,
+        height: 0,
+        fill: color + '33', // Semi-transparent
+        stroke: color,
+        strokeWidth: 2,
+        selectable: false
+      });
 
-    this.canvas.add(this.tempRect);
+      this.canvas.add(this.tempRect);
+      return;
+    }
+
+    // Plain left click on empty area = start panning
+    if (evt.button === 0) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      this.canvas.defaultCursor = 'grabbing';
+      this.canvas.renderAll();
+    }
   }
 
   onMouseMove(e: fabric.IEvent): void {
@@ -865,7 +834,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     if (this.isPanning) {
       this.isPanning = false;
       this.lastPanPosition = null;
-      this.canvas.defaultCursor = (this.spacePressed || this.panModeActive) ? 'grab' : 'crosshair';
+      this.canvas.defaultCursor = 'default';
       this.canvas.renderAll();
       return;
     }

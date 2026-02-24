@@ -90,9 +90,15 @@ export class CanvasBoxService {
 
   /**
    * Setup wheel zooming and panning for a canvas.
-   * - Two-finger trackpad scroll = pan
-   * - Mouse wheel = zoom
-   * - Pinch-to-zoom = zoom
+   * - Ctrl + mouse wheel = zoom
+   * - Pinch gesture = zoom
+   * - Plain mouse wheel = pan vertically
+   * - Two-finger scroll = pan
+   *
+   * Detection logic:
+   * - Pinch gestures: ctrlKey=true, small deltaY, no deltaX
+   * - Two-finger scroll: may have ctrlKey=true on some trackpads, but has deltaX or larger deltaY
+   * - We use deltaX presence and deltaY magnitude to distinguish
    */
   setupWheelZoomPan(canvas: fabric.Canvas, config: ZoomPanConfig): void {
     canvas.on('mouse:wheel', (opt) => {
@@ -100,8 +106,15 @@ export class CanvasBoxService {
       evt.preventDefault();
       evt.stopPropagation();
 
-      // Pinch-to-zoom on trackpad sends ctrlKey or metaKey
-      if (evt.ctrlKey || evt.metaKey) {
+      // Detect if this is likely a pinch gesture vs two-finger scroll
+      // Pinch: ctrlKey=true, deltaX=0, small deltaY (typically < 10)
+      // Two-finger scroll: may have ctrlKey, has deltaX OR larger deltaY
+      const hasHorizontalMovement = Math.abs(evt.deltaX) > 0;
+      const hasLargeVerticalMovement = Math.abs(evt.deltaY) > 50;
+      const isLikelyTwoFingerScroll = hasHorizontalMovement || hasLargeVerticalMovement;
+
+      // Zoom only on Ctrl+wheel when it's NOT a two-finger scroll pattern
+      if ((evt.ctrlKey || evt.metaKey) && !isLikelyTwoFingerScroll) {
         const delta = evt.deltaY;
         let zoom = canvas.getZoom();
         zoom *= 0.99 ** delta;
@@ -110,27 +123,12 @@ export class CanvasBoxService {
         return;
       }
 
-      // Detect trackpad vs mouse wheel:
-      // - Trackpad two-finger scroll: deltaMode === 0, often has deltaX or small deltaY
-      // - Mouse wheel: deltaMode === 1 (lines) or larger deltaY jumps
-      const isTrackpadPan = evt.deltaMode === 0 &&
-                            (Math.abs(evt.deltaX) > 0 || Math.abs(evt.deltaY) < 40);
-
-      if (isTrackpadPan) {
-        // Two-finger scroll on trackpad = pan
-        const vpt = canvas.viewportTransform;
-        if (vpt) {
-          vpt[4] -= evt.deltaX;
-          vpt[5] -= evt.deltaY;
-          canvas.setViewportTransform(vpt);
-        }
-      } else {
-        // Mouse wheel = zoom
-        const delta = evt.deltaY;
-        let zoom = canvas.getZoom();
-        zoom *= 0.999 ** delta;
-        zoom = this.clampZoom(zoom, config);
-        canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY } as fabric.Point, zoom);
+      // Everything else = pan (two-finger scroll, plain wheel, etc.)
+      const vpt = canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] -= evt.deltaX;
+        vpt[5] -= evt.deltaY;
+        canvas.setViewportTransform(vpt);
       }
     });
   }
