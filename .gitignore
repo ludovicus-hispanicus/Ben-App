@@ -43,6 +43,24 @@ yolo_predictions/
 layout_test_results/
 ocr_test_results/
 runs/
+**/kraken-training/
+**/kraken_models/
+**/cure-training/
+**/cured_training_data/
+**/deepseek-training/
+**/qwen-training/
+**/nemotron-training/
+**/deepseek_lora_adapters/
+**/nemotron_lora_adapters/
+**/nemotron_models/
+**/qwen_lora_adapters/
+**/cure_models/
+**/cyrus_texts/
+**/cyrus_texts_original/
+**/tmp_upload/
+**/production_images/
+**/pages/
+**/preview/
 
 # Large/generated data
 *.pdf
