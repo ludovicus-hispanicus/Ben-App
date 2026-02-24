@@ -1,0 +1,42 @@
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist/
+tmp/
+out-tsc/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-workspace
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Models & large files
+*.pt
+*.pth
+*.onnx
+*.bin
+models/
+
+# Misc
+*.log
+.build-analytics
+nul
