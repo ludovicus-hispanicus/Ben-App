@@ -36,6 +36,19 @@ Thumbs.db
 *.bin
 models/
 
+# Training data, predictions & results
+yolo_snippets/
+yolo_dataset/
+yolo_predictions/
+layout_test_results/
+ocr_test_results/
+runs/
+
+# Large/generated data
+*.pdf
+deepseek-ocr/
+vlm-ocr/
+
 # Misc
 *.log
 .build-analytics
