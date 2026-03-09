@@ -1,4 +1,0 @@
-=== Section 1 ===
-Box: (277,40) -> (1996,93)
-Output the text exactly as shown.
-
