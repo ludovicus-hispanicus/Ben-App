@@ -67,6 +67,9 @@ runs/
 *.pdf
 deepseek-ocr/
 vlm-ocr/
+server-new/data/
+**/unsloth_compiled_cache/
+**/vlm-training/
 
 # Secrets
 .env

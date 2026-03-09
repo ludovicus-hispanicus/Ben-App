@@ -6,6 +6,10 @@
     box-sizing: border-box;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
   }
 
  
@@ -32,6 +36,14 @@
     background-image: url("../assets/img/banner.jpg");
     background-size: cover;
     width: 100%;
+    flex-shrink: 0;
+    z-index: 1030;
+  }
+
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .logout-link {

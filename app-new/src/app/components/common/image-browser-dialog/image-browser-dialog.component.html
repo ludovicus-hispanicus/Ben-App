@@ -1,12 +1,43 @@
 <mat-dialog-content class="browser-content">
-  <!-- Top bar: title left, actions right -->
+  <!-- Top bar -->
   <div class="top-bar">
     <button *ngIf="selectedProject" mat-icon-button (click)="goBack()" matTooltip="Back to projects">
       <mat-icon>arrow_back</mat-icon>
     </button>
-    <h2 *ngIf="!selectedProject">Browse Server Images</h2>
-    <span class="breadcrumb" *ngIf="selectedProject">{{selectedProject.name}}</span>
+    <h2 *ngIf="!selectedProject">Server</h2>
+    <div class="breadcrumb-trail" *ngIf="selectedProject">
+      <span *ngFor="let crumb of breadcrumb; let last = last">
+        <span class="breadcrumb-item" [class.active]="last">{{ crumb.name }}</span>
+        <mat-icon *ngIf="!last" class="breadcrumb-sep">chevron_right</mat-icon>
+      </span>
+    </div>
     <span class="spacer"></span>
+
+    <!-- Search + View toggle (only when viewing pages) -->
+    <ng-container *ngIf="selectedProject">
+      <div class="page-search-box">
+        <mat-icon class="page-search-icon">search</mat-icon>
+        <input [(ngModel)]="pageSearchQuery"
+               (keyup.enter)="onPageSearchEnter()"
+               placeholder="Search"
+               class="page-search-input">
+        <button *ngIf="pageSearchQuery" mat-icon-button class="page-search-clear" (click)="clearPageSearch()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <span class="search-match-count" *ngIf="pageSearchQuery && filteredPages.length !== selectedProject.pages.length">
+        {{ filteredPages.length }} match{{ filteredPages.length === 1 ? '' : 'es' }}
+      </span>
+      <button mat-icon-button [class.active-view]="viewMode === 'grid'"
+              (click)="viewMode = 'grid'" matTooltip="Icon view">
+        <mat-icon>grid_view</mat-icon>
+      </button>
+      <button mat-icon-button [class.active-view]="viewMode === 'list'"
+              (click)="viewMode = 'list'" matTooltip="Details view">
+        <mat-icon>view_list</mat-icon>
+      </button>
+    </ng-container>
+
     <button mat-stroked-button (click)="uploadInput.click()" [disabled]="isUploading">
       <mat-icon>cloud_upload</mat-icon> Upload
     </button>
@@ -22,47 +53,102 @@
       <mat-spinner diameter="30"></mat-spinner>
     </div>
 
-    <!-- Project List View -->
+    <!-- Tree View -->
     <ng-container *ngIf="!isLoading && !selectedProject">
-      <div *ngIf="projects.length === 0" class="empty">
+      <div *ngIf="tree.length === 0" class="empty">
         No projects found. Upload a PDF or image.
       </div>
-      <div *ngFor="let project of projects" class="project-row" (click)="openProject(project)">
-        <mat-icon class="folder-icon">folder</mat-icon>
-        <span class="project-name">{{project.name}}</span>
-        <span class="project-count">{{project.image_count}} pages</span>
-        <mat-icon class="chevron">chevron_right</mat-icon>
-      </div>
+      <ng-container *ngFor="let node of tree">
+        <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: node, depth: 0 }"></ng-container>
+      </ng-container>
     </ng-container>
 
-    <!-- Pages Grid View -->
+    <!-- Recursive tree node template -->
+    <ng-template #treeNode let-node let-depth="depth">
+      <div class="project-row" [style.padding-left.px]="16 + depth * 24" (click)="openProject(node)">
+        <button *ngIf="node.children?.length" mat-icon-button class="expand-btn"
+                (click)="toggleExpand(node, $event)">
+          <mat-icon>{{ node.expanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
+        </button>
+        <span *ngIf="!node.children?.length" class="expand-spacer"></span>
+        <mat-icon class="folder-icon">{{ node.children?.length ? (node.expanded ? 'folder_open' : 'folder') : 'folder' }}</mat-icon>
+        <span class="project-name">{{ node.name }}</span>
+        <span class="project-count">{{ node.image_count }} pages</span>
+        <mat-icon class="chevron">chevron_right</mat-icon>
+      </div>
+      <ng-container *ngIf="node.expanded && node.children?.length">
+        <ng-container *ngFor="let child of node.children">
+          <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: child, depth: depth + 1 }"></ng-container>
+        </ng-container>
+      </ng-container>
+    </ng-template>
+
+    <!-- Open folder view -->
     <ng-container *ngIf="!isLoading && selectedProject">
-      <div *ngIf="selectedProject.pages.length === 0" class="empty">
+
+      <!-- Child folders at top -->
+      <ng-container *ngIf="currentNode?.children?.length">
+        <div *ngFor="let child of currentNode.children" class="child-folder-row" (click)="openProject(child)">
+          <mat-icon class="folder-icon">folder</mat-icon>
+          <span class="project-name">{{ child.name }}</span>
+          <span class="project-count">{{ child.image_count }} pages</span>
+          <mat-icon class="chevron">chevron_right</mat-icon>
+        </div>
+        <div *ngIf="selectedProject.pages.length > 0" class="folder-file-separator"></div>
+      </ng-container>
+
+      <div *ngIf="selectedProject.pages.length === 0 && !currentNode?.children?.length" class="empty">
         No pages in this project.
       </div>
-      <div class="thumb-grid">
-        <div *ngFor="let page of selectedProject.pages"
-             class="thumb-item"
+
+      <div class="thumbnail-grid" *ngIf="viewMode === 'grid' && selectedProject.pages.length > 0">
+        <div *ngFor="let page of filteredPages"
+             [id]="'browser-page-' + page.page_number"
+             class="thumbnail-card"
              [class.selected]="isPageSelected(page)"
-             (click)="selectPage(page, $event)"
-             matTooltip="{{page.filename}}">
-          <div class="select-check" *ngIf="isPageSelected(page)">
-            <mat-icon>check_circle</mat-icon>
+             (click)="togglePageSelection(page, $event)"
+             (dblclick)="loadPage(page)">
+          <div class="thumbnail-icon">
+            <mat-icon>image</mat-icon>
           </div>
-          <img [src]="getThumbnailUrl(page)" [alt]="page.filename" loading="lazy">
-          <span class="thumb-label">{{page.filename}}</span>
+          <span class="thumbnail-label">{{ page.filename }}</span>
+        </div>
+      </div>
+
+      <!-- Pages: List View -->
+      <div class="details-list" *ngIf="viewMode === 'list' && selectedProject.pages.length > 0">
+        <div class="details-header">
+          <span class="details-col-icon"></span>
+          <span class="details-col-name">Name</span>
+          <span class="details-col-type">Type</span>
+          <span class="details-col-size">Size</span>
+          <span class="details-col-page">Page</span>
+        </div>
+        <div *ngFor="let page of filteredPages"
+             [id]="'browser-page-' + page.page_number"
+             class="details-row"
+             [class.selected]="isPageSelected(page)"
+             (click)="togglePageSelection(page, $event)"
+             (dblclick)="loadPage(page)">
+          <div class="details-icon">
+            <mat-icon>image</mat-icon>
+          </div>
+          <span class="details-name">{{ page.filename }}</span>
+          <span class="details-type">{{ page.file_type }}</span>
+          <span class="details-size">{{ formatFileSize(page.file_size) }}</span>
+          <span class="details-page-num">{{ page.page_number }}</span>
         </div>
       </div>
     </ng-container>
   </div>
 
-  <!-- Selection bar -->
-  <div class="selection-bar" *ngIf="selectedProject && selectedPages.size > 0">
+  <!-- Selection bar (always in DOM to avoid layout shift that breaks dblclick) -->
+  <div class="selection-bar" [class.visible]="selectedProject && selectedPages.size > 0">
     <span class="selection-count">{{ selectedPages.size }} selected</span>
     <span class="selection-hint">Ctrl+click to toggle, Shift+click for range</span>
     <span class="spacer"></span>
     <button mat-stroked-button (click)="selectAll()">
-      {{ selectedPages.size === selectedProject.pages.length ? 'Deselect All' : 'Select All' }}
+      {{ selectedPages.size === selectedProject?.pages?.length ? 'Deselect All' : 'Select All' }}
     </button>
     <button mat-flat-button color="primary" (click)="loadSelected()">
       Load {{ selectedPages.size }} Image{{ selectedPages.size > 1 ? 's' : '' }}

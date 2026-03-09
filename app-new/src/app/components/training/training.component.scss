@@ -320,9 +320,16 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  align-items: center;
 
   > * {
     min-width: 0;
+  }
+
+  .hint {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
   }
 
   @media (max-width: 1200px) {
@@ -451,10 +458,13 @@
 
   .progress-stats {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 16px;
     margin-bottom: 16px;
 
     .stat {
+      min-width: 70px;
+
       .label {
         display: block;
         font-size: 11px;
@@ -464,6 +474,53 @@
         font-weight: 500;
         color: #333;
       }
+    }
+  }
+
+  .best-performance {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #f9a825;
+    }
+
+    .best-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f57f17;
+    }
+
+    .best-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .best-detail {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .early-stopped-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 10px;
+      margin-left: auto;
     }
   }
 
@@ -560,5 +617,130 @@
     padding: 40px;
     text-align: center;
     color: #888;
+  }
+}
+
+// Terminal log viewer
+.terminal-logs {
+  margin-top: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #333;
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #1a1a1a;
+    color: #aaa;
+    font-size: 11px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  .terminal-body {
+    background: #0d0d0d;
+    padding: 8px 12px;
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    &::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 3px;
+    }
+  }
+
+  .terminal-line {
+    color: #4af626;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+}
+
+.metrics-section {
+  margin-top: 16px;
+
+  h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+  }
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.metric-item {
+  text-align: center;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+
+  .metric-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+  }
+}
+
+.selected-datasets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
+  margin-bottom: 16px;
+
+  .dataset-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px 4px 12px;
+    background: #e3f2fd;
+    border-radius: 16px;
+    font-size: 13px;
+    color: #1565c0;
+
+    .dataset-name {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .remove-btn {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      opacity: 0.6;
+      &:hover {
+        opacity: 1;
+      }
+    }
   }
 }

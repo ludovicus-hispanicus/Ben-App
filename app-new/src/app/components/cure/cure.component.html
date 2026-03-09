@@ -32,10 +32,8 @@
 
     <!-- LEFT SIDEBAR (single card) -->
     <div class="cure-sidebar">
-      <!-- Projects -->
-      <h3>Projects</h3>
       <div class="create-project-row">
-        <input [(ngModel)]="newProjectName" placeholder="New project..."
+        <input [(ngModel)]="newProjectName" placeholder="New dataset..."
                (keyup.enter)="createProject()" class="project-name-input" />
         <button mat-raised-button color="primary" (click)="createProject()"
                 [disabled]="!newProjectName.trim()">
@@ -58,9 +56,17 @@
         <span class="file-types">PDF, PNG, JPG</span>
       </div>
 
-      <button mat-stroked-button class="browse-server-btn" (click)="browseServer()">
-        <mat-icon>folder_open</mat-icon> Browse Server
-      </button>
+      <div class="sidebar-btn-row">
+        <button mat-stroked-button class="browse-server-btn" (click)="browseServer()">
+          <mat-icon>folder_open</mat-icon> Server
+        </button>
+        <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+                matTooltip="Upload a folder of images as a batch">
+          <mat-icon>snippet_folder</mat-icon> Folder
+        </button>
+        <input #uploadFolder (change)="handleFolderInput($event)" type="file"
+               webkitdirectory directory multiple style="display:none"/>
+      </div>
 
       <div class="sidebar-divider"></div>
 
@@ -102,21 +108,115 @@
     <div class="cure-main">
       <!-- Project cards view -->
       <div *ngIf="showProjectList" class="main-panel">
-        <div class="project-grid">
-          <div class="project-card" *ngFor="let project of projects" (click)="selectProject(project)">
-            <div class="project-actions">
-              <button mat-icon-button (click)="renameProject(project, $event)" matTooltip="Rename">
-                <mat-icon>edit</mat-icon>
-              </button>
-              <button mat-icon-button color="warn" (click)="deleteProject(project, $event)" matTooltip="Delete">
-                <mat-icon>delete</mat-icon>
-              </button>
-            </div>
+
+        <!-- Toolbar: search + count + view toggle -->
+        <div class="project-toolbar" *ngIf="projects.length > 0">
+          <div class="project-search-box">
+            <mat-icon class="search-icon">search</mat-icon>
+            <input [(ngModel)]="projectSearchQuery" placeholder="Search datasets..." class="project-search-input" />
+            <button *ngIf="projectSearchQuery" class="clear-search-btn" (click)="clearProjectSearch()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <span class="project-count">{{ filteredProjects.length }} datasets</span>
+          <span class="spacer"></span>
+          <div class="view-toggle">
+            <button [class.active-view]="projectViewMode === 'grid'" (click)="projectViewMode = 'grid'" matTooltip="Grid view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button [class.active-view]="projectViewMode === 'list'" (click)="projectViewMode = 'list'" matTooltip="List view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid view -->
+        <div class="project-grid" *ngIf="projects.length > 0 && projectViewMode === 'grid'">
+          <div *ngFor="let project of filteredProjects"
+               class="project-card"
+               [class.selected]="isProjectSelected(project)"
+               (click)="selectProjectCard(project, $event)"
+               (dblclick)="selectProject(project)"
+               (contextmenu)="onProjectContextMenu(project, $event)">
             <mat-icon class="project-icon">folder</mat-icon>
             <div class="project-info">
-              <span class="project-name">{{ project.name }}</span>
+              <span class="project-name" *ngIf="editingProject?.project_id !== project.project_id"
+                    (click)="onProjectNameClick(project, $event)">{{ project.name }}</span>
+              <input *ngIf="editingProject?.project_id === project.project_id"
+                     class="project-name-input-inline" [(ngModel)]="editingProjectName"
+                     (keydown.enter)="confirmProjectRename()" (keydown.escape)="cancelProjectRename()"
+                     (blur)="onProjectRenameBlur()" (click)="$event.stopPropagation()" #projectRenameInput>
+              <span class="project-meta">{{ project.text_count || 0 }} texts</span>
             </div>
           </div>
+        </div>
+
+        <!-- List view -->
+        <div class="project-details-list" *ngIf="projects.length > 0 && projectViewMode === 'list'">
+          <div class="project-details-header">
+            <span class="proj-col-icon"></span>
+            <span class="proj-col-name sortable" (click)="toggleProjectSort('name')"
+                  [class.active-sort]="projectSortColumn === 'name'">
+              Name
+              <mat-icon class="sort-arrow" *ngIf="projectSortColumn === 'name'">
+                {{ projectSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="proj-col-texts sortable" (click)="toggleProjectSort('texts')"
+                  [class.active-sort]="projectSortColumn === 'texts'">
+              Texts
+              <mat-icon class="sort-arrow" *ngIf="projectSortColumn === 'texts'">
+                {{ projectSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="proj-col-curated sortable" (click)="toggleProjectSort('curated')"
+                  [class.active-sort]="projectSortColumn === 'curated'">
+              Curated
+              <mat-icon class="sort-arrow" *ngIf="projectSortColumn === 'curated'">
+                {{ projectSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="proj-col-created sortable" (click)="toggleProjectSort('created')"
+                  [class.active-sort]="projectSortColumn === 'created'">
+              Created
+              <mat-icon class="sort-arrow" *ngIf="projectSortColumn === 'created'">
+                {{ projectSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+          </div>
+          <div *ngFor="let project of filteredProjects"
+               class="project-details-row"
+               [class.selected]="isProjectSelected(project)"
+               (click)="selectProjectCard(project, $event)"
+               (dblclick)="selectProject(project)"
+               (contextmenu)="onProjectContextMenu(project, $event)">
+            <span class="proj-col-icon">
+              <mat-icon class="project-icon">folder</mat-icon>
+            </span>
+            <span class="proj-col-name">
+              <span class="project-name" *ngIf="editingProject?.project_id !== project.project_id"
+                    (click)="onProjectNameClick(project, $event)">{{ project.name }}</span>
+              <input *ngIf="editingProject?.project_id === project.project_id"
+                     class="project-name-input-inline" [(ngModel)]="editingProjectName"
+                     (keydown.enter)="confirmProjectRename()" (keydown.escape)="cancelProjectRename()"
+                     (blur)="onProjectRenameBlur()" (click)="$event.stopPropagation()" #projectRenameInput>
+            </span>
+            <span class="proj-col-texts">{{ project.text_count || 0 }}</span>
+            <span class="proj-col-curated">
+              <ng-container *ngIf="project.curated_count > 0">
+                <mat-icon class="curated-icon">verified</mat-icon> {{ project.curated_count }}
+              </ng-container>
+              <span *ngIf="!project.curated_count">—</span>
+            </span>
+            <span class="proj-col-created">{{ formatProjectDate(project.created_at) }}</span>
+          </div>
+        </div>
+
+        <!-- Empty state: no search results -->
+        <div class="empty-list" *ngIf="projects.length > 0 && filteredProjects.length === 0">
+          <mat-icon>search_off</mat-icon>
+          <p>No matching datasets</p>
+          <span>Try a different search term</span>
         </div>
 
         <div class="empty-list" *ngIf="projects.length === 0">
@@ -142,32 +242,128 @@
           <span>Loading texts...</span>
         </div>
 
-        <!-- Text list -->
-        <div class="text-list" *ngIf="!isLoadingTexts && projectTexts.length > 0">
-          <div class="text-item" *ngFor="let item of projectTexts" (click)="openSavedResult(item)">
-            <div class="text-item-thumbnail">
+        <!-- Toolbar: count + search + view toggle (matches library layout) -->
+        <div class="folder-pages-header" *ngIf="!isLoadingTexts && projectTexts.length > 0">
+          <span class="pages-count">{{ projectTexts.length }} texts</span>
+
+          <div class="page-search-box">
+            <mat-icon class="page-search-icon">search</mat-icon>
+            <input [(ngModel)]="textSearchQuery" placeholder="Search texts..." class="page-search-input" />
+            <button *ngIf="textSearchQuery" mat-icon-button class="page-search-clear" (click)="clearTextSearch()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <span class="pages-filtered-count" *ngIf="textSearchQuery && filteredTexts.length !== projectTexts.length">
+            {{ filteredTexts.length }} match{{ filteredTexts.length === 1 ? '' : 'es' }}
+          </span>
+
+          <span class="header-spacer"></span>
+
+          <div class="view-toggle">
+            <button [class.active-view]="textViewMode === 'grid'" (click)="textViewMode = 'grid'" matTooltip="Grid view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button [class.active-view]="textViewMode === 'list'" (click)="textViewMode = 'list'" matTooltip="List view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid view -->
+        <div class="text-grid" *ngIf="!isLoadingTexts && projectTexts.length > 0 && textViewMode === 'grid'">
+          <div *ngFor="let item of filteredTexts"
+               class="text-grid-card"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openSavedResult(item)">
+            <div class="text-grid-thumbnail">
               <img *ngIf="item._thumbnailUrl" [src]="item._thumbnailUrl" alt="thumbnail" />
               <mat-icon *ngIf="!item._thumbnailUrl">image</mat-icon>
             </div>
-            <div class="text-item-info">
-              <div class="text-item-identifier">{{ getItemIdentifier(item) }}</div>
-              <div class="text-item-meta">
-                <span *ngIf="item.labels?.length > 0" class="text-item-label">{{ item.labels.join(', ') }}</span>
-                <span *ngIf="!item.labels?.length && item.label" class="text-item-label">{{ item.label }}</span>
-                <span *ngIf="item.part" class="text-item-part">{{ item.part }}</span>
-                <span class="text-item-id">BEN {{ item.text_id }}</span>
-                <span *ngIf="item.lines_count" class="text-item-lines">{{ item.lines_count }} lines</span>
-              </div>
+            <div class="text-grid-info">
+              <span class="text-grid-name">{{ getItemIdentifier(item) }}</span>
+              <span class="text-grid-meta">
+                <span *ngIf="item.labels?.length > 0">{{ item.labels[0] }}</span>
+                <span *ngIf="!item.labels?.length && item.label">{{ item.label }}</span>
+              </span>
             </div>
-            <div class="text-item-status">
-              <mat-icon *ngIf="item.is_curated_kraken" class="curated-icon" matTooltip="Curated">check_circle</mat-icon>
-            </div>
-            <div class="text-item-actions">
+            <mat-icon *ngIf="item.is_curated_kraken" class="text-grid-curated">check_circle</mat-icon>
+            <div class="text-grid-actions">
               <button mat-icon-button color="warn" (click)="deleteTextItem(item, $event)" matTooltip="Delete">
                 <mat-icon>delete</mat-icon>
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- List view (Explorer Details style — matches library) -->
+        <div class="details-list" *ngIf="!isLoadingTexts && projectTexts.length > 0 && textViewMode === 'list'">
+          <div class="details-header">
+            <span class="details-col-icon"></span>
+            <span class="details-col-name sortable" (click)="toggleTextSort('name')"
+                  [class.active-sort]="textSortColumn === 'name'">
+              Name
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'name'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-label sortable" (click)="toggleTextSort('label')"
+                  [class.active-sort]="textSortColumn === 'label'">
+              Label
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'label'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-id sortable" (click)="toggleTextSort('id')"
+                  [class.active-sort]="textSortColumn === 'id'">
+              BEN ID
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'id'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-lines sortable" (click)="toggleTextSort('lines')"
+                  [class.active-sort]="textSortColumn === 'lines'">
+              Lines
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'lines'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-status">Status</span>
+            <span class="details-col-actions"></span>
+          </div>
+          <div *ngFor="let item of filteredTexts"
+               class="details-row"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openSavedResult(item)">
+            <div class="details-icon">
+              <mat-icon>description</mat-icon>
+            </div>
+            <span class="details-name">{{ getItemIdentifier(item) }}</span>
+            <span class="details-label">
+              <span *ngIf="item.labels?.length > 0" class="label-tag">{{ item.labels.join(', ') }}</span>
+              <span *ngIf="!item.labels?.length && item.label" class="label-tag">{{ item.label }}</span>
+              <span *ngIf="item.part" class="part-tag">{{ item.part }}</span>
+              <span *ngIf="!item.labels?.length && !item.label">—</span>
+            </span>
+            <span class="details-id">{{ item.text_id }}</span>
+            <span class="details-lines">{{ item.lines_count || '—' }}</span>
+            <span class="details-status">
+              <mat-icon *ngIf="item.is_curated_kraken" class="curated-icon" matTooltip="Curated">check_circle</mat-icon>
+            </span>
+            <div class="details-actions">
+              <button mat-icon-button color="warn" (click)="deleteTextItem(item, $event)" matTooltip="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty search state -->
+        <div class="empty-list" *ngIf="!isLoadingTexts && projectTexts.length > 0 && filteredTexts.length === 0">
+          <mat-icon>search_off</mat-icon>
+          <p>No matching texts</p>
+          <span>Try a different search term</span>
         </div>
 
         <!-- Empty state -->
@@ -682,5 +878,16 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Context menu for project folders -->
+<div class="project-context-menu" *ngIf="projectContextMenuVisible"
+     [style.left.px]="projectContextMenuX" [style.top.px]="projectContextMenuY">
+  <div class="context-menu-item" (mousedown)="startProjectRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteProjectFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
   </div>
 </div>

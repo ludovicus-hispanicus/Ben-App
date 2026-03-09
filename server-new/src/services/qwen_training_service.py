@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Callable, Dict, Any
 
 from services.training_common import TrainingStatus, TrainingProgress
-from services.deepseek_ocr_service import OUTPUT_MODES, PROMPT_PLAIN_TEXT
+from services.ocr_prompts import OUTPUT_MODES, PROMPT_PLAIN_TEXT
 
 
 class QwenTrainingService:
@@ -26,10 +26,11 @@ class QwenTrainingService:
     PATIENCE = 3
 
     BASE_MODELS = {
-        "qwen3-vl-4b": {"hf_id": "Qwen/Qwen3-VL-4B", "name": "Qwen3-VL 4B"},
-        "qwen3-vl-8b": {"hf_id": "Qwen/Qwen3-VL-8B", "name": "Qwen3-VL 8B"},
+        "qwen3-vl-2b": {"hf_id": "Qwen/Qwen3-VL-2B-Instruct", "name": "Qwen3-VL 2B"},
+        "qwen3-vl-4b": {"hf_id": "Qwen/Qwen3-VL-4B-Instruct", "name": "Qwen3-VL 4B"},
+        "qwen3-vl-8b": {"hf_id": "Qwen/Qwen3-VL-8B-Instruct", "name": "Qwen3-VL 8B"},
     }
-    DEFAULT_BASE_MODEL = "qwen3-vl-4b"
+    DEFAULT_BASE_MODEL = "qwen3-vl-2b"
 
     def __init__(self):
         storage_path = os.environ.get("STORAGE_PATH", "data")
@@ -83,8 +84,8 @@ class QwenTrainingService:
     #  Training statistics
     # ------------------------------------------------------------------ #
 
-    def get_training_stats(self, texts_handler) -> dict:
-        curated_stats = texts_handler.get_curated_training_stats(target="vlm")
+    def get_training_stats(self, texts_handler, project_id: int = None, project_ids: list = None) -> dict:
+        curated_stats = texts_handler.get_curated_training_stats(target="vlm", project_id=project_id, project_ids=project_ids)
         total_lines = curated_stats.get("total_lines", 0)
         total_texts = curated_stats.get("curated_texts", 0)
 
@@ -122,8 +123,8 @@ class QwenTrainingService:
     #  Export training data
     # ------------------------------------------------------------------ #
 
-    def export_training_data(self, texts_handler, output_mode: str = "plain") -> dict:
-        logging.info(f"Exporting training data for Qwen fine-tuning (mode: {output_mode})...")
+    def export_training_data(self, texts_handler, output_mode: str = "plain", project_id: int = None, project_ids: list = None) -> dict:
+        logging.info(f"Exporting training data for Qwen fine-tuning (mode: {output_mode}, project_ids={project_ids or project_id})...")
 
         training_dir = Path(self.TRAINING_DATA_DIR)
         if training_dir.exists():
@@ -134,7 +135,7 @@ class QwenTrainingService:
         exported_items = []
         exported_text_ids = []
 
-        curated_data = texts_handler.get_curated_training_data_for("vlm")
+        curated_data = texts_handler.get_curated_training_data_for("vlm", project_id=project_id, project_ids=project_ids)
 
         for text_data in curated_data:
             text_id = text_data["text_id"]
@@ -219,6 +220,8 @@ class QwenTrainingService:
         device: str = "auto",
         patience: int = None,
         progress_callback: Optional[Callable] = None,
+        project_id: int = None,
+        project_ids: list = None,
     ) -> dict:
         try:
             if not base_model:
@@ -245,7 +248,7 @@ class QwenTrainingService:
             if progress_callback:
                 await progress_callback(self.progress)
 
-            export_result = self.export_training_data(texts_handler, output_mode)
+            export_result = self.export_training_data(texts_handler, output_mode, project_id=project_id, project_ids=project_ids)
 
             if export_result["exported_lines"] < self.MIN_LINES:
                 raise ValueError(
@@ -300,7 +303,7 @@ class QwenTrainingService:
     ) -> dict:
         import torch
         import torch.nn.functional as F
-        from transformers import AutoModelForCausalLM, AutoProcessor, BitsAndBytesConfig
+        from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
 
         try:
             from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
@@ -344,7 +347,7 @@ class QwenTrainingService:
         )
 
         # Load model
-        model = AutoModelForCausalLM.from_pretrained(
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
             hf_model_id,
             trust_remote_code=True,
             quantization_config=bnb_config,
@@ -461,6 +464,7 @@ class QwenTrainingService:
                 model, tokenizer, val_items, prompt_text, device
             )
             self.progress.val_accuracy = val_accuracy
+            self.progress.val_loss = val_loss
 
             # ETA
             elapsed = time.time() - epoch_start_time
@@ -663,6 +667,11 @@ class QwenTrainingService:
             with open(registry_path, "r") as f:
                 registry = json.load(f)
 
+        # Extract final val_loss from last epoch history entry
+        last_val_loss = None
+        if self.progress.epoch_history:
+            last_val_loss = self.progress.epoch_history[-1].get("val_loss")
+
         registry.append({
             "name": model_name,
             "path": adapter_path,
@@ -671,6 +680,10 @@ class QwenTrainingService:
             "base_model": base_model,
             "output_mode": output_mode,
             "best_loss": self.progress.best_loss,
+            "best_accuracy": self.progress.best_accuracy,
+            "final_accuracy": self.progress.accuracy,
+            "final_val_accuracy": self.progress.val_accuracy,
+            "final_val_loss": last_val_loss,
         })
 
         with open(registry_path, "w") as f:

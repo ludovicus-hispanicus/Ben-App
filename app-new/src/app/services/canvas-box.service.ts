@@ -15,6 +15,7 @@ export interface ZoomPanConfig {
   minZoom: number;
   maxZoom: number;
   onZoomChange?: (zoom: number) => void;
+  onPan?: () => void;
 }
 
 /**
@@ -136,6 +137,7 @@ export class CanvasBoxService {
           vpt[5] -= evt.deltaY;
         }
         canvas.setViewportTransform(vpt);
+        if (config.onPan) config.onPan();
       }
     });
   }

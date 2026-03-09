@@ -19,7 +19,7 @@ from starlette.responses import JSONResponse
 
 from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
-from api.routers import cured, about, yolo_training, production, ebl, projects, cure, pages
+from api.routers import cured, about, yolo_training, production, ebl, projects, cure, pages, batch_recognition, settings
 from api.routers import users, text
 from utils.storage_utils import StorageUtils
 
@@ -48,6 +48,8 @@ app.include_router(ebl.router)  # eBL (Electronic Babylonian Literature) Integra
 app.include_router(projects.router)
 app.include_router(cure.router)  # CuRe Sign Classifier (separate from CuReD)
 app.include_router(pages.router)  # Document Library - unified image browsing
+app.include_router(batch_recognition.router)  # Batch Recognition - bulk OCR processing
+app.include_router(settings.router)  # Application settings
 
 
 @app.exception_handler(RequestValidationError)
@@ -136,6 +138,9 @@ def startup_event():
                             debug_handler
                         ])
     init_the_db()
+
+    from common.app_settings import init_settings
+    init_settings()
 
     # Pre-load Nemotron local model if enabled (avoids ~30s delay on first OCR request)
     if os.environ.get("PRELOAD_NEMOTRON", "false").lower() == "true":

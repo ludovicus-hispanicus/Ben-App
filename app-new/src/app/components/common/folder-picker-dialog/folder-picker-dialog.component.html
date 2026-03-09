@@ -8,14 +8,14 @@
   <!-- Create new folder -->
   <div class="create-folder-row">
     <mat-form-field appearance="outline" class="folder-name-field">
-      <mat-label>New folder name</mat-label>
+      <mat-label>{{ selectedProjectId ? 'Subfolder in "' + getSelectedFolderName() + '"' : 'New folder name' }}</mat-label>
       <input matInput [(ngModel)]="newFolderName" (keyup.enter)="createFolder()"
              placeholder="Enter folder name...">
     </mat-form-field>
-    <button mat-raised-button color="primary" (click)="createFolder()"
+    <button mat-stroked-button color="primary" (click)="createFolder()"
             [disabled]="!newFolderName.trim() || isCreating">
       <mat-icon>create_new_folder</mat-icon>
-      Create & Save
+      Create
     </button>
     <mat-spinner *ngIf="isCreating" diameter="24"></mat-spinner>
   </div>
@@ -53,10 +53,12 @@
     </div>
   </div>
 
-  <!-- Confirm bar -->
+  <!-- Save bar -->
   <div class="confirm-bar" *ngIf="selectedProjectId">
+    <span class="selected-folder-name">{{ getSelectedFolderName() }}</span>
     <button mat-flat-button color="primary" (click)="confirm()">
-      Save to Selected Folder
+      <mat-icon>save</mat-icon>
+      Save
     </button>
   </div>
 </mat-dialog-content>

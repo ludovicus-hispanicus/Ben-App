@@ -56,6 +56,15 @@ class CuredHandler:
         # Get dimensions of the (possibly cropped) image for coordinate conversion
         image_width, image_height = CuredHandler._get_image_dimensions(image_base64)
 
+        # Apply global image scale reduction
+        from common.app_settings import get_image_scale
+        from utils.image_resize import resize_base64_image
+        scale = get_image_scale()
+        pre_scale_width, pre_scale_height = image_width, image_height
+        if scale < 1.0:
+            image_base64 = resize_base64_image(image_base64, scale)
+            image_width, image_height = CuredHandler._get_image_dimensions(image_base64)
+
         # Select correct client via Factory
         from clients.ocr_factory import OCRFactory
         
@@ -95,6 +104,20 @@ class CuredHandler:
 
         # Clean up newlines in text
         text_lines = [line.replace("\n", "") for line in text_lines]
+
+        # Apply post-OCR correction rules if specified
+        if dto.correctionRules == "akkadian":
+            from utils.akkadian_ocr_corrections import correct_lines
+            text_lines = correct_lines(text_lines)
+
+        # If image was scaled down, scale bounding box coordinates back up
+        if scale < 1.0 and boxes:
+            sx = pre_scale_width / image_width
+            sy = pre_scale_height / image_height
+            boxes = [
+                Dimensions(x=int(b.x * sx), y=int(b.y * sy), width=int(b.width * sx), height=int(b.height * sy))
+                for b in boxes
+            ]
 
         # If we cropped the image, adjust bounding box coordinates back to original image space
         if crop_offset_x > 0 or crop_offset_y > 0:

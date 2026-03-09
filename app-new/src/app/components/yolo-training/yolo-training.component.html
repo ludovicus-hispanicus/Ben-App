@@ -36,13 +36,14 @@
       <div class="datasets-sidebar">
 
         <!-- Create New Dataset -->
-        <mat-form-field appearance="outline">
-          <mat-label>New Dataset</mat-label>
-          <input matInput [(ngModel)]="newDatasetName" placeholder="e.g., ahw_layout">
-        </mat-form-field>
-        <button mat-raised-button color="primary" (click)="createDataset()" [disabled]="!newDatasetName">
-          <mat-icon>add</mat-icon> Create
-        </button>
+        <div class="create-dataset-row">
+          <input [(ngModel)]="newDatasetName" placeholder="New dataset..."
+                 (keyup.enter)="createDataset()" class="dataset-name-input" />
+          <button mat-raised-button color="primary" (click)="createDataset()"
+                  [disabled]="!newDatasetName.trim()">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
         <button mat-stroked-button color="accent" (click)="showAutoAnnotateForm()"
                 [disabled]="models.length === 0"
                 matTooltip="Create dataset from model predictions">
@@ -85,7 +86,7 @@
 
           <div class="models-group" *ngIf="baseModels.length > 0" style="margin-top: 8px">
             <div class="models-group-label">Base Models</div>
-            <div class="model-item" *ngFor="let base of baseModels">{{ base }}</div>
+            <div class="model-item" *ngFor="let base of baseModels">{{ getBaseModelLabel(base) }}</div>
           </div>
         </div>
       </div>
@@ -93,29 +94,119 @@
       <!-- Right: Dataset Folders OR Detail -->
       <div class="datasets-main">
 
-        <!-- ====== FOLDER GRID VIEW (no dataset selected) ====== -->
+        <!-- ====== FOLDER GRID/LIST VIEW (no dataset selected) ====== -->
         <ng-container *ngIf="!selectedDataset && !autoAnnotateFormVisible">
-          <div class="dataset-folder-grid" *ngIf="datasets.length > 0">
-            <div *ngFor="let dataset of datasets"
-                 class="dataset-folder-card"
-                 (click)="selectDataset(dataset)">
-              <button mat-icon-button color="warn" class="folder-card-delete"
-                      (click)="deleteDataset(dataset.dataset_id); $event.stopPropagation()"
-                      matTooltip="Delete dataset">
-                <mat-icon>delete</mat-icon>
+
+          <!-- Dataset toolbar: search + view toggle -->
+          <div class="dataset-toolbar" *ngIf="datasets.length > 0">
+            <div class="dataset-search-box">
+              <mat-icon class="dataset-search-icon">search</mat-icon>
+              <input [(ngModel)]="datasetSearchQuery"
+                     placeholder="Search datasets..."
+                     class="dataset-search-input">
+              <button *ngIf="datasetSearchQuery" mat-icon-button class="dataset-search-clear" (click)="clearDatasetSearch()">
+                <mat-icon>close</mat-icon>
               </button>
+            </div>
+            <span class="dataset-toolbar-count">{{ filteredDatasets.length }} dataset{{ filteredDatasets.length === 1 ? '' : 's' }}</span>
+            <span class="dataset-toolbar-spacer"></span>
+            <button mat-icon-button [class.active-view]="datasetViewMode === 'grid'" (click)="datasetViewMode = 'grid'" matTooltip="Grid view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button mat-icon-button [class.active-view]="datasetViewMode === 'list'" (click)="datasetViewMode = 'list'" matTooltip="List view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+          </div>
+
+          <!-- Grid view -->
+          <div class="dataset-folder-grid" *ngIf="filteredDatasets.length > 0 && datasetViewMode === 'grid'">
+            <div *ngFor="let dataset of filteredDatasets"
+                 class="dataset-folder-card"
+                 [class.selected]="isDatasetSelected(dataset)"
+                 (click)="selectDatasetCard(dataset, $event)"
+                 (dblclick)="selectDataset(dataset)"
+                 (contextmenu)="onDatasetContextMenu(dataset, $event)">
               <mat-icon class="folder-card-badge" *ngIf="dataset.curated">verified</mat-icon>
               <mat-icon class="folder-card-icon">folder</mat-icon>
               <div class="folder-card-info">
-                <span class="folder-card-name">{{ dataset.name }}</span>
+                <span class="folder-card-name" *ngIf="editingDataset?.dataset_id !== dataset.dataset_id"
+                      (click)="onDatasetNameClick(dataset, $event)">{{ dataset.name }}</span>
+                <input *ngIf="editingDataset?.dataset_id === dataset.dataset_id"
+                       class="folder-card-name-input" [(ngModel)]="editingDatasetName"
+                       (keydown.enter)="confirmDatasetRename()" (keydown.escape)="cancelDatasetRename()"
+                       (blur)="onDatasetRenameBlur()" (click)="$event.stopPropagation()" #datasetRenameInput>
                 <span class="folder-card-meta">{{ dataset.image_count }} images</span>
               </div>
+            </div>
+          </div>
+
+          <!-- List view -->
+          <div class="dataset-details-list" *ngIf="filteredDatasets.length > 0 && datasetViewMode === 'list'">
+            <div class="dataset-details-header">
+              <span class="ds-col-icon"></span>
+              <span class="ds-col-name sortable" [class.active-sort]="datasetSortColumn === 'name'" (click)="toggleDatasetSort('name')">
+                Name
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'name'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="ds-col-images sortable" [class.active-sort]="datasetSortColumn === 'images'" (click)="toggleDatasetSort('images')">
+                Images
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'images'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="ds-col-classes sortable" [class.active-sort]="datasetSortColumn === 'classes'" (click)="toggleDatasetSort('classes')">
+                Classes
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'classes'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="ds-col-created sortable" [class.active-sort]="datasetSortColumn === 'created'" (click)="toggleDatasetSort('created')">
+                Created
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'created'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="ds-col-updated sortable" [class.active-sort]="datasetSortColumn === 'updated'" (click)="toggleDatasetSort('updated')">
+                Updated
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'updated'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="ds-col-curated sortable" [class.active-sort]="datasetSortColumn === 'curated'" (click)="toggleDatasetSort('curated')">
+                Curated
+                <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'curated'">{{datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+            </div>
+            <div *ngFor="let dataset of filteredDatasets"
+                 class="dataset-details-row"
+                 [class.selected]="isDatasetSelected(dataset)"
+                 (click)="selectDatasetCard(dataset, $event)"
+                 (dblclick)="selectDataset(dataset)"
+                 (contextmenu)="onDatasetContextMenu(dataset, $event)">
+              <div class="ds-row-icon">
+                <mat-icon>folder</mat-icon>
+                <mat-icon class="ds-curated-badge" *ngIf="dataset.curated">verified</mat-icon>
+              </div>
+              <span class="ds-row-name">
+                <span *ngIf="editingDataset?.dataset_id !== dataset.dataset_id"
+                      (click)="onDatasetNameClick(dataset, $event)">{{ dataset.name }}</span>
+                <input *ngIf="editingDataset?.dataset_id === dataset.dataset_id"
+                       class="folder-card-name-input" [(ngModel)]="editingDatasetName"
+                       (keydown.enter)="confirmDatasetRename()" (keydown.escape)="cancelDatasetRename()"
+                       (blur)="onDatasetRenameBlur()" (click)="$event.stopPropagation()" #datasetRenameInput>
+              </span>
+              <span class="ds-row-images">{{ dataset.image_count }}</span>
+              <span class="ds-row-classes">{{ dataset.class_count }}</span>
+              <span class="ds-row-created">{{ dataset.created_at ? (dataset.created_at | date:'shortDate') : '—' }}</span>
+              <span class="ds-row-updated">{{ dataset.updated_at ? (dataset.updated_at | date:'shortDate') : '—' }}</span>
+              <span class="ds-row-curated">
+                <mat-icon class="curated-icon" *ngIf="dataset.curated">verified</mat-icon>
+                <span *ngIf="dataset.curated">{{ dataset.curated_count }}</span>
+                <span *ngIf="!dataset.curated">—</span>
+              </span>
             </div>
           </div>
 
           <div class="empty-state" *ngIf="datasets.length === 0">
             <mat-icon>folder_open</mat-icon>
             <p>No datasets yet. Create one using the form on the left.</p>
+          </div>
+
+          <div class="empty-state" *ngIf="datasets.length > 0 && filteredDatasets.length === 0">
+            <mat-icon>search_off</mat-icon>
+            <p>No datasets match "{{ datasetSearchQuery }}"</p>
           </div>
         </ng-container>
 
@@ -145,10 +236,17 @@
           <mat-form-field appearance="outline">
             <mat-label>Model</mat-label>
             <mat-select [(ngModel)]="autoAnnotateModel">
-              <mat-option *ngFor="let model of models" [value]="model.model_id">
-                {{ model.name }}
-                <span *ngIf="model.model_id === activeModelId"> (active)</span>
-              </mat-option>
+              <mat-optgroup label="Pre-trained Models" *ngIf="pretrainedBaseModels.length > 0">
+                <mat-option *ngFor="let base of pretrainedBaseModels" [value]="base">
+                  {{ getBaseModelLabel(base) }}
+                </mat-option>
+              </mat-optgroup>
+              <mat-optgroup label="Your Trained Models" *ngIf="models.length > 0">
+                <mat-option *ngFor="let model of models" [value]="model.model_id">
+                  {{ model.name }}
+                  <span *ngIf="model.model_id === activeModelId"> (active)</span>
+                </mat-option>
+              </mat-optgroup>
             </mat-select>
           </mat-form-field>
 
@@ -232,6 +330,9 @@
                 <div class="menu-section-label">Save to Server</div>
                 <button mat-menu-item (click)="saveSnippetsToLibrary()">
                   <mat-icon>library_add</mat-icon> Save Snippets to Library
+                </button>
+                <button mat-menu-item (click)="saveAhwEntriesToLibrary()">
+                  <mat-icon>merge_type</mat-icon> Save as AHw Entries (merged)
                 </button>
               </mat-menu>
               <button mat-icon-button [matMenuTriggerFor]="mergeMenu" matTooltip="Merge with other datasets"
@@ -440,15 +541,14 @@
         <mat-form-field appearance="outline">
           <mat-label>Base Model</mat-label>
           <mat-select [(ngModel)]="trainingBaseModel">
-            <mat-optgroup label="Pre-trained Models">
-              <mat-option value="yolov8n.pt">YOLOv8 Nano (fastest)</mat-option>
-              <mat-option value="yolov8s.pt">YOLOv8 Small (recommended)</mat-option>
-              <mat-option value="yolov8m.pt">YOLOv8 Medium</mat-option>
-              <mat-option value="yolov8l.pt">YOLOv8 Large</mat-option>
+            <mat-optgroup label="Pre-trained Models" *ngIf="pretrainedBaseModels.length > 0">
+              <mat-option *ngFor="let base of pretrainedBaseModels" [value]="base">
+                {{ getBaseModelLabel(base) }}
+              </mat-option>
             </mat-optgroup>
-            <mat-optgroup label="Your Trained Models" *ngIf="models.length > 0">
-              <mat-option *ngFor="let model of models" [value]="model.model_id + '/best.pt'">
-                {{ model.name }}
+            <mat-optgroup label="Your Trained Models" *ngIf="trainedBaseModels.length > 0">
+              <mat-option *ngFor="let base of trainedBaseModels" [value]="base">
+                {{ base }}
               </mat-option>
             </mat-optgroup>
           </mat-select>
@@ -720,10 +820,17 @@
             <mat-option value="default">
               Default ({{ activeModelId || 'latest' }})
             </mat-option>
-            <mat-option *ngFor="let model of models" [value]="model.model_id">
-              {{ model.name }}
-              <span *ngIf="model.model_id === activeModelId"> (active)</span>
-            </mat-option>
+            <mat-optgroup label="Pre-trained Models" *ngIf="pretrainedBaseModels.length > 0">
+              <mat-option *ngFor="let base of pretrainedBaseModels" [value]="base">
+                {{ getBaseModelLabel(base) }}
+              </mat-option>
+            </mat-optgroup>
+            <mat-optgroup label="Your Trained Models" *ngIf="models.length > 0">
+              <mat-option *ngFor="let model of models" [value]="model.model_id">
+                {{ model.name }}
+                <span *ngIf="model.model_id === activeModelId"> (active)</span>
+              </mat-option>
+            </mat-optgroup>
           </mat-select>
         </mat-form-field>
 
@@ -838,5 +945,16 @@
       (saved)="onAnnotationSaved()"
       (cancelled)="onAnnotationCancelled()">
     </app-annotation-canvas>
+  </div>
+</div>
+
+<!-- Context menu for dataset folders -->
+<div class="dataset-context-menu" *ngIf="datasetContextMenuVisible"
+     [style.left.px]="datasetContextMenuX" [style.top.px]="datasetContextMenuY">
+  <div class="context-menu-item" (mousedown)="startDatasetRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteDatasetFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
   </div>
 </div>

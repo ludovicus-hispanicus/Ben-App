@@ -11,10 +11,12 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { TrainingComponent } from './training.component';
 import { YoloTrainingModule } from '../yolo-training/yolo-training.module';
 import { PdfUploaderModule } from '../cure-d/cured.module';
 import { ProductionModule } from '../production/production.module';
+import { BatchRecognitionModule } from '../batch-recognition/batch-recognition.module';
 
 @NgModule({
   declarations: [
@@ -31,9 +33,11 @@ import { ProductionModule } from '../production/production.module';
     MatProgressSpinnerModule,
     MatProgressBarModule,
     MatTooltipModule,
+    MatCheckboxModule,
     YoloTrainingModule,
     PdfUploaderModule,
-    ProductionModule
+    ProductionModule,
+    BatchRecognitionModule
   ],
   exports: [
     TrainingComponent

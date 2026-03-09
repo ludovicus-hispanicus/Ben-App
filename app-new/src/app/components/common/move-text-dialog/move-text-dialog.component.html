@@ -1,0 +1,20 @@
+<h2 mat-dialog-title>Move to Project</h2>
+<mat-dialog-content>
+  <p>Select a destination project:</p>
+  <mat-form-field appearance="outline" style="width: 100%">
+    <mat-label>Project</mat-label>
+    <mat-select [(value)]="selectedProjectId">
+      <mat-option [value]="null">Unassigned</mat-option>
+      <mat-option *ngFor="let p of availableProjects" [value]="p.project_id">
+        {{ p.name }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+  <mat-checkbox *ngIf="hasMultipleSelected" [(ngModel)]="moveAll" style="margin-top: 8px;">
+    Move all {{ data.selectedCount }} selected entries
+  </mat-checkbox>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" (click)="onMove()">Move</button>
+</mat-dialog-actions>

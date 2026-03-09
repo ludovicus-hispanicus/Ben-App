@@ -27,6 +27,8 @@ class CureDGetTransliterationsDto(BaseModel):
     teiModel: Optional[str] = None       # e.g. "qwen3:8b", "gemini-2.0-flash", "claude-haiku-4-5-20251001"
     teiProvider: Optional[str] = None    # "ollama", "gemini", "openai", "anthropic"
     teiApiKey: Optional[str] = None      # API key for TEI encoding (if different from OCR provider)
+    # Post-OCR correction rules applied before returning text (e.g. "akkadian")
+    correctionRules: Optional[str] = None
 
 
 

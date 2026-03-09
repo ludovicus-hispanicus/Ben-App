@@ -1,10 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { Subject, interval } from 'rxjs';
 import { takeUntil, switchMap } from 'rxjs/operators';
 
 import { CuredService, TrainedModel, ActiveModelInfo } from '../../services/cured.service';
 import { YoloTrainingService } from '../../services/yolo-training.service';
 import { NotificationService } from '../../services/notification.service';
+import { ProjectService } from '../../services/project.service';
+import { ProjectPreview } from '../../models/cured';
 import {
   DatasetListItem,
   DatasetStats,
@@ -26,14 +28,15 @@ export enum TrainingTab {
 
 export enum TrainingEngine {
   Kraken = 'kraken',
-  DeepSeek = 'deepseek',
-  Qwen = 'qwen'
+  Qwen = 'qwen',
+  TrOCR = 'trocr'
 }
 
 export enum OcrViewMode {
   Datasets = 'datasets',
   Models = 'models',
   Training = 'training',
+  Batch = 'batch',
   Export = 'export'
 }
 
@@ -67,8 +70,11 @@ interface OcrModel {
   templateUrl: './training.component.html',
   styleUrls: ['./training.component.scss']
 })
-export class TrainingComponent implements OnInit, OnDestroy {
+export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   private destroy$ = new Subject<void>();
+
+  @ViewChild('krakenLogTerminal') krakenLogTerminal: ElementRef;
+  private shouldScrollLogs = true;
 
   // OCR View Mode (Datasets / Models / Training)
   ocrViewMode: OcrViewMode = OcrViewMode.Datasets;
@@ -87,6 +93,10 @@ export class TrainingComponent implements OnInit, OnDestroy {
   // Tab state (legacy)
   activeTab: TrainingTab = TrainingTab.CuReD;
   TrainingTab = TrainingTab;
+
+  // Dataset selector for training (multi-select)
+  trainingProjects: ProjectPreview[] = [];
+  selectedTrainingProjectIds: number[] = [];
 
   // ========== CuReD OCR Training ==========
   trainingStatus: TrainingStatus = {
@@ -118,7 +128,7 @@ export class TrainingComponent implements OnInit, OnDestroy {
   // Base model metadata (from training service)
   baseModelsMetadata: { [key: string]: any } = {};
 
-  // Training engine toggle (Kraken vs DeepSeek)
+  // Training engine toggle
   trainingEngine: TrainingEngine = TrainingEngine.Kraken;
   TrainingEngine = TrainingEngine;
 
@@ -129,32 +139,6 @@ export class TrainingComponent implements OnInit, OnDestroy {
   krakenModels: TrainedModel[] = [];
   krakenActiveModel: ActiveModelInfo | null = null;
   selectedKrakenModel: TrainedModel | null = null;
-  deepseekModels: TrainedModel[] = [];
-  deepseekActiveModel: ActiveModelInfo | null = null;
-  selectedDeepseekModel: TrainedModel | null = null;
-
-  // ========== DeepSeek QLoRA Training ==========
-  deepseekTrainingStatus: TrainingStatus = {
-    curatedTexts: 0,
-    previousLines: 0,
-    newLines: 0,
-    totalLines: 0,
-    requiredForNextTraining: 30,
-    progress: 0,
-    isReady: false,
-    lastTraining: null,
-    currentTraining: null
-  };
-  deepseekModelName = '';
-  deepseekOutputMode = 'plain';
-  deepseekOutputModes: { [key: string]: string } = {};
-  deepseekEpochs = 10;
-  deepseekPatience = 3;
-  deepseekDevice = 'auto';
-  isDeepSeekTraining = false;
-  deepseekTrainingProgress: any = null;
-  deepseekEpochHistory: any[] = [];
-
   // ========== Qwen QLoRA Training ==========
   qwenTrainingStatus: TrainingStatus = {
     curatedTexts: 0,
@@ -181,6 +165,27 @@ export class TrainingComponent implements OnInit, OnDestroy {
   isQwenTraining = false;
   qwenTrainingProgress: any = null;
   qwenEpochHistory: any[] = [];
+
+  // ========== TrOCR Training ==========
+  trocrTrainingStatus: TrainingStatus = {
+    curatedTexts: 0, previousLines: 0, newLines: 0, totalLines: 0,
+    requiredForNextTraining: 30, progress: 0, isReady: false,
+    lastTraining: null, currentTraining: null
+  };
+  trocrModels: TrainedModel[] = [];
+  trocrActiveModel: ActiveModelInfo | null = null;
+  selectedTrOCRModel: TrainedModel | null = null;
+  trocrModelName = '';
+  trocrBaseModels: { id: string; name: string; hf_id: string; params: string }[] = [];
+  trocrBaseModel = 'trocr-base-handwritten';
+  trocrEpochs = 30;
+  trocrPatience = 5;
+  trocrDevice = 'auto';
+  trocrLearningRate = 0.00005;
+  trocrFreezeEncoder = false;
+  isTrOCRTraining = false;
+  trocrTrainingProgress: any = null;
+  trocrEpochHistory: any[] = [];
 
   // ========== YOLO Training ==========
   yoloViewMode: YoloViewMode = YoloViewMode.Dashboard;
@@ -224,6 +229,7 @@ export class TrainingComponent implements OnInit, OnDestroy {
     private curedService: CuredService,
     private yoloService: YoloTrainingService,
     private notification: NotificationService,
+    private projectService: ProjectService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -235,20 +241,32 @@ export class TrainingComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadTrainingProjects();
     this.loadOcrTrainingStatus();
     this.loadAvailableModels();
     this.loadKrakenBaseModels();
-    this.loadDeepSeekTrainingStatus();
-    this.loadDeepSeekOutputModes();
     this.loadQwenTrainingStatus();
     this.loadQwenOutputModes();
     this.loadQwenBaseModels();
+    this.loadTrOCRTrainingStatus();
+    this.loadTrOCRBaseModels();
     this.loadOcrModels();
     this.checkYoloHealth();
     this.loadYoloDashboardData();
 
     // Poll for training status updates
     this.startTrainingStatusPolling();
+  }
+
+  ngAfterViewChecked(): void {
+    this.scrollLogTerminal();
+  }
+
+  private scrollLogTerminal(): void {
+    if (this.shouldScrollLogs && this.krakenLogTerminal) {
+      const el = this.krakenLogTerminal.nativeElement;
+      el.scrollTop = el.scrollHeight;
+    }
   }
 
   ngOnDestroy(): void {
@@ -263,8 +281,8 @@ export class TrainingComponent implements OnInit, OnDestroy {
       this.loadOcrModels();
     } else if (mode === OcrViewMode.Training) {
       this.loadOcrTrainingStatus();
-      this.loadDeepSeekTrainingStatus();
       this.loadQwenTrainingStatus();
+      this.loadTrOCRTrainingStatus();
     }
   }
 
@@ -285,20 +303,6 @@ export class TrainingComponent implements OnInit, OnDestroy {
       error: (err) => console.error('Failed to load Kraken active model', err)
     });
 
-    this.curedService.listDeepSeekModels().subscribe({
-      next: (response) => {
-        this.deepseekModels = response.models;
-      },
-      error: (err) => console.error('Failed to load DeepSeek models', err)
-    });
-
-    this.curedService.getDeepSeekActiveModel().subscribe({
-      next: (model) => {
-        this.deepseekActiveModel = model;
-      },
-      error: (err) => console.error('Failed to load DeepSeek active model', err)
-    });
-
     this.curedService.listQwenModels().subscribe({
       next: (response) => {
         this.qwenModels = response.models;
@@ -311,6 +315,20 @@ export class TrainingComponent implements OnInit, OnDestroy {
         this.qwenActiveModel = model;
       },
       error: (err) => console.error('Failed to load Qwen active model', err)
+    });
+
+    this.curedService.listTrOCRModels().subscribe({
+      next: (response) => {
+        this.trocrModels = response.models;
+      },
+      error: (err) => console.error('Failed to load TrOCR models', err)
+    });
+
+    this.curedService.getTrOCRActiveModel().subscribe({
+      next: (model) => {
+        this.trocrActiveModel = model;
+      },
+      error: (err) => console.error('Failed to load TrOCR active model', err)
     });
   }
 
@@ -338,30 +356,6 @@ export class TrainingComponent implements OnInit, OnDestroy {
     });
   }
 
-  activateDeepseekModel(modelName: string): void {
-    this.curedService.activateDeepSeekModel(modelName).subscribe({
-      next: () => {
-        this.notification.showSuccess(`DeepSeek model "${modelName}" activated`);
-        this.loadOcrModels();
-      },
-      error: (err) => this.notification.showError('Failed to activate model')
-    });
-  }
-
-  deleteDeepseekModel(modelName: string): void {
-    if (!confirm(`Are you sure you want to delete DeepSeek model "${modelName}"?`)) {
-      return;
-    }
-    this.curedService.deleteDeepSeekModel(modelName).subscribe({
-      next: () => {
-        this.notification.showSuccess(`Model "${modelName}" deleted`);
-        this.selectedDeepseekModel = null;
-        this.loadOcrModels();
-      },
-      error: (err) => this.notification.showError('Failed to delete model')
-    });
-  }
-
   activateQwenModel(modelName: string): void {
     this.curedService.activateQwenModel(modelName).subscribe({
       next: () => {
@@ -386,6 +380,30 @@ export class TrainingComponent implements OnInit, OnDestroy {
     });
   }
 
+  activateTrOCRModel(modelName: string): void {
+    this.curedService.activateTrOCRModel(modelName).subscribe({
+      next: () => {
+        this.notification.showSuccess(`TrOCR model "${modelName}" activated`);
+        this.loadOcrModels();
+      },
+      error: (err) => this.notification.showError('Failed to activate model')
+    });
+  }
+
+  deleteTrOCRModel(modelName: string): void {
+    if (!confirm(`Are you sure you want to delete TrOCR model "${modelName}"?`)) {
+      return;
+    }
+    this.curedService.deleteTrOCRModel(modelName).subscribe({
+      next: () => {
+        this.notification.showSuccess(`Model "${modelName}" deleted`);
+        this.selectedTrOCRModel = null;
+        this.loadOcrModels();
+      },
+      error: (err) => this.notification.showError('Failed to delete model')
+    });
+  }
+
   getTrainingStatusColor(status: string): string {
     switch (status) {
       case 'completed': return '#4caf50';
@@ -396,10 +414,49 @@ export class TrainingComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ========== Dataset (Project) Selection ==========
+
+  loadTrainingProjects(): void {
+    this.projectService.list().subscribe({
+      next: (projects) => {
+        this.trainingProjects = projects || [];
+      },
+      error: () => {}
+    });
+  }
+
+  onTrainingProjectChange(): void {
+    this.loadOcrTrainingStatus();
+    this.loadQwenTrainingStatus();
+    this.loadTrOCRTrainingStatus();
+  }
+
+  addTrainingProject(projectId: number): void {
+    if (projectId && !this.selectedTrainingProjectIds.includes(projectId)) {
+      this.selectedTrainingProjectIds = [...this.selectedTrainingProjectIds, projectId];
+      this.onTrainingProjectChange();
+    }
+  }
+
+  removeTrainingProject(projectId: number): void {
+    this.selectedTrainingProjectIds = this.selectedTrainingProjectIds.filter(id => id !== projectId);
+    this.onTrainingProjectChange();
+  }
+
+  getUnselectedProjects(): any[] {
+    return this.trainingProjects.filter(p => !this.selectedTrainingProjectIds.includes(p.project_id));
+  }
+
+  getProjectName(projectId: number): string {
+    const project = this.trainingProjects.find(p => p.project_id === projectId);
+    return project ? project.name : `Project ${projectId}`;
+  }
+
   // ========== CuReD OCR Training Methods ==========
 
   loadOcrTrainingStatus(): void {
-    this.curedService.getKrakenTrainingStatus().subscribe({
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
+    this.curedService.getKrakenTrainingStatus(pids).subscribe({
       next: (status) => {
         this.trainingStatus = status;
         if (status.currentTraining) {
@@ -439,75 +496,72 @@ export class TrainingComponent implements OnInit, OnDestroy {
     });
   }
 
+  private krakenPollStop$ = new Subject<void>();
+  private qwenPollStop$ = new Subject<void>();
+
   startTrainingStatusPolling(): void {
-    // Poll Kraken training progress
+    // Do a one-time check for each provider; only start polling if training is active
+    this.curedService.getKrakenTrainingProgress().subscribe(p => this.handleKrakenProgress(p, true));
+    this.curedService.getQwenTrainingProgress().subscribe(p => this.handleQwenProgress(p, true));
+    this.curedService.getTrOCRTrainingProgress().subscribe(p => this.handleTrOCRProgress(p, true));
+  }
+
+  startKrakenPolling(): void {
+    this.krakenPollStop$.next();
     interval(5000)
       .pipe(
         takeUntil(this.destroy$),
+        takeUntil(this.krakenPollStop$),
         switchMap(() => this.curedService.getKrakenTrainingProgress())
       )
-      .subscribe({
-        next: (progress) => {
-          if (progress && progress.status !== 'idle') {
-            this.ocrTrainingProgress = progress;
-            this.isOcrTraining = progress.status === 'training' || progress.status === 'preparing';
-            if (progress.epoch_history) {
-              this.epochHistory = progress.epoch_history;
-            }
-            if (progress.status === 'completed' || progress.status === 'failed') {
-              this.loadOcrTrainingStatus();
-            }
-          } else {
-            this.isOcrTraining = false;
-          }
-        }
-      });
+      .subscribe({ next: (p) => this.handleKrakenProgress(p, false) });
+  }
 
-    // Poll DeepSeek training progress
+  private handleKrakenProgress(progress: any, initialCheck: boolean): void {
+    if (progress && progress.status !== 'idle') {
+      this.ocrTrainingProgress = progress;
+      this.isOcrTraining = progress.status === 'training' || progress.status === 'preparing';
+      if (progress.epoch_history) {
+        this.epochHistory = progress.epoch_history;
+      }
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.krakenPollStop$.next();
+        this.loadOcrTrainingStatus();
+      } else if (initialCheck) {
+        this.startKrakenPolling();
+      }
+    } else {
+      this.isOcrTraining = false;
+    }
+  }
+
+  startQwenPolling(): void {
+    this.qwenPollStop$.next();
     interval(5000)
       .pipe(
         takeUntil(this.destroy$),
-        switchMap(() => this.curedService.getDeepSeekTrainingProgress())
-      )
-      .subscribe({
-        next: (progress) => {
-          if (progress && progress.status !== 'idle') {
-            this.deepseekTrainingProgress = progress;
-            this.isDeepSeekTraining = progress.status === 'training' || progress.status === 'preparing';
-            if (progress.epoch_history) {
-              this.deepseekEpochHistory = progress.epoch_history;
-            }
-            if (progress.status === 'completed' || progress.status === 'failed') {
-              this.loadDeepSeekTrainingStatus();
-            }
-          } else {
-            this.isDeepSeekTraining = false;
-          }
-        }
-      });
-
-    // Poll Qwen training progress
-    interval(5000)
-      .pipe(
-        takeUntil(this.destroy$),
+        takeUntil(this.qwenPollStop$),
         switchMap(() => this.curedService.getQwenTrainingProgress())
       )
-      .subscribe({
-        next: (progress) => {
-          if (progress && progress.status !== 'idle') {
-            this.qwenTrainingProgress = progress;
-            this.isQwenTraining = progress.status === 'training' || progress.status === 'preparing';
-            if (progress.epoch_history) {
-              this.qwenEpochHistory = progress.epoch_history;
-            }
-            if (progress.status === 'completed' || progress.status === 'failed') {
-              this.loadQwenTrainingStatus();
-            }
-          } else {
-            this.isQwenTraining = false;
-          }
-        }
-      });
+      .subscribe({ next: (p) => this.handleQwenProgress(p, false) });
+  }
+
+  private handleQwenProgress(progress: any, initialCheck: boolean): void {
+    if (progress && progress.status !== 'idle') {
+      this.qwenTrainingProgress = progress;
+      this.isQwenTraining = progress.status === 'training' || progress.status === 'preparing';
+      if (progress.epoch_history) {
+        this.qwenEpochHistory = progress.epoch_history;
+      }
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.qwenPollStop$.next();
+        this.loadQwenTrainingStatus();
+      } else if (initialCheck) {
+        this.startQwenPolling();
+      }
+    } else {
+      this.isQwenTraining = false;
+    }
   }
 
   startOcrTraining(): void {
@@ -520,10 +574,12 @@ export class TrainingComponent implements OnInit, OnDestroy {
     this.epochHistory = [];
 
     const baseModel = this.selectedBaseModel === 'from_scratch' ? null : this.selectedBaseModel;
-    this.curedService.startKrakenTraining(this.krakenEpochs, this.trainingModelName.trim(), baseModel, this.krakenBatchSize, this.krakenDevice, this.krakenPatience).subscribe({
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
+    this.curedService.startKrakenTraining(this.krakenEpochs, this.trainingModelName.trim(), baseModel, this.krakenBatchSize, this.krakenDevice, this.krakenPatience, pids).subscribe({
       next: (response) => {
         this.notification.showSuccess('Kraken training started');
         this.trainingRightTab = 'progress';
+        this.startKrakenPolling();
         this.loadOcrTrainingStatus();
       },
       error: (err) => {
@@ -546,100 +602,22 @@ export class TrainingComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ========== DeepSeek QLoRA Training Methods ==========
-
   setTrainingEngine(engine: TrainingEngine): void {
     this.trainingEngine = engine;
-    if (engine === TrainingEngine.DeepSeek) {
-      this.loadDeepSeekTrainingStatus();
-    } else if (engine === TrainingEngine.Qwen) {
+    if (engine === TrainingEngine.Qwen) {
       this.loadQwenTrainingStatus();
+    } else if (engine === TrainingEngine.TrOCR) {
+      this.loadTrOCRTrainingStatus();
     } else {
       this.loadOcrTrainingStatus();
     }
   }
 
-  loadDeepSeekTrainingStatus(): void {
-    this.curedService.getDeepSeekTrainingStatus().subscribe({
-      next: (status) => {
-        this.deepseekTrainingStatus = status;
-        if (status.currentTraining) {
-          this.deepseekTrainingProgress = status.currentTraining;
-          this.isDeepSeekTraining = status.currentTraining.status === 'training' ||
-                                     status.currentTraining.status === 'preparing';
-          if (status.currentTraining.epoch_history) {
-            this.deepseekEpochHistory = status.currentTraining.epoch_history;
-          }
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load DeepSeek training status', err);
-      }
-    });
-  }
-
-  loadDeepSeekOutputModes(): void {
-    this.curedService.getDeepSeekOutputModes().subscribe({
-      next: (response) => {
-        this.deepseekOutputModes = response.modes;
-      },
-      error: (err) => {
-        console.error('Failed to load DeepSeek output modes', err);
-        // Provide defaults
-        this.deepseekOutputModes = {
-          plain: 'Plain text transcription',
-          tei_lex0: 'TEI Lex-0 XML for dictionaries',
-          tei_epidoc: 'TEI EpiDoc XML for cuneiform texts',
-        };
-      }
-    });
-  }
-
-  startDeepSeekTraining(): void {
-    if (!this.deepseekModelName?.trim()) {
-      this.notification.showWarning('Please enter a model name');
-      return;
-    }
-
-    this.isDeepSeekTraining = true;
-    this.deepseekEpochHistory = [];
-
-    this.curedService.startDeepSeekTraining(
-      this.deepseekEpochs,
-      this.deepseekModelName.trim(),
-      this.deepseekOutputMode,
-      this.deepseekDevice,
-      this.deepseekPatience
-    ).subscribe({
-      next: (response) => {
-        this.notification.showSuccess('DeepSeek QLoRA training started');
-        this.trainingRightTab = 'progress';
-        this.loadDeepSeekTrainingStatus();
-      },
-      error: (err) => {
-        this.notification.showError('Failed to start training: ' + (err.error?.detail || err.message));
-        this.isDeepSeekTraining = false;
-      }
-    });
-  }
-
-  cancelDeepSeekTraining(): void {
-    this.curedService.cancelDeepSeekTraining().subscribe({
-      next: () => {
-        this.notification.showSuccess('Training cancelled');
-        this.isDeepSeekTraining = false;
-        this.loadDeepSeekTrainingStatus();
-      },
-      error: (err) => {
-        this.notification.showError('Failed to cancel training');
-      }
-    });
-  }
-
   // ========== Qwen QLoRA Training Methods ==========
 
   loadQwenTrainingStatus(): void {
-    this.curedService.getQwenTrainingStatus().subscribe({
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
+    this.curedService.getQwenTrainingStatus(pids).subscribe({
       next: (status) => {
         this.qwenTrainingStatus = status;
         if (status.currentTraining) {
@@ -700,17 +678,20 @@ export class TrainingComponent implements OnInit, OnDestroy {
     this.isQwenTraining = true;
     this.qwenEpochHistory = [];
 
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
     this.curedService.startQwenTraining(
       this.qwenEpochs,
       this.qwenModelName.trim(),
       this.qwenBaseModel,
       this.qwenOutputMode,
       this.qwenDevice,
-      this.qwenPatience
+      this.qwenPatience,
+      pids
     ).subscribe({
       next: (response) => {
         this.notification.showSuccess('Qwen QLoRA training started');
         this.trainingRightTab = 'progress';
+        this.startQwenPolling();
         this.loadQwenTrainingStatus();
       },
       error: (err) => {
@@ -730,6 +711,119 @@ export class TrainingComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.notification.showError('Failed to cancel training');
       }
+    });
+  }
+
+  // ========== TrOCR Training Methods ==========
+
+  private trocrPollStop$ = new Subject<void>();
+
+  loadTrOCRTrainingStatus(): void {
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
+    this.curedService.getTrOCRTrainingStatus(pids).subscribe({
+      next: (status) => {
+        this.trocrTrainingStatus = status;
+        if (status.currentTraining) {
+          this.trocrTrainingProgress = status.currentTraining;
+          this.isTrOCRTraining = status.currentTraining.status === 'training' ||
+                                  status.currentTraining.status === 'preparing';
+          if (status.currentTraining.epoch_history) {
+            this.trocrEpochHistory = status.currentTraining.epoch_history;
+          }
+        }
+      },
+      error: (err) => console.error('Failed to load TrOCR training status', err)
+    });
+  }
+
+  loadTrOCRBaseModels(): void {
+    this.curedService.getTrOCRBaseModels().subscribe({
+      next: (response) => {
+        this.trocrBaseModels = response.models;
+        if (response.models.length > 0 && !this.trocrBaseModel) {
+          this.trocrBaseModel = response.models[0].id;
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load TrOCR base models', err);
+        this.trocrBaseModels = [
+          { id: 'trocr-base-handwritten', name: 'TrOCR Base Handwritten', hf_id: 'microsoft/trocr-base-handwritten', params: '~334M' },
+          { id: 'trocr-small-handwritten', name: 'TrOCR Small Handwritten', hf_id: 'microsoft/trocr-small-handwritten', params: '~62M' },
+        ];
+      }
+    });
+  }
+
+  startTrOCRPolling(): void {
+    this.trocrPollStop$.next();
+    interval(5000)
+      .pipe(
+        takeUntil(this.destroy$),
+        takeUntil(this.trocrPollStop$),
+        switchMap(() => this.curedService.getTrOCRTrainingProgress())
+      )
+      .subscribe({ next: (p) => this.handleTrOCRProgress(p, false) });
+  }
+
+  private handleTrOCRProgress(progress: any, initialCheck: boolean): void {
+    if (progress && progress.status !== 'idle') {
+      this.trocrTrainingProgress = progress;
+      this.isTrOCRTraining = progress.status === 'training' || progress.status === 'preparing';
+      if (progress.epoch_history) {
+        this.trocrEpochHistory = progress.epoch_history;
+      }
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.trocrPollStop$.next();
+        this.loadTrOCRTrainingStatus();
+      } else if (initialCheck) {
+        this.startTrOCRPolling();
+      }
+    } else {
+      this.isTrOCRTraining = false;
+    }
+  }
+
+  startTrOCRTraining(): void {
+    if (!this.trocrModelName?.trim()) {
+      this.notification.showWarning('Please enter a model name');
+      return;
+    }
+
+    this.isTrOCRTraining = true;
+    this.trocrEpochHistory = [];
+
+    const pids = this.selectedTrainingProjectIds.length > 0 ? this.selectedTrainingProjectIds : undefined;
+    this.curedService.startTrOCRTraining(
+      this.trocrEpochs,
+      this.trocrModelName.trim(),
+      this.trocrBaseModel,
+      this.trocrDevice,
+      this.trocrPatience,
+      this.trocrLearningRate,
+      this.trocrFreezeEncoder,
+      pids
+    ).subscribe({
+      next: (response) => {
+        this.notification.showSuccess('TrOCR training started');
+        this.trainingRightTab = 'progress';
+        this.startTrOCRPolling();
+        this.loadTrOCRTrainingStatus();
+      },
+      error: (err) => {
+        this.notification.showError('Failed to start training: ' + (err.error?.detail || err.message));
+        this.isTrOCRTraining = false;
+      }
+    });
+  }
+
+  cancelTrOCRTraining(): void {
+    this.curedService.cancelTrOCRTraining().subscribe({
+      next: () => {
+        this.notification.showSuccess('TrOCR training cancelled');
+        this.isTrOCRTraining = false;
+        this.loadTrOCRTrainingStatus();
+      },
+      error: (err) => this.notification.showError('Failed to cancel training')
     });
   }
 

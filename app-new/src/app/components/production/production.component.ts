@@ -2140,7 +2140,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     browseServerImages(): void {
         const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-            width: '850px', height: '600px'
+            width: '1000px', height: '720px'
         });
         dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
             if (!result || result.length === 0) return;

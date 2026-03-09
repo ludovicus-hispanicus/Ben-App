@@ -122,6 +122,20 @@ async def add_classes_to_dataset(request: Request, dataset_name: str, body: dict
     return result
 
 
+@router.delete("/datasets/{dataset_name}/classes/{class_id}")
+async def delete_class_from_dataset(request: Request, dataset_name: str, class_id: int):
+    """
+    Delete a class from a dataset. Removes all annotations with that class
+    and re-indexes remaining classes.
+    """
+    result = yolo_training_handler.delete_class_from_dataset(dataset_name, class_id)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+
+    return result
+
+
 @router.put("/datasets/{dataset_name}/classes/{class_id}/color")
 async def update_class_color(request: Request, dataset_name: str, class_id: int, body: dict):
     """
@@ -385,6 +399,31 @@ async def save_snippets_to_library(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Save to library failed: {str(e)}")
+
+    return result
+
+
+@router.post("/datasets/{dataset_name}/save-ahw-entries")
+async def save_ahw_entries_to_library(
+    dataset_name: str,
+    project_id: str = None,
+    project_name: str = None,
+):
+    """
+    Save merged AHw dictionary entries to the Pages library.
+
+    Groups mainEntry + partEntry annotations per page and merges them vertically
+    into single images per dictionary entry. Other classes saved individually.
+    """
+    try:
+        result = await asyncio.to_thread(
+            yolo_training_handler.save_ahw_entries_to_library,
+            dataset_name, project_id, project_name
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Save AHw entries failed: {str(e)}")
 
     return result
 

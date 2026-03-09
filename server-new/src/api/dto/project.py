@@ -16,6 +16,10 @@ class MoveProjectDto(BaseModel):
     parent_id: Optional[int] = None
 
 
+class AssignTextDto(BaseModel):
+    project_id: Optional[int] = None
+
+
 class ProjectPreviewDto(BaseModel):
     project_id: int
     name: str
@@ -23,6 +27,7 @@ class ProjectPreviewDto(BaseModel):
     parent_id: Optional[int] = None
     text_count: int = 0
     curated_count: int = 0
+    curated_lines: int = 0
     children_count: int = 0
 
 

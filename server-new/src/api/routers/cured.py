@@ -3,9 +3,10 @@
 from api.dto.get_predictions import CureDGetTransliterationsDto
 from pydantic import BaseModel
 
-from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks, Request, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, File, UploadFile, Form, BackgroundTasks, Request, HTTPException, Query
 
-from api.dto.submissions import TransliterationSubmitDto, CuredSubmissionDto, CuredTransliterationData
+from api.dto.submissions import TransliterationSubmitDto, CuredSubmissionDto, CuredTransliterationData, BatchCurateDto
 from entities.new_text import TransliterationSource
 from common.global_handlers import global_new_text_handler
 from handlers.cured_handler import CuredHandler
@@ -371,19 +372,38 @@ async def pull_ollama_model_stream(model_name: str):
 @router.get("/ollama/prompts")
 async def get_ollama_prompts():
     """Get available OCR prompts."""
-    from services.ollama_ocr_service import PROMPTS
+    from common.ocr_prompts import PROMPTS, BUILTIN_PROMPT_KEYS
     return {
         "prompts": [
-            {"key": key, "value": value}
+            {"key": key, "value": value, "builtin": key in BUILTIN_PROMPT_KEYS}
             for key, value in PROMPTS.items()
         ]
     }
 
 
+@router.post("/ollama/prompts")
+async def create_ollama_prompt(body: dict):
+    """Create a new custom OCR prompt."""
+    from common.ocr_prompts import PROMPTS
+
+    key = body.get("key", "").strip().lower().replace(" ", "_")
+    value = body.get("value", "").strip()
+
+    if not key:
+        raise HTTPException(status_code=400, detail="Prompt key is required")
+    if not value:
+        raise HTTPException(status_code=400, detail="Prompt value is required")
+    if key in PROMPTS:
+        raise HTTPException(status_code=409, detail=f"Prompt '{key}' already exists")
+
+    PROMPTS[key] = value
+    return {"message": f"Prompt '{key}' created", "key": key, "value": value}
+
+
 @router.put("/ollama/prompts/{prompt_key}")
 async def update_ollama_prompt(prompt_key: str, body: dict):
     """Update an OCR prompt."""
-    from services.ollama_ocr_service import PROMPTS
+    from common.ocr_prompts import PROMPTS
     if prompt_key not in PROMPTS:
         raise HTTPException(status_code=404, detail=f"Prompt '{prompt_key}' not found")
 
@@ -395,17 +415,31 @@ async def update_ollama_prompt(prompt_key: str, body: dict):
     return {"message": f"Prompt '{prompt_key}' updated", "key": prompt_key, "value": new_value}
 
 
+@router.delete("/ollama/prompts/{prompt_key}")
+async def delete_ollama_prompt(prompt_key: str):
+    """Delete a custom OCR prompt (built-in prompts cannot be deleted)."""
+    from common.ocr_prompts import PROMPTS, BUILTIN_PROMPT_KEYS
+
+    if prompt_key not in PROMPTS:
+        raise HTTPException(status_code=404, detail=f"Prompt '{prompt_key}' not found")
+    if prompt_key in BUILTIN_PROMPT_KEYS:
+        raise HTTPException(status_code=403, detail=f"Cannot delete built-in prompt '{prompt_key}'")
+
+    del PROMPTS[prompt_key]
+    return {"message": f"Prompt '{prompt_key}' deleted", "key": prompt_key}
+
+
 @router.get("/ollama/default-prompt")
 async def get_default_prompt():
     """Get the default OCR prompt key."""
-    from services.ollama_ocr_service import get_default_prompt
-    return {"default_prompt": get_default_prompt()}
+    from common.ocr_prompts import get_default_prompt as _get_default
+    return {"default_prompt": _get_default()}
 
 
 @router.put("/ollama/default-prompt")
 async def set_default_prompt(body: dict):
     """Set the default OCR prompt key."""
-    from services.ollama_ocr_service import PROMPTS, set_default_prompt
+    from common.ocr_prompts import PROMPTS, set_default_prompt
 
     prompt_key = body.get("prompt_key")
     if not prompt_key:
@@ -418,12 +452,26 @@ async def set_default_prompt(body: dict):
     return {"message": f"Default prompt set to '{prompt_key}'", "default_prompt": prompt_key}
 
 
+@router.patch("/batch-curate")
+async def batch_curate(request: Request, dto: BatchCurateDto):
+    """Set or unset curation flags on multiple texts at once."""
+    user_id = getattr(request.state, 'user_id', 'admin')
+    result = global_new_text_handler.batch_curate(
+        text_ids=dto.text_ids,
+        curate=dto.curate,
+        target=dto.target,
+        user_id=user_id
+    )
+    return result
+
+
 @router.get("/training/curated-stats")
-async def get_curated_stats():
-    """Get curated data stats broken down by target (kraken vs vlm) plus totals."""
-    all_stats = global_new_text_handler.get_curated_training_stats(target=None)
-    kraken_stats = global_new_text_handler.get_curated_training_stats(target="kraken")
-    vlm_stats = global_new_text_handler.get_curated_training_stats(target="vlm")
+async def get_curated_stats(project_id: int = None):
+    """Get curated data stats broken down by target (kraken vs vlm) plus totals.
+    Optionally filtered by project_id."""
+    all_stats = global_new_text_handler.get_curated_training_stats(target=None, project_id=project_id)
+    kraken_stats = global_new_text_handler.get_curated_training_stats(target="kraken", project_id=project_id)
+    vlm_stats = global_new_text_handler.get_curated_training_stats(target="vlm", project_id=project_id)
 
     return {
         "total": {
@@ -458,7 +506,7 @@ async def get_training_status():
     required_for_training = 50  # LoRA is more data-efficient
 
     # Progress: use total_lines before first training, new_lines after
-    lines_for_progress = new_lines if last_training else total_lines
+    lines_for_progress = total_lines
     progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
 
     # Include current training status if training is in progress
@@ -497,7 +545,7 @@ async def start_training(background_tasks: BackgroundTasks, epochs: int = 3, mod
     last_training = stats.get("last_training")
 
     # Use new_lines after first training, total_lines before
-    lines_for_training = new_lines if last_training else total_lines
+    lines_for_training = total_lines
     min_required = 50  # LoRA is more data-efficient
 
     if lines_for_training < min_required:
@@ -620,19 +668,6 @@ async def get_available_models():
     except Exception as e:
         logging.warning(f"Could not load Nemotron adapters: {e}")
 
-    # Add DeepSeek LoRA adapters
-    try:
-        from services.deepseek_training_service import deepseek_training_service
-        ds_adapters = deepseek_training_service.get_adapters()
-        for adapter in ds_adapters:
-            mode = adapter.get("output_mode", "plain")
-            models.append({
-                "value": f"deepseek_lora:{adapter['name']}",
-                "label": f"{adapter['name']} (DeepSeek QLoRA, {mode})"
-            })
-    except Exception as e:
-        logging.warning(f"Could not load DeepSeek adapters: {e}")
-
     # Add Qwen LoRA adapters
     try:
         from services.qwen_training_service import qwen_training_service
@@ -659,6 +694,19 @@ async def get_available_models():
     except Exception as e:
         logging.warning(f"Could not load CuRe models: {e}")
 
+    # Add TrOCR fine-tuned models
+    try:
+        from services.trocr_training_service import trocr_training_service
+        trocr_models = trocr_training_service.get_models()
+        for tm in trocr_models:
+            base = tm.get("base_model", "trocr")
+            models.append({
+                "value": f"trocr:{tm['name']}",
+                "label": f"{tm['name']} (TrOCR, {base})"
+            })
+    except Exception as e:
+        logging.warning(f"Could not load TrOCR models: {e}")
+
     return {"models": models}
 
 
@@ -667,12 +715,15 @@ async def get_available_models():
 # ==========================================
 
 @router.get("/training/kraken/status")
-async def get_kraken_training_status():
+async def get_kraken_training_status(project_id: int = None, project_ids: Optional[List[int]] = Query(None)):
     """Get the current training data status for Kraken OCR fine-tuning."""
     from services.kraken_training_service import kraken_training_service, TrainingStatus
 
+    # Normalise: single project_id → list for consistency
+    pids = project_ids or ([project_id] if project_id is not None else None)
+
     # Get stats with previous/new breakdown
-    stats = kraken_training_service.get_training_stats(global_new_text_handler)
+    stats = kraken_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
     logging.info(f"Kraken training stats: {stats}")
 
     previous_lines = stats.get("previous_lines", 0)
@@ -683,7 +734,7 @@ async def get_kraken_training_status():
     required_for_training = kraken_training_service.MIN_LINES_FINETUNE
 
     # Progress: use total_lines before first training, new_lines after
-    lines_for_progress = new_lines if last_training else total_lines
+    lines_for_progress = total_lines
     progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
 
     # Include current training status if training is in progress
@@ -705,24 +756,34 @@ async def get_kraken_training_status():
 
 
 @router.post("/training/kraken/start")
-async def start_kraken_training(background_tasks: BackgroundTasks, epochs: int = 500, model_name: str = None, base_model: str = None, batch_size: int = 1, device: str = "auto", patience: int = 10):
-    """Start Kraken OCR training."""
+async def start_kraken_training(epochs: int = 500, model_name: str = None, base_model: str = None, batch_size: int = 1, device: str = "auto", patience: int = 10, project_id: int = None, project_ids: Optional[List[int]] = Query(None)):
+    """Start Kraken OCR training, optionally scoped to one or more projects."""
     from services.kraken_training_service import kraken_training_service, TrainingStatus
     import asyncio
+
+    # Normalise: single project_id → list for consistency
+    pids = project_ids or ([project_id] if project_id is not None else None)
 
     # Check if already training
     if kraken_training_service.progress.status == TrainingStatus.TRAINING:
         raise HTTPException(status_code=409, detail="Training already in progress")
 
+    # Check GPU availability (Kraken can use GPU when device != cpu)
+    if device != "cpu":
+        from services.gpu_lock import acquire as gpu_acquire
+        ok, owner = gpu_acquire("kraken_training")
+        if not ok:
+            raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
+
     # Validate training data
-    stats = kraken_training_service.get_training_stats(global_new_text_handler)
+    stats = kraken_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
     previous_lines = stats.get("previous_lines", 0)
     new_lines = stats.get("new_lines", 0)
     total_lines = stats.get("total_lines", 0)
     last_training = stats.get("last_training")
 
     # Use new_lines after first training, total_lines before
-    lines_for_training = new_lines if last_training else total_lines
+    lines_for_training = total_lines
     min_required = kraken_training_service.MIN_LINES_FINETUNE if base_model else kraken_training_service.MIN_LINES_SCRATCH
 
     if lines_for_training < min_required:
@@ -737,19 +798,28 @@ async def start_kraken_training(background_tasks: BackgroundTasks, epochs: int =
         from datetime import datetime
         model_name = f"kraken_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    # Run training in background
-    def run_training_sync():
-        asyncio.run(kraken_training_service.start_training(
-            texts_handler=global_new_text_handler,
-            epochs=epochs,
-            model_name=model_name,
-            base_model=base_model,
-            batch_size=batch_size,
-            device=device,
-            patience=patience,
-        ))
+    # Run training in a separate thread to avoid blocking the event loop
+    import threading
 
-    background_tasks.add_task(run_training_sync)
+    def run_training_sync():
+        try:
+            asyncio.run(kraken_training_service.start_training(
+                texts_handler=global_new_text_handler,
+                epochs=epochs,
+                model_name=model_name,
+                base_model=base_model,
+                batch_size=batch_size,
+                device=device,
+                patience=patience,
+                project_ids=pids,
+            ))
+        finally:
+            if device != "cpu":
+                from services.gpu_lock import release as gpu_release
+                gpu_release("kraken_training")
+
+    thread = threading.Thread(target=run_training_sync, daemon=True)
+    thread.start()
     return {"message": "Kraken training started", "epochs": epochs, "model_name": model_name, "batch_size": batch_size}
 
 
@@ -838,185 +908,19 @@ async def get_kraken_base_models():
 
 
 # ==========================================
-# DeepSeek OCR-2 QLoRA Training Endpoints
-# ==========================================
-
-@router.get("/training/deepseek/status")
-async def get_deepseek_training_status():
-    """Get the current training data status for DeepSeek QLoRA fine-tuning."""
-    from services.deepseek_training_service import deepseek_training_service
-    from services.training_common import TrainingStatus
-
-    stats = deepseek_training_service.get_training_stats(global_new_text_handler)
-    logging.info(f"DeepSeek training stats: {stats}")
-
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    total_lines = stats.get("total_lines", 0)
-    curated_texts = stats.get("curated_texts", 0)
-    last_training = stats.get("last_training")
-    required_for_training = deepseek_training_service.MIN_LINES
-
-    lines_for_progress = new_lines if last_training else total_lines
-    progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
-
-    current_training = None
-    if deepseek_training_service.progress.status != TrainingStatus.IDLE:
-        current_training = deepseek_training_service.progress.to_dict()
-
-    return {
-        "curatedTexts": curated_texts,
-        "previousLines": previous_lines,
-        "newLines": new_lines,
-        "totalLines": total_lines,
-        "requiredForNextTraining": required_for_training,
-        "progress": progress,
-        "isReady": lines_for_progress >= required_for_training,
-        "lastTraining": last_training,
-        "currentTraining": current_training,
-    }
-
-
-@router.post("/training/deepseek/start")
-async def start_deepseek_training(
-    background_tasks: BackgroundTasks,
-    epochs: int = 10,
-    model_name: str = None,
-    output_mode: str = "plain",
-    device: str = "auto",
-    patience: int = 3,
-):
-    """Start DeepSeek QLoRA fine-tuning."""
-    from services.deepseek_training_service import deepseek_training_service
-    from services.training_common import TrainingStatus
-    import asyncio
-
-    if deepseek_training_service.progress.status == TrainingStatus.TRAINING:
-        raise HTTPException(status_code=409, detail="Training already in progress")
-
-    stats = deepseek_training_service.get_training_stats(global_new_text_handler)
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    total_lines = stats.get("total_lines", 0)
-    last_training = stats.get("last_training")
-
-    lines_for_training = new_lines if last_training else total_lines
-    min_required = deepseek_training_service.MIN_LINES
-
-    if lines_for_training < min_required:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough training data. Need at least {min_required} lines, got {lines_for_training}"
-        )
-
-    # Validate output mode
-    valid_modes = deepseek_training_service.get_output_modes()
-    if output_mode not in valid_modes:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid output_mode '{output_mode}'. Valid: {list(valid_modes.keys())}"
-        )
-
-    if not model_name:
-        from datetime import datetime
-        model_name = f"deepseek_lora_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    def run_training_sync():
-        asyncio.run(deepseek_training_service.start_training(
-            texts_handler=global_new_text_handler,
-            epochs=epochs,
-            model_name=model_name,
-            output_mode=output_mode,
-            device=device,
-            patience=patience,
-        ))
-
-    background_tasks.add_task(run_training_sync)
-    return {
-        "message": "DeepSeek QLoRA training started",
-        "epochs": epochs,
-        "model_name": model_name,
-        "output_mode": output_mode,
-    }
-
-
-@router.get("/training/deepseek/progress")
-async def get_deepseek_training_progress():
-    """Get current DeepSeek QLoRA training progress."""
-    from services.deepseek_training_service import deepseek_training_service
-    return deepseek_training_service.progress.to_dict()
-
-
-@router.post("/training/deepseek/cancel")
-async def cancel_deepseek_training():
-    """Cancel ongoing DeepSeek QLoRA training."""
-    from services.deepseek_training_service import deepseek_training_service
-    from services.training_common import TrainingStatus
-
-    if deepseek_training_service.progress.status != TrainingStatus.TRAINING:
-        raise HTTPException(status_code=400, detail="No training in progress")
-
-    deepseek_training_service.cancel_training()
-    return {"message": "Training cancelled"}
-
-
-@router.get("/training/deepseek/models")
-async def list_deepseek_models():
-    """List available DeepSeek QLoRA adapter models."""
-    from services.deepseek_training_service import deepseek_training_service
-    models = deepseek_training_service.get_models()
-    return {"models": models}
-
-
-@router.get("/training/deepseek/active-model")
-async def get_deepseek_active_model():
-    """Get information about the currently active DeepSeek adapter."""
-    from services.deepseek_training_service import deepseek_training_service
-    return deepseek_training_service.get_active_model_info()
-
-
-@router.post("/training/deepseek/models/{model_name}/activate")
-async def activate_deepseek_model(model_name: str):
-    """Set a DeepSeek QLoRA adapter as the active model."""
-    from services.deepseek_training_service import deepseek_training_service
-
-    success = deepseek_training_service.activate_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"DeepSeek adapter not found: {model_name}")
-
-    return {"message": f"DeepSeek adapter {model_name} activated"}
-
-
-@router.delete("/training/deepseek/models/{model_name}")
-async def delete_deepseek_model(model_name: str):
-    """Delete a DeepSeek QLoRA adapter."""
-    from services.deepseek_training_service import deepseek_training_service
-
-    success = deepseek_training_service.delete_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"DeepSeek adapter not found or is active: {model_name}")
-
-    return {"message": f"DeepSeek adapter {model_name} deleted"}
-
-
-@router.get("/training/deepseek/output-modes")
-async def get_deepseek_output_modes():
-    """Get available output modes for DeepSeek QLoRA training."""
-    from services.deepseek_training_service import deepseek_training_service
-    return {"modes": deepseek_training_service.get_output_modes()}
-
-
-# ==========================================
 # Qwen3-VL QLoRA Training Endpoints
 # ==========================================
 
 @router.get("/training/qwen/status")
-async def get_qwen_training_status():
+async def get_qwen_training_status(project_id: int = None, project_ids: Optional[List[int]] = Query(None)):
     """Get the current training data status for Qwen QLoRA fine-tuning."""
     from services.qwen_training_service import qwen_training_service
     from services.training_common import TrainingStatus
 
-    stats = qwen_training_service.get_training_stats(global_new_text_handler)
+    # Normalise: single project_id → list for consistency
+    pids = project_ids or ([project_id] if project_id is not None else None)
+
+    stats = qwen_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
     logging.info(f"Qwen training stats: {stats}")
 
     previous_lines = stats.get("previous_lines", 0)
@@ -1026,7 +930,8 @@ async def get_qwen_training_status():
     last_training = stats.get("last_training")
     required_for_training = qwen_training_service.MIN_LINES
 
-    lines_for_progress = new_lines if last_training else total_lines
+    # Always use total_lines for readiness — retraining with more epochs on same data is valid
+    lines_for_progress = total_lines
     progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
 
     current_training = None
@@ -1048,35 +953,45 @@ async def get_qwen_training_status():
 
 @router.post("/training/qwen/start")
 async def start_qwen_training(
-    background_tasks: BackgroundTasks,
     epochs: int = 10,
     model_name: str = None,
     base_model: str = None,
     output_mode: str = "plain",
     device: str = "auto",
     patience: int = 3,
+    project_id: int = None,
+    project_ids: Optional[List[int]] = Query(None),
 ):
-    """Start Qwen QLoRA fine-tuning."""
+    """Start Qwen QLoRA fine-tuning, optionally scoped to one or more projects."""
     from services.qwen_training_service import qwen_training_service
     from services.training_common import TrainingStatus
     import asyncio
 
+    # Normalise: single project_id → list for consistency
+    pids = project_ids or ([project_id] if project_id is not None else None)
+
     if qwen_training_service.progress.status == TrainingStatus.TRAINING:
         raise HTTPException(status_code=409, detail="Training already in progress")
 
-    stats = qwen_training_service.get_training_stats(global_new_text_handler)
+    # Check GPU availability
+    from services.gpu_lock import acquire as gpu_acquire
+    ok, owner = gpu_acquire("qwen_training")
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
+
+    stats = qwen_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
     previous_lines = stats.get("previous_lines", 0)
     new_lines = stats.get("new_lines", 0)
     total_lines = stats.get("total_lines", 0)
     last_training = stats.get("last_training")
 
-    lines_for_training = new_lines if last_training else total_lines
+    # Always use total_lines — retraining with more epochs on same data is valid
     min_required = qwen_training_service.MIN_LINES
 
-    if lines_for_training < min_required:
+    if total_lines < min_required:
         raise HTTPException(
             status_code=400,
-            detail=f"Not enough training data. Need at least {min_required} lines, got {lines_for_training}"
+            detail=f"Not enough training data. Need at least {min_required} lines, got {total_lines}"
         )
 
     # Validate output mode
@@ -1098,18 +1013,26 @@ async def start_qwen_training(
         from datetime import datetime
         model_name = f"qwen_lora_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    def run_training_sync():
-        asyncio.run(qwen_training_service.start_training(
-            texts_handler=global_new_text_handler,
-            epochs=epochs,
-            model_name=model_name,
-            base_model=base_model,
-            output_mode=output_mode,
-            device=device,
-            patience=patience,
-        ))
+    import threading
+    from services.gpu_lock import release as gpu_release
 
-    background_tasks.add_task(run_training_sync)
+    def run_training_sync():
+        try:
+            asyncio.run(qwen_training_service.start_training(
+                texts_handler=global_new_text_handler,
+                epochs=epochs,
+                model_name=model_name,
+                base_model=base_model,
+                output_mode=output_mode,
+                device=device,
+                patience=patience,
+                project_ids=pids,
+            ))
+        finally:
+            gpu_release("qwen_training")
+
+    thread = threading.Thread(target=run_training_sync, daemon=True)
+    thread.start()
     return {
         "message": "Qwen QLoRA training started",
         "epochs": epochs,
@@ -1192,6 +1115,315 @@ async def get_qwen_base_models():
     return {"models": qwen_training_service.get_base_models()}
 
 
+# ================================================================== #
+# TrOCR Training Endpoints
+# ================================================================== #
+
+@router.get("/training/trocr/status")
+async def get_trocr_training_status(project_id: int = None, project_ids: Optional[List[int]] = Query(None)):
+    """Get TrOCR training status and data readiness."""
+    from services.trocr_training_service import trocr_training_service
+    from services.training_common import TrainingStatus
+
+    pids = project_ids or ([project_id] if project_id is not None else None)
+    stats = trocr_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
+
+    total_lines = stats.get("total_lines", 0)
+    previous_lines = stats.get("previous_lines", 0)
+    new_lines = stats.get("new_lines", 0)
+    last_training = stats.get("last_training")
+
+    required_for_training = trocr_training_service.MIN_LINES
+    lines_for_progress = total_lines
+    progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
+
+    current_training = None
+    if trocr_training_service.progress.status != TrainingStatus.IDLE:
+        current_training = trocr_training_service.progress.to_dict()
+
+    return {
+        "curatedTexts": stats.get("curated_texts", 0),
+        "previousLines": previous_lines,
+        "newLines": new_lines,
+        "totalLines": total_lines,
+        "requiredForNextTraining": required_for_training,
+        "progress": progress,
+        "isReady": lines_for_progress >= required_for_training,
+        "lastTraining": last_training,
+        "currentTraining": current_training,
+    }
+
+
+@router.post("/training/trocr/start")
+async def start_trocr_training(
+    epochs: int = 30,
+    model_name: str = None,
+    base_model: str = None,
+    device: str = "auto",
+    patience: int = 5,
+    learning_rate: float = 5e-5,
+    freeze_encoder: bool = False,
+    project_id: int = None,
+    project_ids: Optional[List[int]] = Query(None),
+):
+    """Start TrOCR fine-tuning, optionally scoped to one or more projects."""
+    from services.trocr_training_service import trocr_training_service
+    from services.kraken_training_service import kraken_training_service
+    from services.training_common import TrainingStatus
+    import asyncio
+
+    pids = project_ids or ([project_id] if project_id is not None else None)
+
+    if trocr_training_service.progress.status == TrainingStatus.TRAINING:
+        raise HTTPException(status_code=409, detail="TrOCR training already in progress")
+
+    from services.gpu_lock import acquire as gpu_acquire
+    ok, owner = gpu_acquire("trocr_training")
+    if not ok:
+        raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
+
+    stats = trocr_training_service.get_training_stats(global_new_text_handler, project_ids=pids)
+    total_lines = stats.get("total_lines", 0)
+
+    if total_lines < trocr_training_service.MIN_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough training data. Need at least {trocr_training_service.MIN_LINES} lines, got {total_lines}"
+        )
+
+    if base_model and base_model not in trocr_training_service.BASE_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid base_model '{base_model}'. Valid: {list(trocr_training_service.BASE_MODELS.keys())}"
+        )
+
+    if not model_name:
+        from datetime import datetime
+        model_name = f"trocr_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    import threading
+    from services.gpu_lock import release as gpu_release
+
+    def run_training_sync():
+        try:
+            asyncio.run(trocr_training_service.start_training(
+                texts_handler=global_new_text_handler,
+                kraken_training_service=kraken_training_service,
+                epochs=epochs,
+                model_name=model_name,
+                base_model=base_model,
+                device=device,
+                patience=patience,
+                learning_rate=learning_rate,
+                freeze_encoder=freeze_encoder,
+                project_ids=pids,
+            ))
+        finally:
+            gpu_release("trocr_training")
+
+    thread = threading.Thread(target=run_training_sync, daemon=True)
+    thread.start()
+    return {
+        "message": "TrOCR training started",
+        "epochs": epochs,
+        "model_name": model_name,
+        "base_model": base_model or trocr_training_service.DEFAULT_BASE_MODEL,
+        "learning_rate": learning_rate,
+        "freeze_encoder": freeze_encoder,
+    }
+
+
+@router.get("/training/trocr/progress")
+async def get_trocr_training_progress():
+    """Get current TrOCR training progress."""
+    from services.trocr_training_service import trocr_training_service
+    return trocr_training_service.progress.to_dict()
+
+
+@router.post("/training/trocr/cancel")
+async def cancel_trocr_training():
+    """Cancel ongoing TrOCR training."""
+    from services.trocr_training_service import trocr_training_service
+    from services.training_common import TrainingStatus
+
+    if trocr_training_service.progress.status != TrainingStatus.TRAINING:
+        raise HTTPException(status_code=400, detail="No TrOCR training in progress")
+
+    trocr_training_service.cancel_training()
+    return {"message": "TrOCR training cancelled"}
+
+
+@router.get("/training/trocr/models")
+async def list_trocr_models():
+    """List available TrOCR fine-tuned models."""
+    from services.trocr_training_service import trocr_training_service
+    return {"models": trocr_training_service.get_models()}
+
+
+@router.get("/training/trocr/active-model")
+async def get_trocr_active_model():
+    """Get information about the currently active TrOCR model."""
+    from services.trocr_training_service import trocr_training_service
+    return trocr_training_service.get_active_model_info()
+
+
+@router.post("/training/trocr/models/{model_name}/activate")
+async def activate_trocr_model(model_name: str):
+    """Set a TrOCR fine-tuned model as the active model."""
+    from services.trocr_training_service import trocr_training_service
+    success = trocr_training_service.activate_model(model_name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"TrOCR model not found: {model_name}")
+    return {"message": f"TrOCR model {model_name} activated"}
+
+
+@router.delete("/training/trocr/models/{model_name}")
+async def delete_trocr_model(model_name: str):
+    """Delete a TrOCR fine-tuned model."""
+    from services.trocr_training_service import trocr_training_service
+    success = trocr_training_service.delete_model(model_name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"TrOCR model not found or is active: {model_name}")
+    return {"message": f"TrOCR model {model_name} deleted"}
+
+
+@router.get("/training/trocr/base-models")
+async def get_trocr_base_models():
+    """Get available TrOCR base models for fine-tuning."""
+    from services.trocr_training_service import trocr_training_service
+    return {"models": trocr_training_service.get_base_models()}
+
+
+@router.post("/training/regenerate")
+async def regenerate_training_data():
+    """One-time migration: scan all curated texts and persist training data to disk.
+    Recovers Kraken data from earlier edit_history entries that were overwritten by VLM curation."""
+    result = global_new_text_handler.regenerate_all_training_data()
+    return result
+
+
+# ─── CuReD Dataset Export / Import ───────────────────────────────
+
+@router.get("/export/project/{project_id}")
+async def export_project_cured(project_id: int):
+    """Export all texts in a project as a CuReD zip (manifest.json + images)."""
+    import asyncio
+    from starlette.background import BackgroundTask
+    from common.global_handlers import global_projects_handler
+    from entities.new_text import NewText
+
+    project = global_projects_handler.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
+
+    texts_raw = global_new_text_handler._collection.find({"project_id": int(project_id)})
+    texts = [NewText.parse_obj(t) for t in texts_raw]
+    if not texts:
+        raise HTTPException(status_code=404, detail="No texts in project")
+
+    zip_path = await asyncio.to_thread(
+        global_new_text_handler.build_cured_export_zip,
+        texts, project_id, project.name,
+    )
+
+    safe_name = (project.name or str(project_id)).replace(" ", "_")
+    filename = f"{safe_name}_cured_export.zip"
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(lambda: os.unlink(zip_path)),
+    )
+
+
+@router.get("/export/text/{text_id}")
+async def export_single_text_cured(text_id: int):
+    """Export a single text as a CuReD zip (manifest.json + image)."""
+    import asyncio
+    from starlette.background import BackgroundTask
+    from entities.new_text import NewText
+
+    text_doc = global_new_text_handler._collection.find_one({"text_id": int(text_id)})
+    if not text_doc:
+        raise HTTPException(status_code=404, detail=f"Text {text_id} not found")
+
+    text = NewText.parse_obj(text_doc)
+    zip_path = await asyncio.to_thread(
+        global_new_text_handler.build_cured_export_zip,
+        [text], text.project_id, None,
+    )
+
+    identifier = text.museum_id or text.p_number or text.publication_id or str(text_id)
+    safe_id = identifier.replace("/", "_").replace(" ", "_")
+    filename = f"{safe_id}_{text_id}_cured_export.zip"
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(lambda: os.unlink(zip_path)),
+    )
+
+
+@router.post("/import")
+async def import_cured_zip(
+    file: UploadFile = File(...),
+    project_id: Optional[int] = Form(None),
+):
+    """Import a CuReD export zip. Recreates texts with images and transliterations.
+    If is_curated_kraken is set, Kraken training data is auto-generated on import."""
+    import asyncio
+    import tempfile
+
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are accepted")
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    try:
+        tmp.write(await file.read())
+        tmp.close()
+        result = await asyncio.to_thread(
+            global_new_text_handler.import_cured_zip,
+            tmp.name, project_id,
+        )
+    finally:
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+
+    if result.get("errors") and result["imported"] == 0:
+        raise HTTPException(status_code=400, detail=f"Import failed: {result['errors']}")
+
+    return result
+
+
+class ImportFolderDto(BaseModel):
+    folder_path: str
+    project_id: Optional[int] = None
+
+
+@router.post("/import-folder")
+async def import_cured_folder(dto: ImportFolderDto):
+    """Import CuReD data from an unzipped local folder containing manifest.json + images/.
+    Used when the export was already extracted or shared as a folder."""
+    import asyncio
+
+    if not os.path.isdir(dto.folder_path):
+        raise HTTPException(status_code=400, detail=f"Folder not found: {dto.folder_path}")
+
+    manifest_path = os.path.join(dto.folder_path, "manifest.json")
+    if not os.path.exists(manifest_path):
+        raise HTTPException(status_code=400, detail="manifest.json not found in folder")
+
+    result = await asyncio.to_thread(
+        global_new_text_handler.import_cured_folder,
+        dto.folder_path, dto.project_id,
+    )
+
+    if result.get("errors") and result["imported"] == 0:
+        raise HTTPException(status_code=400, detail=f"Import failed: {result['errors']}")
+
+    return result
+
+
 @router.post("/createSubmission")
 async def submit(request: Request, submit_dto: CuredSubmissionDto):
     user_id = request.state.user_id
@@ -1217,7 +1449,21 @@ async def submit(request: Request, submit_dto: CuredSubmissionDto):
 async def save_text_image(request: Request, file: UploadFile = File(...), text_id=Form(...)):
     StorageUtils.validate_image_file_type(file=file)
 
+    import glob
+    train_dir = os.path.join(StorageUtils.BASE_PATH, StorageUtils.CURED_TRAINING_DATA_DIR_NAME)
+    preview_dir = os.path.join(StorageUtils.BASE_PATH, StorageUtils.PREVIEW_DIR_NAME)
+
+    # Delete any existing images for this text (old crops, etc.)
+    existing = glob.glob(os.path.join(train_dir, f"{text_id}_*"))
+    for old_file in existing:
+        logging.info(f"Deleting old image: {old_file}")
+        os.remove(old_file)
+    for old_preview in glob.glob(os.path.join(preview_dir, f"{text_id}_*")):
+        os.remove(old_preview)
+
+    # Generate a fresh name with the correct extension
     new_name = StorageUtils.generate_cured_train_image_name(original_file_name=file.filename, text_id=text_id)
+
     path = StorageUtils.build_cured_train_image_path(image_name=new_name)
     preview_path = StorageUtils.build_preview_image_path(image_name=new_name)
     await StorageUtils.save_uploaded_image(file=file, path=path)
@@ -1389,23 +1635,74 @@ async def fetch_transliteration_by_id(text_id: int, transliteration_id: int):
 
 @router.get("/transliterationImage/{text_id}/{transliteration_id}")
 async def get_image(text_id: int, transliteration_id: int):
+    import glob
     if type(text_id) is not int or type(transliteration_id) is not int:
         raise HTTPException(status_code=500, detail="invalid BEN / transliteration id")
 
     transliterations = global_new_text_handler.get_text_cured_transliterations(text_id=text_id)
-    trans = next(trans for trans in transliterations if trans.transliteration_id == transliteration_id)
+    trans = next((t for t in transliterations if t.transliteration_id == transliteration_id), None)
     if not trans:
         raise HTTPException(status_code=500, detail="Transliteration doesn't exist")
 
     image_name = trans.image_name
-    if not image_name:
-        raise HTTPException(status_code=404, detail="No image associated with this transliteration")
+    image_path = None
 
-    image_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
-    if not os.path.isfile(image_path):
-        raise HTTPException(status_code=404, detail="Image file not found")
+    # Try the stored image_name first
+    if image_name:
+        image_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
+        if not os.path.isfile(image_path):
+            image_path = None
 
-    return FileResponse(image_path)
+    # Fallback: find any image file matching this text_id
+    if not image_path:
+        train_dir = os.path.join(StorageUtils.BASE_PATH, StorageUtils.CURED_TRAINING_DATA_DIR_NAME)
+        matches = glob.glob(os.path.join(train_dir, f"{text_id}_*"))
+        if matches:
+            image_path = matches[0]
+            # Fix the DB record so this doesn't happen again
+            found_name = os.path.basename(image_path)
+            logging.info(f"Image fallback: updating image_name from '{image_name}' to '{found_name}' for text {text_id}")
+            global_new_text_handler.update_transliteration_image(text_id, transliteration_id, found_name)
+
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No image found for this transliteration")
+
+    return FileResponse(image_path, headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    })
+
+
+class BatchDeleteDto(BaseModel):
+    text_ids: List[int]
+
+
+class RemoveTileMarkersDto(BaseModel):
+    project_id: Optional[int] = None
+    text_ids: Optional[List[int]] = None
+
+
+@router.post("/remove-tile-markers")
+async def remove_tile_markers(dto: RemoveTileMarkersDto):
+    """Remove ************************ tile merge marker lines from texts."""
+    import asyncio
+    result = await asyncio.to_thread(
+        global_new_text_handler.remove_tile_markers,
+        project_id=dto.project_id,
+        text_ids=dto.text_ids,
+    )
+    return result
+
+
+@router.post("/batch-delete")
+async def batch_delete_texts(dto: BatchDeleteDto):
+    """Delete multiple texts in a single operation (much faster than individual deletes)."""
+    import asyncio
+    if not dto.text_ids:
+        return {"deleted": 0, "errors": []}
+    result = await asyncio.to_thread(global_new_text_handler.delete_texts_batch, dto.text_ids)
+    return result
 
 
 @router.delete("/{text_id}")

@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import threading
+import time
 from bson import ObjectId
 from typing import List, Dict, Any, Optional, Type
 from pydantic import BaseModel
@@ -15,6 +16,11 @@ def _get_file_lock(path: str) -> threading.Lock:
         if path not in _file_locks:
             _file_locks[path] = threading.Lock()
         return _file_locks[path]
+
+# ── In-memory cache shared across LocalCollection instances ──
+# Keyed by absolute file path → (data list, mtime at load)
+_cache: Dict[str, tuple] = {}
+_cache_lock = threading.Lock()
 
 class LocalCollection:
     def __init__(self, collection_path: str, obj_type: Optional[Type[BaseModel]] = None):
@@ -30,16 +36,30 @@ class LocalCollection:
                 json.dump([], f)
 
     def _read_unsafe(self) -> List[Dict]:
-        """Read without lock — caller must hold self._lock."""
+        """Read without lock — caller must hold self._lock.
+        Uses an in-memory cache; only re-reads from disk when the
+        file's mtime has changed."""
         try:
+            abs_path = os.path.abspath(self.path)
+            mtime = os.path.getmtime(abs_path)
+            with _cache_lock:
+                cached = _cache.get(abs_path)
+                if cached and cached[1] == mtime:
+                    return cached[0]
+
             with open(self.path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+
+            with _cache_lock:
+                _cache[abs_path] = (data, mtime)
+            return data
         except Exception as e:
             logging.error(f"Error reading local db {self.path}: {e}")
             return []
 
     def _write_unsafe(self, data: List[Dict]):
-        """Write without lock — caller must hold self._lock. Uses atomic rename."""
+        """Write without lock — caller must hold self._lock. Uses atomic rename.
+        Also updates the in-memory cache."""
         try:
             tmp_path = self.path + ".tmp"
             with open(tmp_path, 'w', encoding='utf-8') as f:
@@ -47,6 +67,12 @@ class LocalCollection:
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_path, self.path)
+
+            # Update cache immediately so subsequent reads don't hit disk
+            abs_path = os.path.abspath(self.path)
+            mtime = os.path.getmtime(abs_path)
+            with _cache_lock:
+                _cache[abs_path] = (data, mtime)
         except Exception as e:
             logging.error(f"Error writing local db {self.path}: {e}")
 
@@ -136,7 +162,14 @@ class LocalCollection:
         # Simple sorting if provided (e.g. [("field", -1)])
         if sort:
             for field, direction in reversed(sort):
-                results.sort(key=lambda x: x.get(field) if x.get(field) is not None else "", reverse=(direction == -1))
+                def _sort_key(x, _f=field):
+                    v = x.get(_f)
+                    if v is None:
+                        return (0, "")
+                    if isinstance(v, (int, float)):
+                        return (1, v)
+                    return (2, str(v))
+                results.sort(key=_sort_key, reverse=(direction == -1))
 
         if limit > 0:
             return results[:limit]

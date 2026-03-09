@@ -179,6 +179,20 @@
         </div>
 
         <div class="settings-section">
+          <h3>Image Resolution</h3>
+
+          <div class="setting-item">
+            <label>Default Image Scale for VLM OCR</label>
+            <select [(ngModel)]="settings.imageScale" class="form-control">
+              <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+            <small>Reduce image resolution before sending to VLM models. Lower resolution = fewer visual tokens = faster inference. Does not affect Kraken (CPU) models.</small>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <h3>General</h3>
 
           <div class="setting-item">
@@ -216,18 +230,54 @@
           <div *ngIf="loadingPrompts" class="loading">Loading prompts...</div>
           <div *ngIf="promptsError" class="error">{{ promptsError }}</div>
 
+          <!-- Add Prompt Button -->
+          <div class="add-prompt-bar" *ngIf="!loadingPrompts && !promptsError && !showNewPromptForm">
+            <button class="btn btn-primary btn-sm" (click)="showNewPromptForm = true">
+              + Add Custom Prompt
+            </button>
+          </div>
+
+          <!-- New Prompt Form -->
+          <div class="new-prompt-form" *ngIf="showNewPromptForm">
+            <div class="new-prompt-header">
+              <strong>New Custom Prompt</strong>
+            </div>
+            <div class="setting-item">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="newPromptName" class="form-control"
+                     placeholder="e.g. Sumerian Dictionary">
+            </div>
+            <div class="setting-item">
+              <label>Prompt Text</label>
+              <textarea [(ngModel)]="newPromptText" rows="6" class="form-control"
+                        placeholder="Enter the OCR prompt instructions..."></textarea>
+            </div>
+            <div class="edit-actions">
+              <button class="btn btn-primary btn-sm" (click)="createPrompt()"
+                      [disabled]="creatingPrompt || !newPromptName.trim() || !newPromptText.trim()">
+                {{ creatingPrompt ? 'Creating...' : 'Create' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="showNewPromptForm = false">Cancel</button>
+            </div>
+          </div>
+
           <div class="prompts-list" *ngIf="!loadingPrompts && !promptsError">
             <div class="prompt-item" *ngFor="let prompt of ocrPrompts"
-                 [class.is-default]="prompt.key === defaultPrompt">
+                 [class.is-default]="prompt.key === defaultPrompt"
+                 [class.is-custom]="!prompt.builtin">
               <div class="prompt-header">
                 <div class="prompt-info">
                   <strong>{{ getPromptLabel(prompt.key) }}</strong>
                   <span class="prompt-key">({{ prompt.key }})</span>
                   <span class="default-badge" *ngIf="prompt.key === defaultPrompt">Default</span>
+                  <span class="custom-badge" *ngIf="!prompt.builtin">Custom</span>
                 </div>
                 <div class="prompt-actions" *ngIf="!prompt.editing">
                   <button class="btn-icon" (click)="startEditing(prompt)" title="Edit prompt">
                     ✏️
+                  </button>
+                  <button class="btn-icon btn-icon-delete" *ngIf="!prompt.builtin" (click)="deletePrompt(prompt)" title="Delete prompt">
+                    🗑️
                   </button>
                 </div>
               </div>

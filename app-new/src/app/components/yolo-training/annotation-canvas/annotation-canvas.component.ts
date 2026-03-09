@@ -126,9 +126,11 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
   lastPanPosition: { x: number; y: number } | null = null;
   spacePressed = false;
   panModeActive = false; // Toggled pan mode (via toolbar button)
+  drawModeActive = false; // When true, plain click draws boxes, Shift+click pans
   crosshairEnabled = true;
   private crosshairH: fabric.Line | null = null;
   private crosshairV: fabric.Line | null = null;
+  private lastMouseScreenPos: { x: number; y: number } | null = null;
 
   // Auto-save
   private autoSaveTimer: any = null;
@@ -241,6 +243,10 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       }
       this.selectedAnnotation = null;
     }
+    // D to toggle draw mode
+    if (event.key === 'd' || event.key === 'D') {
+      this.toggleDrawMode();
+    }
     // Zoom with + and -
     if (event.key === '+' || event.key === '=') {
       this.zoomIn();
@@ -309,7 +315,8 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     this.canvasBoxService.setupWheelZoomPan(this.canvas, {
       minZoom: this.minZoom,
       maxZoom: this.maxZoom,
-      onZoomChange: (zoom) => { this.zoomLevel = zoom; }
+      onZoomChange: (zoom) => { this.zoomLevel = zoom; this.updateCrosshairAfterViewportChange(); },
+      onPan: () => this.updateCrosshairAfterViewportChange()
     });
 
     // Selection events
@@ -417,7 +424,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
 
   browseServer(): void {
     const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-      width: '850px', height: '600px'
+      width: '1000px', height: '720px'
     });
     dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
       if (!result || result.length === 0) return;
@@ -838,6 +845,14 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     }
   }
 
+  toggleDrawMode(): void {
+    this.drawModeActive = !this.drawModeActive;
+    if (this.canvas) {
+      this.canvas.defaultCursor = this.drawModeActive ? 'crosshair' : 'default';
+      this.canvas.renderAll();
+    }
+  }
+
   toggleCrosshair(): void {
     this.crosshairEnabled = !this.crosshairEnabled;
     if (!this.crosshairEnabled) {
@@ -849,6 +864,26 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     if (this.crosshairH) this.crosshairH.set({ visible: false });
     if (this.crosshairV) this.crosshairV.set({ visible: false });
     if (this.canvas) this.canvas.renderAll();
+  }
+
+  private updateCrosshairAfterViewportChange(): void {
+    if (!this.crosshairEnabled || !this.canvas || !this.crosshairH || !this.crosshairV) return;
+    if (!this.crosshairH.visible || !this.lastMouseScreenPos) return;
+
+    // After viewport pan/zoom, recalculate canvas coordinates from the
+    // last known screen mouse position so the crosshair stays under the cursor.
+    const vpt = this.canvas.viewportTransform;
+    if (!vpt) return;
+
+    const zoom = this.canvas.getZoom();
+    const canvasX = (this.lastMouseScreenPos.x - vpt[4]) / zoom;
+    const canvasY = (this.lastMouseScreenPos.y - vpt[5]) / zoom;
+
+    this.crosshairH.set({ x1: -5000, y1: canvasY, x2: 5000, y2: canvasY });
+    this.crosshairV.set({ x1: canvasX, y1: -5000, x2: canvasX, y2: 5000 });
+    this.crosshairH.bringToFront();
+    this.crosshairV.bringToFront();
+    this.canvas.renderAll();
   }
 
   // ============== Right Panel Resize ==============
@@ -901,8 +936,12 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       return; // Let fabric handle selection
     }
 
-    // Shift + left click = draw new box (unified behavior with CuReD)
-    if (evt.shiftKey && evt.button === 0) {
+    // Determine if this click should draw or pan based on drawModeActive:
+    // - Draw mode OFF (default): Shift+click = draw, plain click = pan
+    // - Draw mode ON: plain click = draw, Shift+click = pan
+    const wantsDraw = this.drawModeActive ? !evt.shiftKey : evt.shiftKey;
+
+    if (wantsDraw && evt.button === 0) {
       const pointer = this.canvas.getPointer(e.e);
       this.isDrawing = true;
       this.drawStart = { x: pointer.x, y: pointer.y };
@@ -926,7 +965,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       return;
     }
 
-    // Plain left click on empty area = start panning
+    // Otherwise pan
     if (evt.button === 0) {
       this.isPanning = true;
       this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
@@ -939,6 +978,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     if (!this.canvas) return;
 
     const evt = e.e as MouseEvent;
+    this.lastMouseScreenPos = { x: evt.offsetX, y: evt.offsetY };
     const needsCrosshair = this.crosshairEnabled && this.crosshairH && this.crosshairV;
 
     // Update crosshair position
@@ -1224,6 +1264,69 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
       },
       error: () => {
         this.notification.showError('Failed to add class');
+      }
+    });
+  }
+
+  deleteClass(cls: YoloClass, event: Event): void {
+    event.stopPropagation();
+
+    const annotationsWithClass = this.annotations.filter(a => a.classId === cls.id);
+    const message = annotationsWithClass.length > 0
+      ? `Delete class "${cls.name}"? This will also remove ${annotationsWithClass.length} annotation(s) using this class.`
+      : `Delete class "${cls.name}"?`;
+
+    if (!confirm(message)) return;
+
+    if (!this.datasetName) {
+      // No dataset — remove locally
+      // Remove annotations with this class from canvas
+      annotationsWithClass.forEach(ann => {
+        if (ann.fabricRect && this.canvas) {
+          this.canvas.remove(ann.fabricRect);
+        }
+      });
+      this.annotations = this.annotations.filter(a => a.classId !== cls.id);
+      this.classes = this.classes.filter(c => c.id !== cls.id);
+      // Re-index classes
+      this.classes.forEach((c, i) => c.id = i);
+      // Re-map annotation classIds
+      this.annotations.forEach(ann => {
+        const newCls = this.classes.find(c => c.name === ann.className);
+        if (newCls) ann.classId = newCls.id;
+      });
+      if (this.selectedClassId === cls.id) {
+        this.selectedClassId = this.classes.length > 0 ? this.classes[0].id : null;
+      }
+      this.canvas?.renderAll();
+      return;
+    }
+
+    this.yoloService.deleteClassFromDataset(this.datasetName, cls.id).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.classes = response.classes;
+          // Remove annotations with the deleted class from canvas
+          annotationsWithClass.forEach(ann => {
+            if (ann.fabricRect && this.canvas) {
+              this.canvas.remove(ann.fabricRect);
+            }
+          });
+          this.annotations = this.annotations.filter(a => a.className !== cls.name);
+          // Re-map annotation classIds to new indices
+          this.annotations.forEach(ann => {
+            const newCls = this.classes.find(c => c.name === ann.className);
+            if (newCls) ann.classId = newCls.id;
+          });
+          if (this.selectedClassId === cls.id) {
+            this.selectedClassId = this.classes.length > 0 ? this.classes[0].id : null;
+          }
+          this.canvas?.renderAll();
+          this.notification.showSuccess(`Class "${cls.name}" deleted`);
+        }
+      },
+      error: () => {
+        this.notification.showError('Failed to delete class');
       }
     });
   }

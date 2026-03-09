@@ -32,7 +32,7 @@
   background: #fff;
 
   mat-icon {
-    color: #1976d2;
+    color: #8D6E63;
     font-size: 22px;
     width: 22px;
     height: 22px;
@@ -66,11 +66,11 @@
   }
 
   &.selected {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #EFEBE9;
+    color: #5D4037;
 
     .folder-icon {
-      color: #1976d2;
+      color: #5D4037;
     }
   }
 
@@ -107,7 +107,7 @@
   }
 
   .folder-icon {
-    color: #00897b;
+    color: #8D6E63;
     font-size: 20px;
     width: 20px;
     height: 20px;
@@ -120,6 +120,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .node-name-input {
+    flex: 1;
+    border: 1px solid #1976d2;
+    border-radius: 2px;
+    padding: 0 4px;
+    font-size: 13px;
+    outline: none;
+    min-width: 0;
+    background: #fff;
   }
 
   .node-count {
@@ -217,6 +228,41 @@
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  position: relative;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed #1976d2;
+  border-radius: 12px;
+  background: rgba(25, 118, 210, 0.06);
+  z-index: 10;
+  pointer-events: none;
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #1976d2;
+  }
+
+  span {
+    font-size: 16px;
+    font-weight: 500;
+    color: #1976d2;
+  }
+
+  .drop-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: #666;
+  }
 }
 
 // ============== Upload in breadcrumb bar ==============
@@ -255,6 +301,21 @@
   white-space: nowrap;
 }
 
+.breadcrumb-selection {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1976d2;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.breadcrumb-action-btn {
+  font-size: 12px;
+  min-width: auto;
+  padding: 0 8px;
+  line-height: 32px;
+}
+
 // ============== Subfolder Grid ==============
 
 .subfolder-grid {
@@ -270,31 +331,10 @@
   align-items: center;
   gap: 10px;
   padding: 14px;
-  padding-left: 32px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  cursor: pointer;
+  cursor: default;
   transition: box-shadow 0.2s, border-color 0.2s;
-
-  .subfolder-check {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    opacity: 0;
-    transition: opacity 0.15s;
-
-    mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: #1976d2;
-    }
-  }
-
-  &:hover .subfolder-check,
-  &.selected .subfolder-check {
-    opacity: 1;
-  }
 
   &:hover {
     background: #f5f5f5;
@@ -318,7 +358,7 @@
   }
 
   .subfolder-icon {
-    color: #00897b;
+    color: #8D6E63;
     font-size: 32px;
     width: 32px;
     height: 32px;
@@ -339,34 +379,21 @@
     white-space: nowrap;
   }
 
+  .subfolder-name-input {
+    border: 1px solid #1976d2;
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-size: 14px;
+    font-weight: 500;
+    outline: none;
+    width: 100%;
+    background: #fff;
+  }
+
   .subfolder-count {
     font-size: 12px;
     color: #999;
     margin-top: 2px;
-  }
-
-  .subfolder-delete {
-    position: absolute;
-    top: 1px;
-    right: 2px;
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    line-height: 28px;
-    color: #d32f2f;
-    opacity: 0;
-    transition: opacity 0.15s;
-
-    mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  }
-
-  &:hover .subfolder-delete {
-    opacity: 0.5;
-    &:hover { opacity: 1; }
   }
 }
 
@@ -386,7 +413,14 @@
   .pages-count {
     font-size: 14px;
     color: #666;
-    margin-right: auto;
+  }
+
+  .header-spacer {
+    flex: 1;
+  }
+
+  .active-view {
+    color: #1976d2;
   }
 
   .view-pages-btn {
@@ -396,6 +430,58 @@
       height: 18px;
       margin-right: 4px;
     }
+  }
+
+  .page-search-box {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0 6px;
+    background: #fff;
+    margin-left: 8px;
+
+    &:focus-within {
+      border-color: #1976d2;
+    }
+
+    .page-search-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #999;
+      flex-shrink: 0;
+    }
+
+    .page-search-input {
+      border: none;
+      outline: none;
+      font-size: 12px;
+      padding: 5px 6px;
+      width: 160px;
+      background: transparent;
+    }
+
+    .page-search-clear {
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      flex-shrink: 0;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        color: #999;
+      }
+    }
+  }
+
+  .pages-filtered-count {
+    font-size: 11px;
+    color: #1976d2;
+    white-space: nowrap;
+    margin-left: 4px;
   }
 }
 
@@ -431,7 +517,7 @@
   flex-wrap: wrap;
 
   .detail-folder-icon {
-    color: #00897b;
+    color: #8D6E63;
     font-size: 28px;
     width: 28px;
     height: 28px;
@@ -468,13 +554,14 @@
   }
 }
 
-// ============== Thumbnail Grid ==============
+// ============== Icon Grid (Explorer-style) ==============
 
 .thumbnail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
   user-select: none;
+  padding: 4px;
 }
 
 .thumbnail-card {
@@ -482,79 +569,164 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
+  width: 72px;
+  padding: 6px 4px 4px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: background 0.15s;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  }
-
-  &.selected {
-    border-color: #1976d2;
-    background: #e3f2fd;
-  }
-
-  .thumbnail-check {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    z-index: 1;
-    transition: opacity 0.15s;
-
-    mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: #1976d2;
-      background: rgba(255, 255, 255, 0.85);
-      border-radius: 3px;
-    }
-  }
-
-  img {
-    width: 100%;
-    height: 130px;
-    object-fit: cover;
     background: #f0f0f0;
   }
 
-  .thumbnail-footer {
+  &.selected {
+    background: #e3f2fd;
+  }
+
+  .thumbnail-icon {
     display: flex;
     align-items: center;
-    width: 100%;
-    padding: 2px 4px;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+
+    mat-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: #78909c;
+    }
   }
 
   .thumbnail-label {
-    flex: 1;
+    width: 100%;
+    margin-top: 2px;
     font-size: 11px;
-    color: #666;
+    color: #444;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0 2px;
+    text-align: center;
+  }
+}
+
+// ============== Details List View ==============
+
+.details-list {
+  user-select: none;
+
+  .details-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e0e0e0;
+
+    .sortable {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      user-select: none;
+      transition: color 0.15s;
+
+      &:hover {
+        color: #666;
+      }
+
+      &.active-sort {
+        color: #1976d2;
+      }
+
+      .sort-arrow {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        line-height: 14px;
+      }
+    }
   }
 
-  .thumbnail-delete {
+  .details-col-icon { width: 28px; flex-shrink: 0; }
+  .details-col-name { flex: 1; overflow: hidden; }
+  .details-col-type { width: 60px; flex-shrink: 0; }
+  .details-col-size { width: 80px; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+  .details-col-date { width: 150px; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+  .details-col-page { width: 60px; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+}
+
+.details-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #f5f5f5;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  &.selected {
+    background: #e3f2fd;
+  }
+
+  .details-icon {
+    width: 28px;
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    line-height: 24px;
-    transition: opacity 0.15s;
-    color: #d32f2f;
-    opacity: 0.5;
 
     mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #78909c;
     }
-
-    &:hover { opacity: 1; }
   }
+
+  .details-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #333;
+  }
+
+  .details-type {
+    width: 50px;
+    flex-shrink: 0;
+    color: #999;
+    font-size: 11px;
+  }
+
+  .details-size {
+    width: 70px;
+    flex-shrink: 0;
+    text-align: right;
+    color: #999;
+    font-size: 11px;
+  }
+
+  .details-date {
+    width: 140px;
+    flex-shrink: 0;
+    text-align: right;
+    color: #999;
+    font-size: 11px;
+  }
+
+  .details-page-num {
+    width: 50px;
+    flex-shrink: 0;
+    text-align: right;
+    color: #999;
+    font-size: 11px;
+  }
+
 }
 
 // ============== Image Viewer Overlay ==============
@@ -644,6 +816,41 @@
         border-color: #fff;
         background: rgba(255, 255, 255, 0.1);
       }
+    }
+  }
+}
+
+// ============== Context Menu ==============
+
+.context-menu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 140px;
+
+  .context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      background: #f0f0f0;
+    }
+
+    &.delete {
+      color: #d32f2f;
+    }
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
     }
   }
 }

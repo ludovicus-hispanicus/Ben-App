@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, EventEmitter, HostListener, OnInit, OnDestroy, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, OnInit, OnDestroy, Output, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
 import { PDFDocumentProxy } from 'ng2-pdf-viewer';
@@ -15,6 +15,8 @@ import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.
 import { LabelDialogComponent } from '../common/label-dialog/label-dialog.component';
 import { IdentifierDialogComponent, IdentifierDialogResult } from '../common/identifier-dialog/identifier-dialog.component';
 import { ImageBrowserDialogComponent } from '../common/image-browser-dialog/image-browser-dialog.component';
+import { MoveTextDialogComponent, MoveTextDialogResult } from '../common/move-text-dialog/move-text-dialog.component';
+import { PartDialogComponent, PartDialogResult } from '../common/part-dialog/part-dialog.component';
 import { SelectedPage } from '../../models/pages';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from 'src/app/auth/auth.service';
@@ -27,6 +29,7 @@ import { TextService } from 'src/app/services/text.service';
 import { ProjectService } from 'src/app/services/project.service';
 import { TextPreview, ProjectPreview } from 'src/app/models/cured';
 import { DomSanitizer } from '@angular/platform-browser';
+import { ProductionService, KwicResult } from 'src/app/services/production.service';
 
 export interface ModelInfo {
   name: string;
@@ -101,8 +104,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   private ocrCropArea: { left: number; top: number; width: number; height: number } | null = null;
   // Reference to the selection box kept on canvas after OCR (non-interactive)
   private ocrSelectionBox: Rect | null = null;
-  public isCuratedKraken: boolean = false;
-  public isCuratedVlm: boolean = false;
+  public isCurated: boolean = false;
 
   public goToPage: number = 1;
   public uploadedImageBlob: File = null;
@@ -112,9 +114,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public isLoadedFromServer: boolean = false;
 
-  // Auto-save
-  private autoSaveTimer: any = null;
-  private readonly AUTO_SAVE_DEBOUNCE_MS = 2000;
+  // Dirty state tracking
+  public hasUnsavedChanges: boolean = false;
 
   public takeTextId: number;
   public takeTransId: number;
@@ -147,16 +148,47 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Dashboard list (stage 0)
   public curedTexts: TextPreview[] = [];
-  public selectedLabelFilter: string | null = null;
   public searchQuery: string = '';
   public sortColumn: string = 'last_modified';
   public sortDirection: 'asc' | 'desc' = 'desc';
+  public textViewMode: 'grid' | 'list' = 'list';
+
+  // Multi-selection for batch operations
+  public selectedTexts: Set<number> = new Set();
+  public lastSelectedTextIndex: number = -1;
+  public isBatchCurating: boolean = false;
+
+  // Text context menu (grid view)
+  public textContextMenuVisible: boolean = false;
+  public textContextMenuX: number = 0;
+  public textContextMenuY: number = 0;
+  public textContextMenuItem: TextPreview | null = null;
+
+  // KWIC concordance search
+  public kwicResults: KwicResult[] = [];
+  public kwicSearchActive: boolean = false;
+  public kwicSearchQuery: string = '';
+  public isSearchingKwic: boolean = false;
 
   // Project state (flat list)
   public projects: ProjectPreview[] = [];
+  public projectSearchQuery: string = '';
   public selectedProject: ProjectPreview | null = null;
   public showProjectList: boolean = true;
   public newProjectName: string = '';
+
+  // Project card selection & inline rename
+  public selectedProjectCard: ProjectPreview | null = null;
+  public editingProject: ProjectPreview | null = null;
+  public editingProjectName: string = '';
+  private projectRenameTimer: any = null;
+  private projectRenameCancelled: boolean = false;
+
+  // Project context menu
+  public projectContextMenuVisible: boolean = false;
+  public projectContextMenuX: number = 0;
+  public projectContextMenuY: number = 0;
+  public projectContextMenuNode: ProjectPreview | null = null;
 
   // Translation state
   public hasLinkedTranslation: boolean = false;
@@ -167,6 +199,23 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public currentMuseumNumber: number = 0;
   public currentPNumber: string = '';
   public currentPublicationNumber: string = '';
+
+  // Text list navigation (for navigating between texts in editing mode)
+  public textListNavActive: boolean = false;
+
+  get currentTextListIndex(): number {
+    if (!this.textListNavActive || !this.textId) return -1;
+    return this.filteredTexts.findIndex(t => t.text_id === this.textId);
+  }
+
+  get canNavigatePrev(): boolean {
+    return this.currentTextListIndex > 0;
+  }
+
+  get canNavigateNext(): boolean {
+    const idx = this.currentTextListIndex;
+    return idx >= 0 && idx < this.filteredTexts.length - 1;
+  }
 
   // Batch queue (sequential image loading)
   public pendingPages: SelectedPage[] = [];
@@ -200,7 +249,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   // API Key for cloud providers (GPT-4, Claude, Gemini)
   public apiKey: string = '';
 
-  // Sub-model selection for API providers (e.g., gemini-2.0-flash vs gemini-3-pro)
+  // Sub-model selection for API providers (e.g., gemini-3.1-flash-preview vs gemini-3.1-pro-preview)
   public selectedSubModel: string = '';
 
   // Available sub-models for each API provider
@@ -208,8 +257,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     'gemini_vision': [
       { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Fast, free tier' },
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
-      { value: 'gemini-3-flash', label: 'Gemini 3 Flash', description: 'Latest multimodal' },
-      { value: 'gemini-3-pro', label: 'Gemini 3 Pro', description: 'Most capable' },
+      { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite', description: 'Latest multimodal' },
+      { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Most capable' },
     ],
     'claude_vision': [
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', description: 'Fastest, cheapest' },
@@ -258,12 +307,20 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return this._selectedOcrModel;
   }
+  // Post-OCR correction rules (e.g. "akkadian" for glottal stop, reference signs)
+  public correctionRules: string = '';
+  public correctionRulesOptions: Array<{value: string; label: string; description: string}> = [
+    { value: '', label: 'None', description: 'No post-OCR corrections' },
+    { value: 'akkadian', label: 'Akkadian', description: 'Fix glottal stops (ʾ), reference signs (↑), special chars' },
+  ];
+
   // OCR prompt/mode selection (for VLM models like Ollama)
   public selectedOcrPrompt: string = 'dictionary';
   public ocrPromptModes: Array<{value: string; label: string; description: string}> = [
     { value: 'plain', label: 'Plain', description: 'Simple text extraction' },
     { value: 'markdown', label: 'Markdown', description: 'Formatted with markdown' },
     { value: 'dictionary', label: 'Dictionary', description: 'Akkadian dictionary entries' },
+    { value: 'ahw_refentry', label: 'AHw RefEntry', description: 'AHw cross-reference entries (plain text, special chars)' },
     { value: 'tei_lex0', label: 'TEI Lex-0', description: 'Two-stage: OCR → TEI XML encoding (with XSD validation)' },
   ];
 
@@ -271,8 +328,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public selectedTeiModel: string = 'gemini';
   public teiApiKey: string = '';
   public teiEncodingModels: Array<{value: string; label: string; provider: string; model: string; needsApiKey: boolean; description: string}> = [
-    { value: 'gemini', label: 'Gemini Flash', provider: 'gemini', model: 'gemini-2.0-flash', needsApiKey: true, description: 'Fast, free tier' },
-    { value: 'gemini_pro', label: 'Gemini Pro', provider: 'gemini', model: 'gemini-3-pro', needsApiKey: true, description: 'Most capable' },
+    { value: 'gemini', label: 'Gemini Flash-Lite', provider: 'gemini', model: 'gemini-3.1-flash-lite-preview', needsApiKey: true, description: 'Fast, free tier' },
+    { value: 'gemini_pro', label: 'Gemini Pro', provider: 'gemini', model: 'gemini-3.1-pro-preview', needsApiKey: true, description: 'Most capable' },
     { value: 'claude_haiku', label: 'Claude Haiku', provider: 'anthropic', model: 'claude-haiku-4-5-20251001', needsApiKey: true, description: 'Fast, cheap' },
     { value: 'claude_sonnet', label: 'Claude Sonnet', provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', needsApiKey: true, description: 'Balanced' },
     { value: 'gpt4o_mini', label: 'GPT-4o Mini', provider: 'openai', model: 'gpt-4o-mini', needsApiKey: true, description: 'Fast, cheap' },
@@ -308,6 +365,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         { value: 'kraken_typewriter', label: 'Typewriter', description: 'Pennsylvania Sumerian Dictionary' },
         { value: 'kraken_base', label: 'Base (SAA)', description: 'SAA Corpus' },
         { value: 'kraken_cusas', label: 'CUSAS-18', description: 'CUSAS-18 trained model' },
+        { value: 'trocr', label: 'TrOCR Base', description: 'Line-level handwritten OCR' },
       ]
     },
     {
@@ -338,6 +396,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         { value: 'claude_vision', label: 'Claude Vision', description: 'Anthropic' },
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
       ]
+    },
+    {
+      name: 'Trained',
+      models: []  // Populated dynamically from /available-models
     }
   ];
 
@@ -349,6 +411,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     'kraken_typewriter': true,
     'kraken_base': true,
     'kraken_cusas': true,
+    'trocr': true,
     // GPU models - local inference
     'nemotron_local': true,
     'deepseek_ocr': true,
@@ -403,6 +466,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvas: FabricCanvasComponent;
   @ViewChild('lineEditor', { static: false }) lineEditor: TextEditorComponent;
   @ViewChild(MatMenuTrigger) exportMenuTrigger: MatMenuTrigger;
+  @ViewChildren('projectRenameInput') projectRenameInputs!: QueryList<ElementRef>;
   public lines: Letter[];
 
   // Get dynamic canvas dimensions based on viewport
@@ -526,7 +590,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       : undefined;
 
-    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, teiOptions).subscribe(data => {
+    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, teiOptions, this.correctionRules || undefined).subscribe(data => {
       if (data.lines.length == 0) {
         this.notificationService.showWarning("AI failed to parse the image, please try again", 20000);
         this.isLoading = false;
@@ -597,7 +661,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     private projectService: ProjectService,
     private sanitizer: DomSanitizer,
     private location: Location,
-    private http: HttpClient) {
+    private http: HttpClient,
+    private productionService: ProductionService) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];
@@ -609,11 +674,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit(): void {
     console.log(
       '%c CuReD Keyboard Shortcuts %c\n' +
-      'Ctrl+Alt+N       New OCR process (restart)\n' +
+      'Ctrl+S           Save\n' +
+      'Ctrl+Shift+S     Save As (open dialog)\n' +
+      'Ctrl+N           New text (restart)\n' +
       'Alt+Z            Pan mode\n' +
       'Alt+A            Add box mode\n' +
-      'Alt+X            Adjust mode\n' +
       'Alt+D            Delete mode\n' +
+      'Ctrl+Shift+C     Crop image to selection box\n' +
       'Delete           Delete selected box\n' +
       'Double-click+hold Draw new box (in Pan mode)\n' +
       'Ctrl+H           Find & Replace (in text editor)',
@@ -680,6 +747,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.viewOnly) {
         this.canvasType = CanvasType.ViewAmendment;
       }
+
+      // Clear previous state when navigating between texts
+      if (this.canvas) {
+        this.canvas.removeAllRects();
+        this.boundingBoxes = [];
+      }
+      this.uploadedImageBlob = null;
+      this.currentMuseumName = '';
+      this.currentMuseumNumber = 0;
+      this.currentPNumber = '';
+      this.currentPublicationNumber = '';
+      this.currentLabel = '';
+      this.currentPart = '';
+      this.isCurated = false;
+      this.hasUnsavedChanges = false;
+      this.ocrCropArea = null;
 
       this.textId = this.takeTextId;
       this.transliterationId = this.takeTransId;
@@ -752,13 +835,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
    * Reset component to clean state for dashboard view
    */
   private resetToCleanState() {
+    this.textListNavActive = false;
     this.textId = null;
     this.transliterationId = null;
     this.takeTextId = null;
     this.takeTransId = null;
     this.isLoadedFromServer = false;
-    this.isCuratedKraken = false;
-    this.isCuratedVlm = false;
+    this.isCurated = false;
     this.viewOnly = false;
     this.lines = null;
     this.boundingBoxes = [];
@@ -789,9 +872,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy() {
     this.toolbarService.clearButtons();
     this.toolbarService.setLoading(false);
-    if (this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
-    }
     if (this.queryParamsSub) {
       this.queryParamsSub.unsubscribe();
     }
@@ -802,108 +882,26 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   updateToolbarButtons() {
-    const canGoBack = !this.isLoadedFromServer && !this.viewOnly && this.stage >= 1;
-
-    if (this.stage === 1) {
+    if (this.stage >= 1 && this.stage <= 5) {
       this.toolbarService.setToolbar({
         buttons: [],
-        message: 'Select a page',
-        backAction: canGoBack ? () => this.goBack() : undefined
-      });
-    } else if (this.stage === 2) {
-      // User can optionally draw a selection box, or process whole page
-      const message = this.selectedBox
-        ? 'Selection ready - click Generate'
-        : 'Draw a box to select area (optional)';
-      this.toolbarService.setToolbar({
-        buttons: [],
-        message: message,
-        backAction: canGoBack ? () => this.goBack() : undefined
-      });
-    } else if (this.stage === 5) {
-      const buttons = [];
-
-      buttons.push({
-        label: 'Export',
-        icon: 'download',
-        action: () => this.exportMenuTrigger.openMenu(),
-        color: 'default'
-      });
-
-      if (!this.viewOnly) {
-        buttons.push({
-          label: 'Save',
-          icon: 'save',
-          action: () => this.openSaveDialog(),
-          color: 'primary'
-        });
-
-        // Curate for Kraken: requires boxes === lines
-        const krakenLabel = this.isCuratedKraken ? 'Kraken ✓' : 'Curate Kraken';
-        buttons.push({
-          label: krakenLabel,
-          icon: 'grid_on',
-          action: () => this.curateForKraken(),
-          color: this.isCuratedKraken ? 'primary' : 'accent',
-          disabled: this.textId == null || !this.canCurateKraken
-        });
-
-        // Curate for VLM: requires crop area or saved image + lines
-        const vlmLabel = this.isCuratedVlm ? 'VLM ✓' : 'Curate VLM';
-        buttons.push({
-          label: vlmLabel,
-          icon: 'crop',
-          action: () => this.curateForVlm(),
-          color: this.isCuratedVlm ? 'primary' : 'accent',
-          disabled: this.textId == null || !this.canCurateVlm
-        });
-
-        // Detect Lines: when boxes are missing or mismatched with lines
-        if (this.lines?.length > 0 && this.boundingBoxes.length !== this.lines.length) {
-          buttons.push({
-            label: this.isDetectingLines ? 'Detecting...' : 'Detect Lines',
-            icon: this.isDetectingLines ? 'hourglass_empty' : 'auto_fix_high',
-            action: () => this.detectLines(),
-            color: 'pink',
-            disabled: this.isDetectingLines
-          });
-        }
-
-        // Clear all boxes
-        if (this.boundingBoxes.length > 0) {
-          buttons.push({
-            label: 'Clear Boxes',
-            icon: 'delete_sweep',
-            action: () => this.clearAllBoxes(),
-            color: 'warn'
-          });
-        }
-
-        if (this.isLoadedFromServer && this.textId != null && this.transliterationId != null) {
-          buttons.push({
-            label: 'Delete',
-            icon: 'delete',
-            action: () => this.deleteCurrentTransliteration(),
-            color: 'warn'
-          });
-        }
-      }
-
-      buttons.push({
-        label: 'New',
-        icon: 'refresh',
-        action: () => this.restart(),
-        color: 'warn'
-      });
-
-      this.toolbarService.setToolbar({
-        buttons,
         message: undefined,
-        backAction: canGoBack ? () => this.goBack() : undefined
+        backAction: undefined
       });
     } else {
       this.toolbarService.clearButtons();
     }
+  }
+
+  save() {
+    // First save: need metadata from dialog
+    if (!this.textId) {
+      this.openSaveDialog();
+      return;
+    }
+    // Subsequent saves: use stored label/part
+    this.isSaving = true;
+    this.doSaveWithLabelAndPart(false, this.currentLabel, this.currentPart);
   }
 
   openSaveDialog() {
@@ -1013,25 +1011,29 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  private doSaveWithLabelAndPart(isFixed: boolean, label: string, part: string, curateTarget?: 'kraken' | 'vlm') {
-    if (this.transliterationId == null && this.uploadedImageBlob) {
+  private doSaveWithLabelAndPart(isFixed: boolean, label: string, part: string, curateTarget?: 'both') {
+    if (this.uploadedImageBlob) {
+      console.log('[Save] Uploading image:', this.uploadedImageBlob.name, 'size:', this.uploadedImageBlob.size, 'textId:', this.textId);
       this.curedService.saveImage(this.uploadedImageBlob, this.textId).subscribe(imageName => {
+        console.log('[Save] Image uploaded, server returned name:', imageName);
         this.createSubmissionWithLabelAndPart(isFixed, imageName, label, part, curateTarget);
       }, err => {
+        console.error('[Save] Image upload FAILED:', err);
         this.notificationService.showError('Failed to upload image');
         this.isSaving = false;
       });
     } else {
+      console.log('[Save] No uploadedImageBlob — saving text only');
       this.createSubmissionWithLabelAndPart(isFixed, null, label, part, curateTarget);
     }
   }
 
-  private doSave(isFixed: boolean, curateTarget?: 'kraken' | 'vlm') {
+  private doSave(isFixed: boolean, curateTarget?: 'both') {
     this.doSaveWithLabelAndPart(isFixed, this.currentLabel, this.currentPart, curateTarget);
   }
 
   createSubmissionWithLabelAndPart(isFixed: boolean, imageName: string = null, label: string = '', part: string = '',
-                                   curateTarget?: 'kraken' | 'vlm') {
+                                   curateTarget?: 'both') {
     let lines = this.lines.map(line => line.letter);
     // If image was cropped, adjust box coordinates to be relative to the crop (not full page)
     let dimensions: Dimensions[];
@@ -1046,11 +1048,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       dimensions = this.boundingBoxes.map(box => new Dimensions(box.left, box.top, box.getScaledHeight(), box.getScaledWidth()));
     }
 
-    // Determine curation flags: preserve existing + add new target
-    let isKraken = this.isCuratedKraken;
-    let isVlm = this.isCuratedVlm;
-    if (curateTarget === 'kraken') isKraken = true;
-    if (curateTarget === 'vlm') isVlm = true;
+    // Determine curation flags
+    let isKraken = this.isCurated;
+    let isVlm = this.isCurated;
+    if (curateTarget === 'both') { isKraken = true; isVlm = true; }
 
     this.curedService.createSubmission(this.textId, this.transliterationId, lines, dimensions, imageName, isKraken, isVlm).subscribe(result => {
       if (this.hasPendingPages) {
@@ -1061,9 +1062,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.notificationService.showInfo("Successfully saved");
       }
       this.transliterationId = result;
-      this.isCuratedKraken = isKraken;
-      this.isCuratedVlm = isVlm;
+      this.isCurated = isKraken || isVlm;
       this.isSaving = false;
+      this.hasUnsavedChanges = false;
+      this.uploadedImageBlob = null;  // Clear so it doesn't re-upload on next save
 
       // Update label if provided
       if (label && this.textId) {
@@ -1104,22 +1106,16 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  /** Check if the data shape allows Kraken curation (boxes === lines). */
-  get canCurateKraken(): boolean {
+  /** Check if the data shape allows curation (boxes === lines). */
+  get canCurate(): boolean {
     const lineCount = this.lines?.length || 0;
     const boxCount = this.boundingBoxes?.length || 0;
     return lineCount > 0 && boxCount === lineCount;
   }
 
-  /** Check if the data shape allows VLM curation (crop area OR saved image + lines). */
-  get canCurateVlm(): boolean {
-    const lineCount = this.lines?.length || 0;
-    return lineCount > 0 && (!!this.ocrCropArea || this.isLoadedFromServer);
-  }
-
-  /** Whether any curation has been done. */
+  /** Whether curation has been done. */
   get isTextFixed(): boolean {
-    return this.isCuratedKraken || this.isCuratedVlm;
+    return this.isCurated;
   }
 
   /** Clear all bounding boxes from the canvas. */
@@ -1129,47 +1125,37 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.boundingBoxes = [];
     this.canvas.getCanvas().renderAll();
+    this.hasUnsavedChanges = true;
     this.notificationService.showInfo('All boxes removed');
     this.updateToolbarButtons();
   }
 
-  curateForKraken() {
+  curate() {
     if (this.textId == null) {
       this.notificationService.showError('Please save first before curating');
       return;
     }
-    if (!this.canCurateKraken) {
-      this.notificationService.showError(`Cannot curate for Kraken: need ${this.lines?.length || 0} boxes but have ${this.boundingBoxes?.length || 0}`);
+    if (!this.canCurate) {
+      this.notificationService.showError(`Cannot curate: need ${this.lines?.length || 0} boxes but have ${this.boundingBoxes?.length || 0}`);
       return;
     }
-    this.notificationService.showInfo('Curating for Kraken');
-    this.doSave(true, 'kraken');
+    this.notificationService.showInfo('Curating for training');
+    this.doSave(true, 'both');
   }
 
-  curateForVlm() {
-    if (this.textId == null) {
-      this.notificationService.showError('Please save first before curating');
+  deleteCurrentEntry() {
+    if (!confirm('Delete this text entry and all its transliterations? This cannot be undone.')) {
       return;
     }
-    if (!this.canCurateVlm) {
-      this.notificationService.showError('Cannot curate for VLM: need lines and an image');
-      return;
-    }
-    this.notificationService.showInfo('Curating for VLM');
-    this.doSave(true, 'vlm');
-  }
-
-  deleteCurrentTransliteration() {
-    if (!confirm('Delete this transliteration? This will also delete the associated image and cannot be undone.')) {
-      return;
-    }
-    this.curedService.deleteTransliteration(this.textId, this.transliterationId).subscribe(
+    this.curedService.deleteText(this.textId).subscribe(
       () => {
-        this.notificationService.showSuccess('Transliteration deleted');
-        this.router.navigate(['/']);
+        this.notificationService.showSuccess('Text entry deleted');
+        this.curedTexts = this.curedTexts.filter(t => t.text_id !== this.textId);
+        this.stage = 0;
+        this.refreshCurrentProject();
       },
       () => {
-        this.notificationService.showError('Failed to delete transliteration');
+        this.notificationService.showError('Failed to delete text entry');
       }
     );
   }
@@ -1208,13 +1194,18 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   loadTransliteration() {
     this.curedService.loadTransliteration(this.textId, this.transliterationId).subscribe(data => {
       this.processTransliteration(data.lines, data.boxes, true);
-      this.isCuratedKraken = data.is_curated_kraken || false;
-      this.isCuratedVlm = data.is_curated_vlm || false;
+      this.isCurated = data.is_curated_kraken || data.is_curated_vlm || false;
       if (this.highlightQuery) {
         this.setHighlightByQuery(this.highlightQuery);
       }
       // Load text metadata to enable translation lookup
       this.loadTextMetadata();
+      // Loading from server is not a user change — reset dirty flag
+      this.hasUnsavedChanges = false;
+      this.updateToolbarButtons();
+    }, err => {
+      console.error('Failed to load transliteration:', err);
+      this.notificationService.showError('Failed to load transliteration data');
     });
   }
 
@@ -1306,7 +1297,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   browseServer(): void {
     const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-      width: '850px', height: '600px'
+      width: '1000px', height: '720px'
     });
     dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
       if (!result || result.length === 0) return;
@@ -1360,8 +1351,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.textId = null;
     this.transliterationId = null;
     this.uploadedImageBlob = null;
-    this.isCuratedKraken = false;
-    this.isCuratedVlm = false;
+    this.isCurated = false;
     this.ocrCropArea = null;
     this.ocrSelectionBox = null;
     this.teiValidationResults = null;
@@ -1467,6 +1457,56 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.canvas.props.canvasWidth = dims.width;
     this.canvas.forceCanvasSize();
     this.canvas.forceZoomOut(0.5);  // 50% zoom
+  }
+
+  cropToSelectedBox() {
+    const bgImage = this.canvas?.getCanvas().backgroundImage as unknown as FabricImage;
+    if (!bgImage) {
+      this.notificationService.showError('No image loaded');
+      return;
+    }
+
+    // Use selectedBox (stage 2), the active canvas object, selectedRect, or first bounding box
+    const box = this.selectedBox
+      || this.canvas.getCanvas().getActiveObject() as any
+      || this.canvas.selectedRect
+      || (this.boundingBoxes.length === 1 ? this.boundingBoxes[0] : null);
+    if (!box || box.left == null) {
+      this.notificationService.showError('Select a box first, or draw one');
+      return;
+    }
+
+    const croppedDataUrl = bgImage.toDataURL({
+      left: box.left,
+      top: box.top,
+      width: box.getScaledWidth(),
+      height: box.getScaledHeight()
+    });
+
+    // Update blob for saving
+    this.uploadedImageBlob = this.dataUrlToFile(croppedDataUrl, 'manual-crop.png');
+
+    // Remove the box from canvas
+    this.canvas.getCanvas().remove(box);
+    if (this.selectedBox === box) {
+      this.selectedBox = null;
+    }
+    // Remove from boundingBoxes array if it was a bounding box (stage 5)
+    this.boundingBoxes = this.boundingBoxes.filter(b => b !== box);
+    this.ocrCropArea = null;  // Image IS the crop now — no offset needed
+
+    // Clear all remaining bounding boxes (they won't match the cropped image)
+    for (const b of this.boundingBoxes) {
+      this.canvas.getCanvas().remove(b);
+    }
+    this.boundingBoxes = [];
+
+    // Replace canvas background with cropped image
+    this.setCanvasImage(croppedDataUrl);
+
+    this.hasUnsavedChanges = true;
+    this.notificationService.showSuccess('Image cropped to selection');
+    this.updateToolbarButtons();
   }
 
 
@@ -1668,6 +1708,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.boundingBoxes = this.boundingBoxes.filter(item => item.data.index.row != index.row);
       this.sortBoxes();
       this.updateBoundingBoxesIndexes();
+      this.hasUnsavedChanges = true;
       this.updateToolbarButtons();
     } else {
       this.selectedBox = null;
@@ -1688,39 +1729,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onLinesChanged(updatedLines: Letter[]) {
     this.lines = updatedLines;
+    this.hasUnsavedChanges = true;
     this.updateToolbarButtons();
-    this.autoSave();
-  }
-
-  private autoSave(): void {
-    // Only auto-save if we have an existing transliteration (already saved once)
-    if (!this.transliterationId || !this.textId) return;
-
-    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-    this.autoSaveTimer = setTimeout(() => {
-      const lines = this.lines.map(line => line.letter);
-      let dimensions: Dimensions[];
-      if (this.ocrCropArea) {
-        dimensions = this.boundingBoxes.map(box => new Dimensions(
-          box.left - this.ocrCropArea.left,
-          box.top - this.ocrCropArea.top,
-          box.getScaledHeight(),
-          box.getScaledWidth()
-        ));
-      } else {
-        dimensions = this.boundingBoxes.map(box =>
-          new Dimensions(box.left, box.top, box.getScaledHeight(), box.getScaledWidth())
-        );
-      }
-
-      this.curedService.createSubmission(
-        this.textId, this.transliterationId, lines, dimensions, null,
-        this.isCuratedKraken, this.isCuratedVlm
-      ).subscribe(
-        result => { this.transliterationId = result; },
-        () => {}
-      );
-    }, this.AUTO_SAVE_DEBOUNCE_MS);
   }
 
   updateTransliterationIndexes() {
@@ -1730,33 +1740,56 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.updateToolbarButtons();
   }
 
-  @HostListener('document:keydown', ['$event'])
-  onKeyDown(event: KeyboardEvent) {
-    if (event.ctrlKey && event.key === 'n') {
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(event: BeforeUnloadEvent) {
+    if (this.hasUnsavedChanges) {
       event.preventDefault();
-      this.restart();
+      event.returnValue = '';
     }
   }
 
-  restart() {
-    if (!confirm("Are you sure you are done with this text?")) {
-      return;
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent) {
+    if (event.ctrlKey && !event.shiftKey && event.key === 's') {
+      event.preventDefault();
+      if (this.stage === 5 && !this.viewOnly) {
+        this.save();
+      }
     }
-    this.toolbarService.clearButtons();
-    location.reload();
-    return;
-
-    this.stage = 0;
-    this.textId = null;
-    this.transliterationId = null;
-    this.backgroundImage = null;
-    this.isLoadedFromServer = false;
-    this.isCuratedKraken = false;
-    this.isCuratedVlm = false;
-    this.boundingBoxes = [];
-    this.lines = [];
-    this.lineEditor.hardReset();
-    this.canvas.hardReset();
+    if (event.ctrlKey && event.shiftKey && event.key === 'S') {
+      event.preventDefault();
+      if (this.stage === 5 && !this.viewOnly) {
+        this.openSaveDialog();
+      }
+    }
+    if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+      event.preventDefault();
+      this.cropToSelectedBox();
+    }
+    if (event.ctrlKey && event.shiftKey && event.key === 'X') {
+      event.preventDefault();
+      if (this.stage === 5 && !this.viewOnly && this.textId != null) {
+        if (this.isCurated) {
+          this.curedService.batchCurate([this.textId], false).subscribe(
+            () => {
+              this.isCurated = false;
+              this.notificationService.showSuccess('Curation removed');
+              this.loadCuratedStats();
+            },
+            () => this.notificationService.showError('Failed to toggle curation')
+          );
+        } else {
+          this.curate();
+        }
+      }
+    }
+    if (event.ctrlKey && event.key === 'a' && this.stage === 0 && this.selectedProject) {
+      event.preventDefault();
+      this.selectAllTexts();
+    }
+    if (event.key === 'Delete' && this.stage === 0 && this.selectedTexts.size > 0) {
+      this.deleteSelectedTexts();
+    }
   }
 
   fetchBoundingBoxes(allDimensions: Dimensions[] = [], selecteAreaBox = null) {
@@ -1845,6 +1878,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.updateToolbarButtons();
       }
     } else if (this.stage == 5) {
+      if (this.hasUnsavedChanges) {
+        if (!confirm('You have unsaved changes. Discard them?')) {
+          return;
+        }
+        this.hasUnsavedChanges = false;
+      }
       // From results back to visualizer (stage 2)
       this.stage = 2;
       this.updateUrl(replace);
@@ -1881,43 +1920,219 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.boundingBoxes.push(newRect);
       this.sortBoxes();
       this.updateBoundingBoxesIndexes();
+      this.hasUnsavedChanges = true;
       this.updateToolbarButtons();
     }
   }
 
-  exportResult() {
-    var lines = `Transliterations generated by CuReD (https://ben-digpasts.com/cured)\n\n`;
-    this.lines.forEach(line => {
-      lines += line.letter + "\n";
-    })
+  downloadCurrentText(format: string) {
+    const label = this.currentLabel || 'unlabeled';
+    const fnameBase = this.currentLabel ? `${this.currentLabel}_${this.textId || 'new'}` : `CuReD-${this.textId || 'new'}`;
+    const editorContent = this.lines.map(l => l.letter).join('\n');
 
-    var transliteratinsBlob = new Blob([lines], { type: "text/plain;charset=utf-8" });
-    saveAs(transliteratinsBlob, `CuReD-Result.txt`);
+    if (format === 'txt') {
+      const header = `=== ${label} | text_id=${this.textId || 'unsaved'} ===\n`;
+      const blob = new Blob([header + editorContent], { type: 'text/plain;charset=utf-8' });
+      saveAs(blob, `${fnameBase}.txt`);
+      return;
+    }
+
+    if (format === 'atf') {
+      const atfContent = this.convertToAtf(editorContent, label, this.textId || 0);
+      saveAs(new Blob([atfContent], { type: 'text/plain;charset=utf-8' }), `${fnameBase}.atf`);
+      return;
+    }
+
+    // JSON and CSV: use backend if text is saved, otherwise build locally
+    if (this.textId != null) {
+      const ext = format === 'csv' ? 'csv' : 'json';
+      this.projectService.exportSingleText(this.textId, format).subscribe(
+        blob => { saveAs(blob, `${fnameBase}.${ext}`); },
+        () => { this.notificationService.showError('Download failed'); }
+      );
+    } else {
+      // Text not yet saved — build locally
+      if (format === 'json') {
+        const data = { label: this.currentLabel, content: editorContent, text_id: null, part: this.currentPart || '' };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+        saveAs(blob, `${fnameBase}.json`);
+      } else if (format === 'csv') {
+        const csvContent = `label,content,text_id,part\n"${(this.currentLabel || '').replace(/"/g, '""')}","${editorContent.replace(/"/g, '""')}","","${(this.currentPart || '').replace(/"/g, '""')}"`;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+        saveAs(blob, `${fnameBase}.csv`);
+      }
+    }
   }
 
-  exportAtfEbl() {
-    let content = "&P123456 = CuReD Export\n#project: ebl\n#atf: lang akk\n#atf: use unicode\n@tablet\n@obverse\n";
-
-    this.lines.forEach((line, index) => {
-      // Always start with the Raw text (because this.lines is kept raw by the editor)
-      let text = line.letter;
-
-      // Convert to ATF using the service (this handles all replacements)
-      text = this.atfConverter.toAtf(text);
-
-      // Clean up internal tags like @reading{...} for final export
+  private convertToAtf(content: string, label: string, textId: number): string {
+    let atf = `&P${textId} = ${label}\n#project: ebl\n#atf: lang akk\n#atf: use unicode\n@tablet\n@obverse\n`;
+    const lines = (content || '').split('\n');
+    lines.forEach((line, i) => {
+      let text = this.atfConverter.toAtf(line);
       text = this.atfConverter.cleanForExport(text);
-
-      // Ensure line numbering
-      if (!/^\d+\.?\s+/.test(text) && !/^\d+\.'\s*/.test(text) && !/^\d+'\.?\s*/.test(text)) {
-        content += `${index + 1}. ${text}\n`;
-      } else {
-        content += `${text}\n`;
+      if (text.trim()) {
+        if (!/^\d+\.?\s+/.test(text) && !/^\d+\.'\s*/.test(text) && !/^\d+'\.?\s*/.test(text)) {
+          atf += `${i + 1}. ${text}\n`;
+        } else {
+          atf += `${text}\n`;
+        }
       }
     });
+    return atf;
+  }
 
-    var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `CuReD-Export.atf`);
+  exportProject(format: string) {
+    if (!this.selectedProject || this.selectedProject.project_id === -1) return;
+    const projectName = this.selectedProject.name.replace(/\s+/g, '_');
+
+    // ATF: fetch JSON data, convert client-side
+    if (format === 'atf') {
+      this.projectService.exportProject(this.selectedProject.project_id, 'json').subscribe(
+        blob => {
+          blob.text().then(raw => {
+            const texts: any[] = JSON.parse(raw);
+            let content = '';
+            texts.forEach(t => {
+              content += this.convertToAtf(t.content, t.label || 'unlabeled', t.text_id) + '\n';
+            });
+            saveAs(new Blob([content], { type: 'text/plain;charset=utf-8' }), `${projectName}.atf`);
+          });
+        },
+        () => { this.notificationService.showError('Export failed'); }
+      );
+      return;
+    }
+
+    const ext = format.startsWith('zip_') ? 'zip' : format;
+    const filename = `${projectName}.${ext}`;
+    this.projectService.exportProject(this.selectedProject.project_id, format).subscribe(
+      blob => { saveAs(blob, filename); },
+      () => { this.notificationService.showError('Export failed'); }
+    );
+  }
+
+  downloadSingleText(item: TextPreview, event: Event, format: string = 'txt') {
+    event.stopPropagation();
+    const label = (item.labels && item.labels.length > 0) ? item.labels[0] : (item.label || '');
+    const fnameBase = label ? `${label}_${item.text_id}` : `${item.text_id}`;
+
+    if (format === 'atf') {
+      // ATF conversion is client-side — fetch raw JSON, convert, save
+      this.projectService.exportSingleText(item.text_id, 'json').subscribe(
+        blob => {
+          blob.text().then(raw => {
+            const data = JSON.parse(raw);
+            const atfContent = this.convertToAtf(data.content, label || 'unlabeled', item.text_id);
+            saveAs(new Blob([atfContent], { type: 'text/plain;charset=utf-8' }), `${fnameBase}.atf`);
+          });
+        },
+        () => { this.notificationService.showError('Download failed'); }
+      );
+      return;
+    }
+
+    const ext = format === 'csv' ? 'csv' : format;
+    this.projectService.exportSingleText(item.text_id, format).subscribe(
+      blob => { saveAs(blob, `${fnameBase}.${ext}`); },
+      () => { this.notificationService.showError('Download failed'); }
+    );
+  }
+
+  // ─── CuReD Dataset Export / Import ─────────────────────────────
+
+  exportProjectCured(): void {
+    if (!this.selectedProject || this.selectedProject.project_id === -1) return;
+    this.curedService.exportProjectCured(this.selectedProject.project_id);
+  }
+
+  exportProjectCuredFromMenu(): void {
+    if (!this.projectContextMenuNode) return;
+    this.projectContextMenuVisible = false;
+    this.curedService.exportProjectCured(this.projectContextMenuNode.project_id);
+  }
+
+  exportSingleTextCured(item: TextPreview, event: Event): void {
+    event.stopPropagation();
+    this.curedService.exportTextCured(item.text_id);
+  }
+
+  handleImportZip(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    const file = input.files[0];
+    input.value = '';  // reset so same file can be re-uploaded
+
+    const projectId = this.selectedProject?.project_id !== -1
+      ? this.selectedProject?.project_id
+      : undefined;
+
+    this.curedService.importCuredZip(file, projectId).subscribe({
+      next: (result) => {
+        if (result.errors?.length) {
+          this.notificationService.showError(
+            `Import partially failed: ${result.imported} imported, ${result.errors.length} errors`
+          );
+        } else {
+          this.notificationService.showSuccess(
+            `Imported ${result.imported} text${result.imported === 1 ? '' : 's'}`
+          );
+        }
+        // Reload text list
+        if (this.selectedProject) {
+          this.openProject(this.selectedProject);
+        }
+      },
+      error: () => {
+        this.notificationService.showError('Import failed');
+      }
+    });
+  }
+
+  handleImportFolder(event: any): void {
+    const files = event.target?.files;
+    if (!files || files.length === 0) return;
+
+    // Extract folder path from Electron's File.path property
+    let folderPath = '';
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if ((file as any).path) {
+        const fullPath: string = (file as any).path;
+        const sep = fullPath.includes('\\') ? '\\' : '/';
+        folderPath = fullPath.substring(0, fullPath.lastIndexOf(sep));
+        break;
+      }
+    }
+    event.target.value = '';
+
+    if (!folderPath) {
+      this.notificationService.showError('Could not determine folder path. This feature requires the desktop app.');
+      return;
+    }
+
+    const projectId = this.selectedProject?.project_id !== -1
+      ? this.selectedProject?.project_id
+      : undefined;
+
+    this.curedService.importCuredFolder(folderPath, projectId).subscribe({
+      next: (result) => {
+        if (result.errors?.length) {
+          this.notificationService.showError(
+            `Import partially failed: ${result.imported} imported, ${result.errors.length} errors`
+          );
+        } else {
+          this.notificationService.showSuccess(
+            `Imported ${result.imported} text${result.imported === 1 ? '' : 's'} from folder`
+          );
+        }
+        if (this.selectedProject) {
+          this.openProject(this.selectedProject);
+        }
+      },
+      error: () => {
+        this.notificationService.showError('Folder import failed');
+      }
+    });
   }
 
   setHighlightByQuery(query: string) {
@@ -2038,6 +2253,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   openProject(project: ProjectPreview) {
     this.selectedProject = project;
     this.showProjectList = false;
+    this.clearTextSelection();
+    this.loadCuratedStats();
     this.projectService.getTexts(project.project_id).subscribe(data => {
       this.curedTexts = data;
       this.collectExistingParts();
@@ -2057,10 +2274,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   backToProjects() {
+    this.textListNavActive = false;
     this.selectedProject = null;
     this.showProjectList = true;
     this.curedTexts = [];
+    this.clearTextSelection();
     this.loadProjects();
+    this.loadCuratedStats();
   }
 
   createProject() {
@@ -2072,8 +2292,297 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  deleteProject(project: ProjectPreview, event: Event) {
+  // ============== Project Card Selection & Inline Rename ==============
+
+  selectProjectCard(project: ProjectPreview): void {
+    this.selectedProjectCard = project;
+  }
+
+  onProjectNameClick(project: ProjectPreview, event: MouseEvent): void {
     event.stopPropagation();
+    // Only start rename if this card is already selected (slow double-click)
+    if (this.selectedProjectCard?.project_id === project.project_id) {
+      clearTimeout(this.projectRenameTimer);
+      this.projectRenameTimer = setTimeout(() => {
+        this.startProjectRename(project);
+      }, 400);
+    }
+  }
+
+  startProjectRename(project: ProjectPreview): void {
+    this.editingProject = project;
+    this.editingProjectName = project.name;
+    this.projectRenameCancelled = false;
+    setTimeout(() => {
+      const inputs = this.projectRenameInputs.toArray();
+      if (inputs.length > 0) {
+        const input = inputs[0].nativeElement as HTMLInputElement;
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  confirmProjectRename(): void {
+    if (!this.editingProject || this.projectRenameCancelled) { return; }
+    const project = this.editingProject;
+    const newName = this.editingProjectName.trim();
+    this.editingProject = null;
+
+    if (!newName || newName === project.name) { return; }
+
+    this.projectService.rename(project.project_id, newName).subscribe(
+      () => {
+        project.name = newName;
+        this.notificationService.showSuccess(`Renamed to "${newName}"`);
+      },
+      () => this.notificationService.showError('Failed to rename project')
+    );
+  }
+
+  cancelProjectRename(): void {
+    this.projectRenameCancelled = true;
+    this.editingProject = null;
+    this.editingProjectName = '';
+  }
+
+  onProjectRenameBlur(): void {
+    setTimeout(() => {
+      if (this.editingProject && !this.projectRenameCancelled) {
+        this.confirmProjectRename();
+      }
+    }, 100);
+  }
+
+  // ============== Project Context Menu ==============
+
+  onProjectContextMenu(project: ProjectPreview, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.projectContextMenuNode = project;
+    this.projectContextMenuX = event.clientX;
+    this.projectContextMenuY = event.clientY;
+    this.projectContextMenuVisible = true;
+  }
+
+  startProjectRenameFromMenu(): void {
+    if (!this.projectContextMenuNode) { return; }
+    const project = this.projectContextMenuNode;
+    this.projectContextMenuVisible = false;
+    this.selectedProjectCard = project;
+    this.startProjectRename(project);
+  }
+
+  deleteProjectFromMenu(): void {
+    if (!this.projectContextMenuNode) { return; }
+    const project = this.projectContextMenuNode;
+    this.projectContextMenuVisible = false;
+    this.deleteProject(project);
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.projectContextMenuVisible = false;
+    this.textContextMenuVisible = false;
+  }
+
+  // ============== Text Selection & Batch Curate ==============
+
+  toggleTextSelection(item: TextPreview, event: MouseEvent): void {
+    const index = this.filteredTexts.indexOf(item);
+    const id = item.text_id;
+
+    if (event.shiftKey && this.lastSelectedTextIndex >= 0) {
+      const start = Math.min(this.lastSelectedTextIndex, index);
+      const end = Math.max(this.lastSelectedTextIndex, index);
+      for (let i = start; i <= end; i++) {
+        this.selectedTexts.add(this.filteredTexts[i].text_id);
+      }
+    } else if (event.ctrlKey || event.metaKey) {
+      if (this.selectedTexts.has(id)) {
+        this.selectedTexts.delete(id);
+      } else {
+        this.selectedTexts.add(id);
+      }
+    } else {
+      this.selectedTexts.clear();
+      this.selectedTexts.add(id);
+    }
+    this.lastSelectedTextIndex = index;
+  }
+
+  isTextSelected(item: TextPreview): boolean {
+    return this.selectedTexts.has(item.text_id);
+  }
+
+  selectAllTexts(): void {
+    if (this.selectedTexts.size === this.filteredTexts.length) {
+      this.selectedTexts.clear();
+    } else {
+      this.filteredTexts.forEach(t => this.selectedTexts.add(t.text_id));
+    }
+  }
+
+  clearTextSelection(): void {
+    this.selectedTexts.clear();
+    this.lastSelectedTextIndex = -1;
+  }
+
+  deleteSelectedTexts(): void {
+    if (this.selectedTexts.size === 0) { return; }
+    const count = this.selectedTexts.size;
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete Texts',
+        message: `Delete ${count} selected text(s) and their transliterations?`,
+        confirmText: 'Delete',
+        warn: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) { return; }
+      const textIds = Array.from(this.selectedTexts);
+
+      this.curedService.batchDeleteTexts(textIds).subscribe({
+        next: (result) => {
+          this.curedTexts = this.curedTexts.filter(t => !this.selectedTexts.has(t.text_id));
+          this.notificationService.showSuccess(`Deleted ${result.deleted} text(s)`);
+          this.clearTextSelection();
+          this.refreshCurrentProject();
+        },
+        error: () => {
+          this.notificationService.showError('Failed to delete texts');
+          this.clearTextSelection();
+          this.refreshCurrentProject();
+        }
+      });
+    });
+  }
+
+  allSelectedAreCurated(): boolean {
+    if (this.selectedTexts.size === 0) return false;
+    return this.curedTexts
+      .filter(t => this.selectedTexts.has(t.text_id))
+      .every(t => t.is_curated);
+  }
+
+  batchCurateFromHeader(): void {
+    if (this.selectedTexts.size === 0) return;
+    // If all selected are already curated, uncurate; otherwise curate
+    const curate = !this.allSelectedAreCurated();
+    this.batchCurate(curate);
+  }
+
+  batchCurate(curate: boolean): void {
+    if (this.selectedTexts.size === 0) return;
+    this.isBatchCurating = true;
+    const textIds = Array.from(this.selectedTexts);
+
+    this.curedService.batchCurate(textIds, curate).subscribe({
+      next: (result) => {
+        this.isBatchCurating = false;
+        const msg = curate
+          ? `Curated ${result.updated} text(s)`
+          : `Uncurated ${result.updated} text(s)`;
+        this.notificationService.showSuccess(msg);
+        if (result.skipped > 0) {
+          this.notificationService.showWarning(`Skipped ${result.skipped} text(s) without transliterations`);
+        }
+        this.refreshCurrentProject();
+        this.loadCuratedStats();
+        this.clearTextSelection();
+      },
+      error: () => {
+        this.isBatchCurating = false;
+        this.notificationService.showError('Batch curate failed');
+      }
+    });
+  }
+
+  toggleSingleTextCuration(item: TextPreview, event: Event): void {
+    event.stopPropagation();
+    const newState = !(item.is_curated_kraken || item.is_curated_vlm);
+    this.curedService.batchCurate([item.text_id], newState).subscribe({
+      next: (result) => {
+        if (result.updated > 0) {
+          item.is_curated_kraken = newState;
+          item.is_curated_vlm = newState;
+          this.loadCuratedStats();
+        }
+      },
+      error: () => this.notificationService.showError('Failed to toggle curation')
+    });
+  }
+
+
+  // ============== Text Context Menu (Grid View) ==============
+
+  onTextContextMenu(item: TextPreview, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.textContextMenuItem = item;
+    this.textContextMenuX = event.clientX;
+    this.textContextMenuY = event.clientY;
+    this.textContextMenuVisible = true;
+  }
+
+  curateFromContextMenu(): void {
+    if (!this.textContextMenuItem) return;
+    const item = this.textContextMenuItem;
+    this.textContextMenuVisible = false;
+    this.curedService.batchCurate([item.text_id], true).subscribe({
+      next: (result) => {
+        if (result.updated > 0) {
+          item.is_curated_kraken = true;
+          item.is_curated_vlm = true;
+          this.notificationService.showSuccess('Marked as curated');
+          this.loadCuratedStats();
+        }
+      },
+      error: () => this.notificationService.showError('Failed to curate')
+    });
+  }
+
+  uncurateFromContextMenu(): void {
+    if (!this.textContextMenuItem) return;
+    const item = this.textContextMenuItem;
+    this.textContextMenuVisible = false;
+    this.curedService.batchCurate([item.text_id], false).subscribe({
+      next: (result) => {
+        if (result.updated > 0) {
+          item.is_curated_kraken = false;
+          item.is_curated_vlm = false;
+          this.notificationService.showSuccess('Removed curation');
+          this.loadCuratedStats();
+        }
+      },
+      error: () => this.notificationService.showError('Failed to uncurate')
+    });
+  }
+
+  onTextListBackgroundClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('.details-row') || target.closest('.text-grid-card')) {
+      return;
+    }
+    this.clearTextSelection();
+  }
+
+  private refreshCurrentProject(): void {
+    if (!this.selectedProject) return;
+    if (this.selectedProject.project_id === -1) {
+      this.loadUnassignedTexts();
+    } else {
+      this.projectService.getTexts(this.selectedProject.project_id).subscribe(data => {
+        this.curedTexts = data;
+        this.collectExistingParts();
+        this.loadTransliterationIds();
+      });
+    }
+  }
+
+  deleteProject(project: ProjectPreview) {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: { message: `Delete project "${project.name}"? Texts will become unassigned.` }
     });
@@ -2095,16 +2604,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  renameProject(project: ProjectPreview, event: Event) {
-    event.stopPropagation();
-    const newName = prompt('Rename project:', project.name);
-    if (newName && newName.trim()) {
-      this.projectService.rename(project.project_id, newName.trim()).subscribe(() => {
-        project.name = newName.trim();
-      });
-    }
-  }
-
   loadUnassignedTexts() {
     this.selectedProject = { project_id: -1, name: 'Unassigned' } as any;
     this.showProjectList = false;
@@ -2115,54 +2614,64 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  private loadTransliterationIds() {
-    for (const item of this.curedTexts) {
-      this.curedService.getTextTransliterations(item.text_id).subscribe(
-        transliterations => {
-          if (transliterations && transliterations.length > 0) {
-            const latest = transliterations[transliterations.length - 1];
-            item.latest_transliteration_id = latest.transliteration_id;
-            this.loadListThumbnail(item);
-          }
-        },
-        () => {}
-      );
-    }
-  }
+  private _thumbnailGeneration = 0; // incremented on project change to cancel stale loads
 
-  private loadListThumbnail(item: TextPreview) {
-    if (item.latest_transliteration_id) {
-      this.curedService.getImage(item.text_id, item.latest_transliteration_id).subscribe(
+  private loadTransliterationIds() {
+    // latest_transliteration_id is already provided by the text list API,
+    // so we just load thumbnails directly — no extra per-text requests needed.
+    // Batch with concurrency limit to avoid overwhelming the server.
+    this._thumbnailGeneration++;
+    const gen = this._thumbnailGeneration;
+    const items = this.curedTexts.filter(i => i.latest_transliteration_id && !i._thumbnailUrl);
+    const BATCH = 6;
+    let idx = 0;
+
+    const loadNext = () => {
+      if (gen !== this._thumbnailGeneration) return; // project changed, stop
+      if (idx >= items.length) return;
+      const item = items[idx++];
+      this.curedService.getImage(item.text_id, item.latest_transliteration_id!).subscribe(
         blob => {
+          if (gen !== this._thumbnailGeneration) return;
           const url = URL.createObjectURL(blob);
           item._thumbnailUrl = this.sanitizer.bypassSecurityTrustUrl(url);
+          loadNext();
         },
-        () => {}
+        () => { loadNext(); }
       );
+    };
+
+    // Start BATCH parallel chains
+    for (let i = 0; i < Math.min(BATCH, items.length); i++) {
+      loadNext();
     }
   }
 
-  get availableLabels(): string[] {
-    const labels = new Set<string>();
-    for (const item of this.curedTexts) {
-      if (item.labels && item.labels.length > 0) {
-        item.labels.forEach(l => { if (l) labels.add(l); });
-      } else if (item.label) {
-        labels.add(item.label);
-      }
+  get filteredProjects(): ProjectPreview[] {
+    if (!this.projectSearchQuery.trim()) {
+      return this.projects;
     }
-    return Array.from(labels).sort();
+    const q = this.projectSearchQuery.trim().toLowerCase();
+    return this.projects.filter(p => p.name.toLowerCase().includes(q));
+  }
+
+  clearProjectSearch(): void {
+    this.projectSearchQuery = '';
   }
 
   get filteredTexts(): TextPreview[] {
-    let items: TextPreview[];
-    if (this.selectedLabelFilter === null) {
-      items = [...this.curedTexts];
-    } else {
-      items = this.curedTexts.filter(item =>
-        (item.labels && item.labels.includes(this.selectedLabelFilter)) ||
-        (!item.labels?.length && (item.label || '') === this.selectedLabelFilter)
-      );
+    let items = [...this.curedTexts];
+
+    // Text search filter
+    if (this.searchQuery.trim()) {
+      const q = this.searchQuery.trim().toLowerCase();
+      items = items.filter(t => {
+        const identifier = this.getItemIdentifier(t).toLowerCase();
+        const label = (t.label || '').toLowerCase();
+        const labels = (t.labels || []).join(' ').toLowerCase();
+        return identifier.includes(q) || label.includes(q) || labels.includes(q)
+          || String(t.text_id).includes(q);
+      });
     }
 
     if (this.sortColumn) {
@@ -2175,6 +2684,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         if (this.sortColumn === 'identifier') {
           valA = this.getItemIdentifier(a).toLowerCase();
           valB = this.getItemIdentifier(b).toLowerCase();
+        }
+
+        // Handle label column — prefer labels array over legacy label field
+        if (this.sortColumn === 'label') {
+          valA = (a.labels?.length ? a.labels[0] : a.label) || '';
+          valB = (b.labels?.length ? b.labels[0] : b.label) || '';
         }
 
         if (valA == null) valA = '';
@@ -2200,11 +2715,56 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  setLabelFilter(label: string | null) {
-    this.selectedLabelFilter = label;
+  clearSearch(): void {
+    this.searchQuery = '';
+  }
+
+  searchKwic(): void {
+    const query = this.searchQuery.trim();
+    if (query.length < 2) {
+      this.clearKwicSearch();
+      return;
+    }
+
+    this.isSearchingKwic = true;
+    this.kwicSearchQuery = query;
+
+    this.productionService.searchKwic(query).subscribe({
+      next: (results) => {
+        this.kwicResults = results;
+        this.kwicSearchActive = true;
+        this.isSearchingKwic = false;
+      },
+      error: (err) => {
+        console.error('KWIC search failed:', err);
+        this.notificationService.showError('Search failed');
+        this.isSearchingKwic = false;
+      }
+    });
+  }
+
+  clearKwicSearch(): void {
+    this.kwicSearchActive = false;
+    this.kwicResults = [];
+    this.kwicSearchQuery = '';
+  }
+
+  openKwicResult(result: KwicResult): void {
+    this.router.navigate(['/cured'], {
+      queryParams: { identifier: result.identifier, type: result.identifier_type }
+    });
+  }
+
+  highlightKwicMatch(line: string): string {
+    if (!this.kwicSearchQuery) return line;
+    const safe = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escaped = this.kwicSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    return safe.replace(regex, '<mark>$1</mark>');
   }
 
   openListItem(item: TextPreview) {
+    this.textListNavActive = true;
     if (item.latest_transliteration_id) {
       this.router.navigate(['/cured'], {
         queryParams: {
@@ -2236,6 +2796,47 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       );
     }
+  }
+
+  navigateToPrevText(): void {
+    if (this.hasUnsavedChanges && !confirm('You have unsaved changes. Discard them?')) return;
+    this.hasUnsavedChanges = false;
+    const idx = this.currentTextListIndex;
+    if (idx > 0) {
+      this.openListItem(this.filteredTexts[idx - 1]);
+    }
+  }
+
+  navigateToNextText(): void {
+    if (this.hasUnsavedChanges && !confirm('You have unsaved changes. Discard them?')) return;
+    this.hasUnsavedChanges = false;
+    const idx = this.currentTextListIndex;
+    if (idx >= 0 && idx < this.filteredTexts.length - 1) {
+      this.openListItem(this.filteredTexts[idx + 1]);
+    }
+  }
+
+  navigateToTextByIndex(textId: number): void {
+    if (textId === this.textId) return;
+    if (this.hasUnsavedChanges && !confirm('You have unsaved changes. Discard them?')) return;
+    this.hasUnsavedChanges = false;
+    const item = this.filteredTexts.find(t => t.text_id === textId);
+    if (item) {
+      this.openListItem(item);
+    }
+  }
+
+  getTextNavLabel(item: TextPreview): string {
+    const ids = this.getItemIdentifiers(item);
+    let idStr = ids[0] !== '-' ? ids.join(' ') : '';
+    // Strip directory paths and file extensions
+    if (idStr.includes('/')) idStr = idStr.split('/').pop() || idStr;
+    if (idStr.includes('\\')) idStr = idStr.split('\\').pop() || idStr;
+    idStr = idStr.replace(/\.(png|jpg|jpeg|pdf|tif|tiff)$/i, '');
+    const parts: string[] = [];
+    if (idStr) parts.push(idStr);
+    if (item.part) parts.push(item.part);
+    return parts.length > 0 ? parts.join(' | ') : `Text ${item.text_id}`;
   }
 
   getItemIdentifiers(item: TextPreview): string[] {
@@ -2296,7 +2897,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       const index = Math.abs(hash) % this.labelPalette.length;
       this.labelColorCache.set(label, this.labelPalette[index]);
     }
-    return this.labelColorCache.get(label);
+    return this.labelColorCache.get(label)!;
   }
 
   openLabelDialog(item: TextPreview, event: Event) {
@@ -2379,6 +2980,27 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  openPartDialog(item: TextPreview, event: Event) {
+    event.stopPropagation();
+
+    const dialogRef = this.dialog.open(PartDialogComponent, {
+      data: { currentPart: item.part || '' }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === null || result === undefined) { return; }
+      const r = result as PartDialogResult;
+
+      this.textService.updatePart(item.text_id, r.part).subscribe(
+        () => {
+          item.part = r.part;
+          this.notificationService.showSuccess(r.part ? `Part: ${r.part}` : 'Part removed');
+        },
+        () => { this.notificationService.showError('Failed to update part'); }
+      );
+    });
+  }
+
   private parseIdentifierValue(value: string): { name: string, number: number } {
     const idx = value.lastIndexOf('-');
     if (idx > 0) {
@@ -2429,6 +3051,53 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         },
         () => { this.notificationService.showError('Failed to delete transliteration'); }
       );
+    });
+  }
+
+  moveListItem(item: TextPreview, event: Event) {
+    event.stopPropagation();
+    const currentProjectId = this.selectedProject?.project_id === -1 ? null : this.selectedProject?.project_id ?? null;
+    const dialogRef = this.dialog.open(MoveTextDialogComponent, {
+      data: {
+        projects: this.projects,
+        currentProjectId,
+        selectedCount: this.selectedTexts.size
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: MoveTextDialogResult | undefined) => {
+      if (!result) return;
+      const targetName = result.projectId
+        ? this.projects.find(p => p.project_id === result.projectId)?.name || 'project'
+        : 'Unassigned';
+
+      const textsToMove: TextPreview[] = result.moveAll && this.selectedTexts.size > 1
+        ? this.curedTexts.filter(t => this.selectedTexts.has(t.text_id))
+        : [item];
+
+      let completed = 0;
+      let failed = 0;
+      for (const t of textsToMove) {
+        this.projectService.assignText(t.text_id, result.projectId).subscribe(
+          () => {
+            this.curedTexts = this.curedTexts.filter(ct => ct !== t);
+            this.selectedTexts.delete(t.text_id);
+            completed++;
+            if (completed + failed === textsToMove.length) {
+              const msg = textsToMove.length === 1
+                ? `Moved to ${targetName}`
+                : `Moved ${completed} entries to ${targetName}` + (failed ? ` (${failed} failed)` : '');
+              this.notificationService.showSuccess(msg);
+            }
+          },
+          () => {
+            failed++;
+            if (completed + failed === textsToMove.length) {
+              this.notificationService.showError(`Moved ${completed}, failed ${failed}`);
+            }
+          }
+        );
+      }
     });
   }
 
@@ -2488,7 +3157,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   loadCuratedStats() {
-    this.curedService.getCuratedStats().subscribe(
+    const projectId = this.selectedProject?.project_id;
+    this.curedService.getCuratedStats(projectId).subscribe(
       stats => { this.curatedStats = stats; },
       () => {}
     );
@@ -2632,7 +3302,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.curedService.getAvailableOcrModels().subscribe(
       response => {
         this.availableOcrModels = response.models;
-        // Kraken models are statically defined - no dynamic loading needed
+
+        // Populate "Trained" category from dynamic models
+        const trainedCategory = this.ocrModelCategories.find(c => c.name === 'Trained');
+        if (trainedCategory) {
+          trainedCategory.models = [];
+          const trainedPrefixes = ['qwen_lora:', 'kraken:', 'trocr:'];
+          for (const model of response.models) {
+            if (trainedPrefixes.some(p => model.value.startsWith(p))) {
+              trainedCategory.models.push({
+                value: model.value,
+                label: model.label,
+              });
+              this.modelAvailability[model.value] = true;
+            }
+          }
+        }
       },
       () => {
         // Keep static defaults on error
@@ -2680,6 +3365,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   getVlmTrainingTarget(): number {
     return 200;
+  }
+
+  getProjectsWithCuratedData(): ProjectPreview[] {
+    return this.projects.filter(p => p.curated_count > 0);
   }
 
   getKrakenModels(): Array<{value: string; label: string}> {
@@ -2804,6 +3493,16 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Check for linked translation
         this.checkForLinkedTranslation();
+
+        // If text list nav not active (e.g. page reload), load the project's text list
+        if (!this.textListNavActive && text?.project_id) {
+          this.projectService.getTexts(text.project_id).subscribe(data => {
+            this.curedTexts = data;
+            this.collectExistingParts();
+            this.loadTransliterationIds();
+            this.textListNavActive = true;
+          });
+        }
       },
       () => {
         // Silently fail - translation lookup just won't be available
@@ -2966,6 +3665,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // Add detected boxes, offsetting by crop region
         this.fetchBoundingBoxes(result.dimensions, cropOffset);
+        this.hasUnsavedChanges = true;
         this.notificationService.showSuccess(`Detected ${result.dimensions.length} lines`);
         this.updateToolbarButtons();
       },

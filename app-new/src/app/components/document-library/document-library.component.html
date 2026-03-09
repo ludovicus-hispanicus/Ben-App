@@ -7,7 +7,7 @@
       <span>Library</span>
     </div>
 
-    <div class="tree-scroll">
+    <div class="tree-scroll" (click)="onTreeBackgroundClick($event)">
       <!-- Loading -->
       <div *ngIf="isLoading && projectTree.length === 0" class="tree-loading">
         <mat-spinner diameter="24"></mat-spinner>
@@ -62,8 +62,32 @@
       <!-- Actions in breadcrumb bar -->
       <span class="breadcrumb-spacer"></span>
 
-      <!-- Upload PDF (root view) -->
-      <ng-container *ngIf="!selectedFolder && !openProject">
+      <!-- Folder selection actions -->
+      <ng-container *ngIf="selectedFolders.size > 0">
+        <span class="breadcrumb-selection">{{selectedFolders.size}} folder(s)</span>
+        <button mat-icon-button (click)="deleteSelectedFolders()" matTooltip="Delete selected" class="delete-btn">
+          <mat-icon>delete</mat-icon>
+        </button>
+        <button mat-button class="breadcrumb-action-btn" (click)="selectAllFolders()">
+          {{ selectedFolders.size === currentSubfolders.length ? 'Deselect All' : 'Select All' }}
+        </button>
+        <button mat-button class="breadcrumb-action-btn" (click)="clearFolderSelection()">Clear</button>
+      </ng-container>
+
+      <!-- Page selection actions -->
+      <ng-container *ngIf="selectedPages.size > 0 && selectedFolders.size === 0">
+        <span class="breadcrumb-selection">{{selectedPages.size}} page(s)</span>
+        <button mat-icon-button (click)="deleteSelectedPages()" matTooltip="Delete selected" class="delete-btn">
+          <mat-icon>delete</mat-icon>
+        </button>
+        <button mat-button class="breadcrumb-action-btn" (click)="selectAllPages()">
+          {{ openProject && selectedPages.size === openProject.pages.length ? 'Deselect All' : 'Select All' }}
+        </button>
+        <button mat-button class="breadcrumb-action-btn" (click)="clearSelection()">Clear</button>
+      </ng-container>
+
+      <!-- Upload PDF (root view, no selection active) -->
+      <ng-container *ngIf="!selectedFolder && !openProject && selectedFolders.size === 0">
         <input [(ngModel)]="uploadProjectName" placeholder="Project name..." class="breadcrumb-input"
                (click)="$event.stopPropagation()">
         <input type="file" #pdfFileInput accept="application/pdf" (change)="onPdfSelected($event)" style="display:none">
@@ -79,33 +103,32 @@
         </span>
       </ng-container>
 
-      <button mat-icon-button *ngIf="selectedFolder" (click)="downloadFolder()" matTooltip="Download as ZIP">
-        <mat-icon>download</mat-icon>
-      </button>
-      <button mat-icon-button *ngIf="selectedFolder" (click)="renameFolder()" matTooltip="Rename folder">
-        <mat-icon>edit</mat-icon>
-      </button>
-      <button mat-icon-button *ngIf="selectedFolder" (click)="deleteFolder()" matTooltip="Delete folder" class="delete-btn">
-        <mat-icon>delete</mat-icon>
-      </button>
+      <!-- Folder actions (no selection active) -->
+      <ng-container *ngIf="selectedFolder && selectedFolders.size === 0 && selectedPages.size === 0">
+        <button mat-icon-button (click)="downloadFolder()" matTooltip="Download as ZIP">
+          <mat-icon>download</mat-icon>
+        </button>
+        <button mat-icon-button (click)="deleteFolder()" matTooltip="Delete folder" class="delete-btn">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </ng-container>
     </div>
 
-    <div class="content-scroll">
+    <div class="content-scroll"
+         (click)="onContentBackgroundClick($event)"
+         (dragover)="onFileDragOver($event)"
+         (dragleave)="onFileDragLeave($event)"
+         (drop)="onFileDrop($event)">
+
+      <!-- Drop overlay -->
+      <div class="drop-overlay" *ngIf="fileDragOver">
+        <mat-icon>cloud_upload</mat-icon>
+        <span>Drop files here to upload</span>
+        <span class="drop-hint">PDF, PNG, or JPEG</span>
+      </div>
 
       <!-- ====== ROOT VIEW (no folder selected) ====== -->
       <ng-container *ngIf="!selectedFolder && !openProject">
-
-        <!-- Folder selection toolbar -->
-        <div class="selection-toolbar" *ngIf="selectedFolders.size > 0">
-          <span class="selection-count">{{selectedFolders.size}} selected</span>
-          <button mat-stroked-button color="warn" (click)="deleteSelectedFolders()">
-            <mat-icon>delete</mat-icon> Delete Selected
-          </button>
-          <button mat-button (click)="selectAllFolders()">
-            {{ selectedFolders.size === currentSubfolders.length ? 'Deselect All' : 'Select All' }}
-          </button>
-          <button mat-button (click)="clearFolderSelection()">Clear</button>
-        </div>
 
         <!-- Subfolder cards (root level) -->
         <div class="subfolder-grid" *ngIf="currentSubfolders.length > 0">
@@ -121,19 +144,18 @@
                (drop)="onFolderDrop(folder, $event)"
                (dragend)="onFolderDragEnd($event)"
                (click)="selectFolderFromContent(folder, $event)"
-               (dblclick)="openFolderFromContent(folder)">
-            <div class="subfolder-check">
-              <mat-icon>{{ isFolderSelected(folder) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-            </div>
+               (dblclick)="openFolderFromContent(folder)"
+               (contextmenu)="onFolderContextMenu(folder, $event)">
             <mat-icon class="subfolder-icon">folder</mat-icon>
             <div class="subfolder-info">
-              <span class="subfolder-name">{{folder.name}}</span>
-              <span class="subfolder-count">{{folder.total_image_count}} pages</span>
+              <span class="subfolder-name" *ngIf="editingNode?.project_id !== folder.project_id"
+                    (click)="onSubfolderNameClick(folder, $event)">{{folder.name}}</span>
+              <input *ngIf="editingNode?.project_id === folder.project_id"
+                     class="subfolder-name-input" [(ngModel)]="editingName"
+                     (keydown.enter)="confirmRename()" (keydown.escape)="cancelRename()"
+                     (blur)="onRenameBlur()" (click)="$event.stopPropagation()" #renameInput>
+              <span class="subfolder-count">{{folder.children?.length || 0}}/{{folder.total_image_count}}</span>
             </div>
-            <button mat-icon-button class="subfolder-delete"
-                    (click)="deleteFolderCard(folder, $event)" matTooltip="Delete folder">
-              <mat-icon>delete</mat-icon>
-            </button>
           </div>
         </div>
 
@@ -146,18 +168,6 @@
 
       <!-- ====== FOLDER VIEW (folder selected) ====== -->
       <ng-container *ngIf="selectedFolder">
-
-        <!-- Folder selection toolbar -->
-        <div class="selection-toolbar" *ngIf="selectedFolders.size > 0">
-          <span class="selection-count">{{selectedFolders.size}} selected</span>
-          <button mat-stroked-button color="warn" (click)="deleteSelectedFolders()">
-            <mat-icon>delete</mat-icon> Delete Selected
-          </button>
-          <button mat-button (click)="selectAllFolders()">
-            {{ selectedFolders.size === currentSubfolders.length ? 'Deselect All' : 'Select All' }}
-          </button>
-          <button mat-button (click)="clearFolderSelection()">Clear</button>
-        </div>
 
         <!-- Subfolder cards -->
         <div class="subfolder-grid" *ngIf="currentSubfolders.length > 0">
@@ -173,19 +183,18 @@
                (drop)="onFolderDrop(folder, $event)"
                (dragend)="onFolderDragEnd($event)"
                (click)="selectFolderFromContent(folder, $event)"
-               (dblclick)="openFolderFromContent(folder)">
-            <div class="subfolder-check">
-              <mat-icon>{{ isFolderSelected(folder) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-            </div>
+               (dblclick)="openFolderFromContent(folder)"
+               (contextmenu)="onFolderContextMenu(folder, $event)">
             <mat-icon class="subfolder-icon">folder</mat-icon>
             <div class="subfolder-info">
-              <span class="subfolder-name">{{folder.name}}</span>
-              <span class="subfolder-count">{{folder.total_image_count}} pages</span>
+              <span class="subfolder-name" *ngIf="editingNode?.project_id !== folder.project_id"
+                    (click)="onSubfolderNameClick(folder, $event)">{{folder.name}}</span>
+              <input *ngIf="editingNode?.project_id === folder.project_id"
+                     class="subfolder-name-input" [(ngModel)]="editingName"
+                     (keydown.enter)="confirmRename()" (keydown.escape)="cancelRename()"
+                     (blur)="onRenameBlur()" (click)="$event.stopPropagation()" #renameInput>
+              <span class="subfolder-count">{{folder.children?.length || 0}}/{{folder.total_image_count}}</span>
             </div>
-            <button mat-icon-button class="subfolder-delete"
-                    (click)="deleteFolderCard(folder, $event)" matTooltip="Delete folder">
-              <mat-icon>delete</mat-icon>
-            </button>
           </div>
         </div>
 
@@ -196,6 +205,30 @@
         <ng-container *ngIf="openProject && openProject.pages.length > 0">
           <div class="folder-pages-header">
             <span class="pages-count">{{openProject.pages.length}} pages</span>
+
+            <div class="page-search-box">
+              <mat-icon class="page-search-icon">search</mat-icon>
+              <input [(ngModel)]="pageSearchQuery"
+                     (keyup.enter)="onPageSearchEnter()"
+                     placeholder="Search or jump to page #"
+                     class="page-search-input">
+              <button *ngIf="pageSearchQuery" mat-icon-button class="page-search-clear" (click)="clearPageSearch()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <span class="pages-filtered-count" *ngIf="pageSearchQuery && filteredPages.length !== openProject.pages.length">
+              {{filteredPages.length}} match{{filteredPages.length === 1 ? '' : 'es'}}
+            </span>
+
+            <span class="header-spacer"></span>
+
+            <button mat-icon-button [class.active-view]="viewMode === 'grid'" (click)="viewMode = 'grid'" matTooltip="Icon view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button mat-icon-button [class.active-view]="viewMode === 'list'" (click)="viewMode = 'list'" matTooltip="Details view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+
             <input type="file" #folderFileInput hidden accept=".pdf,.png,.jpg,.jpeg" multiple
                    (change)="onFolderFileSelected($event)">
             <button mat-stroked-button (click)="folderFileInput.click()" [disabled]="isUploading">
@@ -204,35 +237,60 @@
             <mat-spinner *ngIf="isUploading" diameter="20"></mat-spinner>
           </div>
 
-          <!-- Page selection toolbar -->
-          <div class="selection-toolbar" *ngIf="selectedPages.size > 0">
-            <span class="selection-count">{{selectedPages.size}} selected</span>
-            <button mat-stroked-button color="warn" (click)="deleteSelectedPages()">
-              <mat-icon>delete</mat-icon> Delete Selected
-            </button>
-            <button mat-button (click)="selectAllPages()">
-              {{ selectedPages.size === openProject.pages.length ? 'Deselect All' : 'Select All' }}
-            </button>
-            <button mat-button (click)="clearSelection()">Clear</button>
-          </div>
-
-          <div class="thumbnail-grid">
-            <div *ngFor="let page of openProject.pages"
+          <!-- Grid view -->
+          <div class="thumbnail-grid" *ngIf="viewMode === 'grid'">
+            <div *ngFor="let page of filteredPages"
+                 [id]="'page-thumb-' + page.page_number"
                  class="thumbnail-card"
                  [class.selected]="isPageSelected(page)"
                  (click)="togglePageSelection(page, $event)"
                  (dblclick)="openViewer(page)">
-              <div class="thumbnail-check">
-                <mat-icon>{{ isPageSelected(page) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+              <div class="thumbnail-icon">
+                <mat-icon>image</mat-icon>
               </div>
-              <img [src]="getThumbnailUrl(page)" [alt]="page.filename" loading="lazy">
-              <div class="thumbnail-footer">
-                <span class="thumbnail-label">{{page.filename}}</span>
-                <button mat-icon-button class="thumbnail-delete"
-                        (click)="deletePage(page, $event)" matTooltip="Delete page">
-                  <mat-icon>delete</mat-icon>
-                </button>
+              <span class="thumbnail-label">{{page.filename}}</span>
+            </div>
+          </div>
+
+          <!-- Details list view -->
+          <div class="details-list" *ngIf="viewMode === 'list'">
+            <div class="details-header">
+              <span class="details-col-icon"></span>
+              <span class="details-col-name sortable" [class.active-sort]="sortColumn === 'name'" (click)="toggleSort('name')">
+                Name
+                <mat-icon class="sort-arrow" *ngIf="sortColumn === 'name'">{{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="details-col-type sortable" [class.active-sort]="sortColumn === 'type'" (click)="toggleSort('type')">
+                Type
+                <mat-icon class="sort-arrow" *ngIf="sortColumn === 'type'">{{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="details-col-size sortable" [class.active-sort]="sortColumn === 'size'" (click)="toggleSort('size')">
+                Size
+                <mat-icon class="sort-arrow" *ngIf="sortColumn === 'size'">{{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="details-col-date sortable" [class.active-sort]="sortColumn === 'date'" (click)="toggleSort('date')">
+                Modified
+                <mat-icon class="sort-arrow" *ngIf="sortColumn === 'date'">{{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+              <span class="details-col-page sortable" [class.active-sort]="sortColumn === 'page'" (click)="toggleSort('page')">
+                Page
+                <mat-icon class="sort-arrow" *ngIf="sortColumn === 'page'">{{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}}</mat-icon>
+              </span>
+            </div>
+            <div *ngFor="let page of filteredPages"
+                 [id]="'page-thumb-' + page.page_number"
+                 class="details-row"
+                 [class.selected]="isPageSelected(page)"
+                 (click)="togglePageSelection(page, $event)"
+                 (dblclick)="openViewer(page)">
+              <div class="details-icon">
+                <mat-icon>image</mat-icon>
               </div>
+              <span class="details-name">{{page.filename}}</span>
+              <span class="details-type">{{page.file_type}}</span>
+              <span class="details-size">{{formatFileSize(page.file_size)}}</span>
+              <span class="details-date">{{formatDate(page.modified_at)}}</span>
+              <span class="details-page-num">{{page.page_number}}</span>
             </div>
           </div>
         </ng-container>
@@ -305,7 +363,8 @@
        (dragleave)="onFolderDragLeave($event)"
        (drop)="onFolderDrop(node, $event)"
        (dragend)="onFolderDragEnd($event)"
-       (click)="selectFolder(node)">
+       (click)="selectFolder(node)"
+       (contextmenu)="onFolderContextMenu(node, $event)">
 
     <!-- Expand arrow -->
     <span *ngIf="node.children && node.children.length > 0"
@@ -315,8 +374,13 @@
     <span *ngIf="!node.children || node.children.length === 0" class="expand-spacer"></span>
 
     <mat-icon class="folder-icon">{{ node.expanded ? 'folder_open' : 'folder' }}</mat-icon>
-    <span class="node-name">{{node.name}}</span>
-    <span class="node-count" *ngIf="node.total_image_count > 0">{{node.total_image_count}}</span>
+    <span class="node-name" *ngIf="editingNode?.project_id !== node.project_id"
+          (click)="onNameClick(node, $event)">{{node.name}}</span>
+    <input *ngIf="editingNode?.project_id === node.project_id"
+           class="node-name-input" [(ngModel)]="editingName"
+           (keydown.enter)="confirmRename()" (keydown.escape)="cancelRename()"
+           (blur)="onRenameBlur()" (click)="$event.stopPropagation()" #renameInput>
+    <span class="node-count" *ngIf="node.children?.length > 0 || node.total_image_count > 0">{{node.children?.length || 0}}/{{node.total_image_count}}</span>
   </div>
 
   <!-- Children (if expanded) -->
@@ -326,3 +390,14 @@
     </ng-container>
   </ng-container>
 </ng-template>
+
+<!-- Context menu -->
+<div class="context-menu" *ngIf="contextMenuVisible"
+     [style.left.px]="contextMenuX" [style.top.px]="contextMenuY">
+  <div class="context-menu-item" (mousedown)="startRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteFolderFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
+  </div>
+</div>

@@ -168,6 +168,13 @@
         [matTooltip]="viewMode === 'atf' ? 'Switch to Raw format' : 'Switch to eBL-ATF format'">
         <span class="rt-text">{{ viewMode === 'atf' ? 'RAW' : 'eBL' }}</span>
       </button>
+
+      <div class="rt-divider"></div>
+
+      <!-- Section: Export -->
+      <button class="rt-btn" (click)="exportRequested.emit()" matTooltip="Export">
+        <mat-icon>download</mat-icon>
+      </button>
     </div>
   </div>
 </div>

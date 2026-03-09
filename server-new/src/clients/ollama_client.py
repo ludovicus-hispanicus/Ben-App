@@ -6,10 +6,12 @@ Supports various vision models via Ollama (qwen2-vl, llava, minicpm-v, etc.)
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple, Optional
 
 from .base_ocr_client import BaseOcrClient
-from services.ollama_ocr_service import OllamaOcrService, get_default_prompt
+from entities.dimensions import Dimensions
+from services.ollama_ocr_service import OllamaOcrService
+from common.ocr_prompts import get_default_prompt, PROMPTS, resolve_prompt, wrap_prompt_for_batch, parse_batch_response
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +69,16 @@ class OllamaOcrClient(BaseOcrClient):
         output_mode = prompt if prompt else get_default_prompt()
         logger.info(f"Running Ollama OCR with model: {self.model}, prompt: {output_mode}")
 
+        # If prompt is raw text (not a known key), pass as custom_prompt
+        custom_prompt = None
+        if prompt and prompt not in PROMPTS and len(prompt) > 30:
+            custom_prompt = prompt
+            output_mode = "plain"  # fallback mode key
+
         result = self._service.ocr_from_base64(
             image_base64=image_base64,
             output_mode=output_mode,
+            custom_prompt=custom_prompt,
             model=self.model
         )
 
@@ -85,10 +94,55 @@ class OllamaOcrClient(BaseOcrClient):
         lines = result.get("lines", [])
         logger.info(f"Ollama OCR completed: {len(lines)} lines")
 
+        # Estimated evenly-spaced dimensions (Ollama doesn't provide bounding boxes)
+        line_height = image_height // max(1, len(lines)) if lines else 0
+        dimensions = [
+            Dimensions(x=0, y=i * line_height, width=image_width, height=line_height)
+            for i in range(len(lines))
+        ]
+
         return {
             "lines": lines,
-            "dimensions": [],  # Ollama doesn't provide bounding boxes
+            "dimensions": dimensions,
         }
+
+    def ocr_images(self, images: List[Tuple[str, int, int]], prompt: Optional[str] = None) -> List[Dict[str, Any]]:
+        output_mode = prompt if prompt else get_default_prompt()
+
+        custom_prompt = None
+        if prompt and prompt not in PROMPTS and len(prompt) > 30:
+            custom_prompt = prompt
+            output_mode = "plain"
+
+        base_prompt = custom_prompt or PROMPTS.get(output_mode, PROMPTS["plain"])
+        wrapped = wrap_prompt_for_batch(base_prompt, len(images))
+
+        image_list = []
+        dims = []
+        for img_b64, w, h in images:
+            if "," in img_b64:
+                img_b64 = img_b64.split(",", 1)[1]
+            image_list.append(img_b64)
+            dims.append((w, h))
+
+        try:
+            response = self._service.client.post(
+                f"{self._service.base_url}/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": wrapped, "images": image_list}],
+                    "stream": False,
+                },
+            )
+            if response.status_code != 200:
+                logger.error(f"Ollama multi-image OCR failed: {response.status_code}")
+                return [{"lines": [], "dimensions": []} for _ in images]
+
+            text = response.json().get("message", {}).get("content", "")
+            return parse_batch_response(text, len(images), dims)
+        except Exception as e:
+            logger.error(f"Ollama multi-image OCR failed: {e}")
+            return [{"lines": [], "dimensions": []} for _ in images]
 
     @staticmethod
     def is_available() -> bool:

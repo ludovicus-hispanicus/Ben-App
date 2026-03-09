@@ -31,7 +31,8 @@ export class CuredService {
         model: string = 'latest',
         prompt: string = 'dictionary',
         apiKey?: string,
-        teiOptions?: { teiModel: string; teiProvider: string; teiApiKey?: string }
+        teiOptions?: { teiModel: string; teiProvider: string; teiApiKey?: string },
+        correctionRules?: string
     ) {
         const body: any = {
             "image": imageBase64,
@@ -47,6 +48,9 @@ export class CuredService {
             if (teiOptions.teiApiKey) {
                 body.teiApiKey = teiOptions.teiApiKey;
             }
+        }
+        if (correctionRules) {
+            body.correctionRules = correctionRules;
         }
         return this.http.post<CuredResult>(`${environment.apiUrl}${this.baseUrl}/getTransliterations`, body);
     }
@@ -84,7 +88,8 @@ export class CuredService {
     }
 
     getImage(textId: number, transliterationId: number): Observable<Blob> {
-        return this.http.get(`${environment.apiUrl}${this.baseUrl}/transliterationImage/${textId}/${transliterationId}`, { responseType: 'blob' });
+        const cacheBust = Date.now();
+        return this.http.get(`${environment.apiUrl}${this.baseUrl}/transliterationImage/${textId}/${transliterationId}?t=${cacheBust}`, { responseType: 'blob' });
     }
 
     deleteTransliteration(textId: number, transliterationId: number) {
@@ -95,12 +100,35 @@ export class CuredService {
         return this.http.delete<{deleted: string}>(`${environment.apiUrl}${this.baseUrl}/${textId}`);
     }
 
-    getCuratedStats() {
+    batchDeleteTexts(textIds: number[]): Observable<{ deleted: number; errors: any[] }> {
+        return this.http.post<{ deleted: number; errors: any[] }>(
+            `${environment.apiUrl}${this.baseUrl}/batch-delete`,
+            { text_ids: textIds }
+        );
+    }
+
+    removeTileMarkers(projectId?: number, textIds?: number[]): Observable<{ cleaned: number; total_markers_removed: number }> {
+        return this.http.post<{ cleaned: number; total_markers_removed: number }>(
+            `${environment.apiUrl}${this.baseUrl}/remove-tile-markers`,
+            { project_id: projectId || null, text_ids: textIds || null }
+        );
+    }
+
+    batchCurate(textIds: number[], curate: boolean, target: string = 'both') {
+        return this.http.patch<{ updated: number; skipped: number; errors: any[] }>(
+            `${environment.apiUrl}${this.baseUrl}/batch-curate`,
+            { text_ids: textIds, curate, target }
+        );
+    }
+
+    getCuratedStats(projectId?: number) {
+        let url = `${environment.apiUrl}${this.baseUrl}/training/curated-stats`;
+        if (projectId) url += `?project_id=${projectId}`;
         return this.http.get<{
             total: { lines: number; texts: number };
             kraken: { lines: number; texts: number };
             vlm: { lines: number; texts: number };
-        }>(`${environment.apiUrl}${this.baseUrl}/training/curated-stats`);
+        }>(url);
     }
 
     getTrainingStatus() {
@@ -173,7 +201,12 @@ export class CuredService {
     // Kraken OCR Training Methods
     // ==========================================
 
-    getKrakenTrainingStatus() {
+    getKrakenTrainingStatus(projectIds?: number[]) {
+        let url = `${environment.apiUrl}${this.baseUrl}/training/kraken/status`;
+        if (projectIds && projectIds.length > 0) {
+            const qs = projectIds.map(id => `project_ids=${id}`).join('&');
+            url += `?${qs}`;
+        }
         return this.http.get<{
             curatedTexts: number;
             previousLines: number;
@@ -184,10 +217,10 @@ export class CuredService {
             isReady: boolean;
             lastTraining: string | null;
             currentTraining: TrainingProgress | null;
-        }>(`${environment.apiUrl}${this.baseUrl}/training/kraken/status`);
+        }>(url);
     }
 
-    startKrakenTraining(epochs: number = 500, modelName: string = null, baseModel: string = null, batchSize: number = 1, device: string = 'auto', patience: number = 10) {
+    startKrakenTraining(epochs: number = 500, modelName: string = null, baseModel: string = null, batchSize: number = 1, device: string = 'auto', patience: number = 10, projectIds?: number[]) {
         const params: any = { epochs, device, patience };
         if (modelName) {
             params.model_name = modelName;
@@ -197,6 +230,9 @@ export class CuredService {
         }
         if (batchSize > 1) {
             params.batch_size = batchSize;
+        }
+        if (projectIds && projectIds.length > 0) {
+            params.project_ids = projectIds;
         }
         return this.http.post<{ message: string; epochs: number; model_name: string }>(
             `${environment.apiUrl}${this.baseUrl}/training/kraken/start`,
@@ -241,75 +277,15 @@ export class CuredService {
     }
 
     // ==========================================
-    // DeepSeek OCR-2 QLoRA Training Methods
-    // ==========================================
-
-    getDeepSeekTrainingStatus() {
-        return this.http.get<{
-            curatedTexts: number;
-            previousLines: number;
-            newLines: number;
-            totalLines: number;
-            requiredForNextTraining: number;
-            progress: number;
-            isReady: boolean;
-            lastTraining: string | null;
-            currentTraining: TrainingProgress | null;
-        }>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/status`);
-    }
-
-    startDeepSeekTraining(epochs: number = 10, modelName: string = null, outputMode: string = 'plain', device: string = 'auto', patience: number = 3) {
-        const params: any = { epochs, output_mode: outputMode, device, patience };
-        if (modelName) {
-            params.model_name = modelName;
-        }
-        return this.http.post<{ message: string; epochs: number; model_name: string; output_mode: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/deepseek/start`,
-            null,
-            { params }
-        );
-    }
-
-    getDeepSeekTrainingProgress() {
-        return this.http.get<TrainingProgress>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/progress`);
-    }
-
-    cancelDeepSeekTraining() {
-        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/cancel`, null);
-    }
-
-    listDeepSeekModels() {
-        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/models`);
-    }
-
-    getDeepSeekActiveModel() {
-        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/active-model`);
-    }
-
-    activateDeepSeekModel(modelName: string) {
-        return this.http.post<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/deepseek/models/${modelName}/activate`,
-            null
-        );
-    }
-
-    deleteDeepSeekModel(modelName: string) {
-        return this.http.delete<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/deepseek/models/${modelName}`
-        );
-    }
-
-    getDeepSeekOutputModes() {
-        return this.http.get<{ modes: { [key: string]: string } }>(
-            `${environment.apiUrl}${this.baseUrl}/training/deepseek/output-modes`
-        );
-    }
-
-    // ==========================================
     // Qwen3-VL QLoRA Training Methods
     // ==========================================
 
-    getQwenTrainingStatus() {
+    getQwenTrainingStatus(projectIds?: number[]) {
+        let url = `${environment.apiUrl}${this.baseUrl}/training/qwen/status`;
+        if (projectIds && projectIds.length > 0) {
+            const qs = projectIds.map(id => `project_ids=${id}`).join('&');
+            url += `?${qs}`;
+        }
         return this.http.get<{
             curatedTexts: number;
             previousLines: number;
@@ -320,16 +296,19 @@ export class CuredService {
             isReady: boolean;
             lastTraining: string | null;
             currentTraining: TrainingProgress | null;
-        }>(`${environment.apiUrl}${this.baseUrl}/training/qwen/status`);
+        }>(url);
     }
 
-    startQwenTraining(epochs: number = 10, modelName: string = null, baseModel: string = null, outputMode: string = 'plain', device: string = 'auto', patience: number = 3) {
+    startQwenTraining(epochs: number = 10, modelName: string = null, baseModel: string = null, outputMode: string = 'plain', device: string = 'auto', patience: number = 3, projectIds?: number[]) {
         const params: any = { epochs, output_mode: outputMode, device, patience };
         if (modelName) {
             params.model_name = modelName;
         }
         if (baseModel) {
             params.base_model = baseModel;
+        }
+        if (projectIds && projectIds.length > 0) {
+            params.project_ids = projectIds;
         }
         return this.http.post<{ message: string; epochs: number; model_name: string; base_model: string; output_mode: string }>(
             `${environment.apiUrl}${this.baseUrl}/training/qwen/start`,
@@ -376,6 +355,71 @@ export class CuredService {
     getQwenBaseModels() {
         return this.http.get<{ models: { id: string; name: string; hf_id: string }[] }>(
             `${environment.apiUrl}${this.baseUrl}/training/qwen/base-models`
+        );
+    }
+
+    // ========== TrOCR Training ==========
+
+    getTrOCRTrainingStatus(projectIds?: number[]) {
+        let url = `${environment.apiUrl}${this.baseUrl}/training/trocr/status`;
+        if (projectIds && projectIds.length > 0) {
+            const qs = projectIds.map(id => `project_ids=${id}`).join('&');
+            url += `?${qs}`;
+        }
+        return this.http.get<{
+            curatedTexts: number;
+            previousLines: number;
+            newLines: number;
+            totalLines: number;
+            requiredForNextTraining: number;
+            progress: number;
+            isReady: boolean;
+            lastTraining: string | null;
+            currentTraining: any | null;
+        }>(url);
+    }
+
+    startTrOCRTraining(epochs: number = 30, modelName: string = null, baseModel: string = null, device: string = 'auto', patience: number = 5, learningRate: number = 0.00005, freezeEncoder: boolean = false, projectIds?: number[]) {
+        const params: any = { epochs, device, patience, learning_rate: learningRate, freeze_encoder: freezeEncoder };
+        if (modelName) params.model_name = modelName;
+        if (baseModel) params.base_model = baseModel;
+        if (projectIds && projectIds.length > 0) params.project_ids = projectIds;
+        return this.http.post<{ message: string; epochs: number; model_name: string; base_model: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/trocr/start`, null, { params }
+        );
+    }
+
+    getTrOCRTrainingProgress() {
+        return this.http.get<any>(`${environment.apiUrl}${this.baseUrl}/training/trocr/progress`);
+    }
+
+    cancelTrOCRTraining() {
+        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/trocr/cancel`, null);
+    }
+
+    listTrOCRModels() {
+        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/trocr/models`);
+    }
+
+    getTrOCRActiveModel() {
+        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/trocr/active-model`);
+    }
+
+    activateTrOCRModel(modelName: string) {
+        return this.http.post<{ message: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/trocr/models/${modelName}/activate`, null
+        );
+    }
+
+    deleteTrOCRModel(modelName: string) {
+        return this.http.delete<{ message: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/trocr/models/${modelName}`
+        );
+    }
+
+    getTrOCRBaseModels() {
+        return this.http.get<{ models: { id: string; name: string; hf_id: string; params: string }[] }>(
+            `${environment.apiUrl}${this.baseUrl}/training/trocr/base-models`
         );
     }
 
@@ -462,6 +506,46 @@ export class CuredService {
         );
     }
 
+    // ==========================================
+    // CuReD Dataset Import / Export
+    // ==========================================
+
+    exportProjectCured(projectId: number): void {
+        window.open(
+            `${environment.apiUrl}${this.baseUrl}/export/project/${projectId}`,
+            '_blank'
+        );
+    }
+
+    exportTextCured(textId: number): void {
+        window.open(
+            `${environment.apiUrl}${this.baseUrl}/export/text/${textId}`,
+            '_blank'
+        );
+    }
+
+    importCuredFolder(folderPath: string, projectId?: number): Observable<{ imported: number; skipped: number; errors: any[] }> {
+        const body: any = { folder_path: folderPath };
+        if (projectId != null) {
+            body.project_id = projectId;
+        }
+        return this.http.post<{ imported: number; skipped: number; errors: any[] }>(
+            `${environment.apiUrl}${this.baseUrl}/import-folder`,
+            body
+        );
+    }
+
+    importCuredZip(file: File, projectId?: number): Observable<{ imported: number; skipped: number; errors: any[] }> {
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+        if (projectId != null) {
+            formData.append('project_id', projectId.toString());
+        }
+        return this.http.post<{ imported: number; skipped: number; errors: any[] }>(
+            `${environment.apiUrl}${this.baseUrl}/import`,
+            formData
+        );
+    }
 }
 
 export interface TrainingProgress {
@@ -500,10 +584,20 @@ export interface TrainedModel {
     created: string;
     epochs?: number;
     accuracy?: number;
+    word_accuracy?: number;
+    charset_size?: number;
+    learning_rate?: number;
     size_mb?: number;
     base_model?: string;
     output_mode?: string;
     best_loss?: number;
+    best_accuracy?: number;
+    final_accuracy?: number;
+    final_val_accuracy?: number;
+    final_val_loss?: number;
+    type?: string;
+    epochs_trained?: number;
+    early_stopped?: boolean;
 }
 
 export interface ActiveModelInfo {

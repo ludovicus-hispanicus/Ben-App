@@ -1,10 +1,11 @@
-import { Component, OnInit, HostListener } from '@angular/core';
+import { Component, OnInit, HostListener, ViewChildren, QueryList, ElementRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { PagesService } from '../../services/pages.service';
 import { ProjectInfo, ProjectDetail, PageInfo, UploadResponse, ProjectTreeNode } from '../../models/pages';
 import { NotificationService } from '../../services/notification.service';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.component';
+import { PageRangeDialogComponent, PageRangeDialogResult } from '../common/page-range-dialog/page-range-dialog.component';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -40,14 +41,42 @@ export class DocumentLibraryComponent implements OnInit {
   selectedFolders: Set<string> = new Set();
   lastSelectedFolderIndex: number = -1;
 
-  // Drag & drop
+  // Drag & drop (folders)
   draggedFolder: ProjectTreeNode | null = null;
   dragOverFolderId: string | null = null;
   dragOverRoot = false;
 
+  // Drag & drop (file upload)
+  fileDragOver = false;
+  private fileDragCounter = 0;
+
+  // View mode
+  viewMode: 'grid' | 'list' = 'grid';
+
+  // Sorting
+  sortColumn: 'name' | 'type' | 'size' | 'date' | 'page' = 'page';
+  sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Page search/jump
+  pageSearchQuery = '';
+
   // Viewer
   viewerPage: PageInfo | null = null;
   viewerIndex = -1;
+
+  // Inline rename
+  editingNode: ProjectTreeNode | null = null;
+  editingName = '';
+  private renameClickTimer: any = null;
+  private renameCancelled = false;
+
+  // Context menu
+  contextMenuVisible = false;
+  contextMenuX = 0;
+  contextMenuY = 0;
+  contextMenuNode: ProjectTreeNode | null = null;
+
+  @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef>;
 
   constructor(
     private pagesService: PagesService,
@@ -182,6 +211,7 @@ export class DocumentLibraryComponent implements OnInit {
 
   // Double-click on content card: navigate into folder
   openFolderFromContent(node: ProjectTreeNode): void {
+    clearTimeout(this.renameClickTimer);
     this.clearFolderSelection();
     this.selectFolder(node);
   }
@@ -357,21 +387,106 @@ export class DocumentLibraryComponent implements OnInit {
     });
   }
 
-  renameFolder(): void {
-    if (!this.selectedFolder) { return; }
-    const current = this.selectedFolder.name;
-    const newName = prompt('Rename folder:', current);
-    if (!newName || newName.trim() === current) { return; }
+  // ============== Inline Rename ==============
 
-    this.pagesService.renameProject(this.selectedFolder.project_id, newName.trim()).subscribe({
+  onNameClick(node: ProjectTreeNode, event: MouseEvent): void {
+    event.stopPropagation();
+    // Only start rename if this node is already selected (slow double-click)
+    if (this.selectedFolder?.project_id === node.project_id) {
+      clearTimeout(this.renameClickTimer);
+      this.renameClickTimer = setTimeout(() => {
+        this.startRename(node);
+      }, 400);
+    }
+  }
+
+  onSubfolderNameClick(folder: ProjectTreeNode, event: MouseEvent): void {
+    event.stopPropagation();
+    // Only start rename if this folder is already selected
+    if (this.selectedFolders.has(folder.project_id)) {
+      clearTimeout(this.renameClickTimer);
+      this.renameClickTimer = setTimeout(() => {
+        this.startRename(folder);
+      }, 400);
+    }
+  }
+
+  startRename(node: ProjectTreeNode): void {
+    this.editingNode = node;
+    this.editingName = node.name;
+    this.renameCancelled = false;
+    setTimeout(() => {
+      const inputs = this.renameInputs.toArray();
+      if (inputs.length > 0) {
+        const input = inputs[0].nativeElement as HTMLInputElement;
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  confirmRename(): void {
+    if (!this.editingNode || this.renameCancelled) { return; }
+    const node = this.editingNode;
+    const newName = this.editingName.trim();
+    this.editingNode = null;
+
+    if (!newName || newName === node.name) { return; }
+
+    this.pagesService.renameProject(node.project_id, newName).subscribe({
       next: () => {
-        this.notificationService.showSuccess(`Renamed to "${newName.trim()}"`);
-        this.loadTree();
+        node.name = newName;
+        this.notificationService.showSuccess(`Renamed to "${newName}"`);
       },
       error: () => {
         this.notificationService.showError('Failed to rename folder');
       }
     });
+  }
+
+  cancelRename(): void {
+    this.renameCancelled = true;
+    this.editingNode = null;
+    this.editingName = '';
+  }
+
+  onRenameBlur(): void {
+    // Small delay to allow cancelRename (Escape) to fire first
+    setTimeout(() => {
+      if (this.editingNode && !this.renameCancelled) {
+        this.confirmRename();
+      }
+    }, 100);
+  }
+
+  // ============== Context Menu ==============
+
+  onFolderContextMenu(node: ProjectTreeNode, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.contextMenuNode = node;
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+    this.contextMenuVisible = true;
+  }
+
+  startRenameFromMenu(): void {
+    if (!this.contextMenuNode) { return; }
+    const node = this.contextMenuNode;
+    this.contextMenuVisible = false;
+    this.startRename(node);
+  }
+
+  deleteFolderFromMenu(): void {
+    if (!this.contextMenuNode) { return; }
+    const node = this.contextMenuNode;
+    this.contextMenuVisible = false;
+    this.deleteFolderCard(node);
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.contextMenuVisible = false;
   }
 
   // ============== Drag & Drop ==============
@@ -494,24 +609,55 @@ export class DocumentLibraryComponent implements OnInit {
     }
 
     const file = input.files[0];
+    const projectName = this.uploadProjectName.trim();
+    input.value = '';
+
+    // Get page count and show range dialog
     this.isUploading = true;
     this.uploadResult = null;
 
-    this.pagesService.uploadPdf(file, this.uploadProjectName.trim()).subscribe({
-      next: (response) => {
-        this.uploadResult = response;
+    this.pagesService.getPdfPageCount(file).subscribe({
+      next: (info) => {
         this.isUploading = false;
-        this.notificationService.showSuccess(response.message);
-        this.uploadProjectName = '';
-        this.loadTree();
+        const dialogRef = this.dialog.open(PageRangeDialogComponent, {
+          width: '400px',
+          data: { filename: file.name, pageCount: info.page_count }
+        });
+        dialogRef.afterClosed().subscribe((result: PageRangeDialogResult | null) => {
+          if (!result) { return; }
+          this.isUploading = true;
+          this.pagesService.uploadPdf(file, projectName, result.pageFrom, result.pageTo, result.dpi).subscribe({
+            next: (response) => {
+              this.uploadResult = response;
+              this.isUploading = false;
+              this.notificationService.showSuccess(response.message);
+              this.uploadProjectName = '';
+              this.loadTree();
+            },
+            error: (err) => {
+              this.isUploading = false;
+              this.notificationService.showError('Upload failed: ' + (err.error?.detail || err.message));
+            }
+          });
+        });
       },
-      error: (err) => {
-        this.isUploading = false;
-        this.notificationService.showError('Upload failed: ' + (err.error?.detail || err.message));
+      error: () => {
+        // Fallback: upload all pages
+        this.pagesService.uploadPdf(file, projectName).subscribe({
+          next: (response) => {
+            this.uploadResult = response;
+            this.isUploading = false;
+            this.notificationService.showSuccess(response.message);
+            this.uploadProjectName = '';
+            this.loadTree();
+          },
+          error: (err) => {
+            this.isUploading = false;
+            this.notificationService.showError('Upload failed: ' + (err.error?.detail || err.message));
+          }
+        });
       }
     });
-
-    input.value = '';
   }
 
   onTreeFileSelected(event: Event): void {
@@ -552,8 +698,39 @@ export class DocumentLibraryComponent implements OnInit {
       return;
     }
 
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+      this.uploadPdfWithRangeDialog(file, projectId);
+    } else {
+      this.doUploadFile(file, projectId);
+    }
+  }
+
+  private uploadPdfWithRangeDialog(file: File, projectId?: string): void {
     this.isUploading = true;
-    this.pagesService.uploadFile(file, projectId).subscribe({
+    this.pagesService.getPdfPageCount(file).subscribe({
+      next: (info) => {
+        this.isUploading = false;
+        const dialogRef = this.dialog.open(PageRangeDialogComponent, {
+          width: '400px',
+          data: { filename: file.name, pageCount: info.page_count }
+        });
+        dialogRef.afterClosed().subscribe((result: PageRangeDialogResult | null) => {
+          if (!result) { return; } // cancelled
+          this.doUploadFile(file, projectId, result.pageFrom, result.pageTo, result.dpi);
+        });
+      },
+      error: () => {
+        this.isUploading = false;
+        // Fallback: upload without range if page count fails
+        this.doUploadFile(file, projectId);
+      }
+    });
+  }
+
+  private doUploadFile(file: File, projectId?: string, pageFrom?: number, pageTo?: number, dpi?: number): void {
+    this.isUploading = true;
+    this.pagesService.uploadFile(file, projectId, pageFrom, pageTo, dpi).subscribe({
       next: (response) => {
         this.notificationService.showSuccess(response.message);
         this.isUploading = false;
@@ -569,6 +746,45 @@ export class DocumentLibraryComponent implements OnInit {
         this.isUploading = false;
       }
     });
+  }
+
+  // ============== Drag & Drop File Upload ==============
+
+  onFileDragOver(event: DragEvent): void {
+    // Only handle file drags, not folder-move drags
+    if (this.draggedFolder) { return; }
+    if (!event.dataTransfer?.types.includes('Files')) { return; }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) { event.dataTransfer.dropEffect = 'copy'; }
+    this.fileDragCounter++;
+    this.fileDragOver = true;
+  }
+
+  onFileDragLeave(event: DragEvent): void {
+    if (this.draggedFolder) { return; }
+    event.preventDefault();
+    this.fileDragCounter--;
+    if (this.fileDragCounter <= 0) {
+      this.fileDragOver = false;
+      this.fileDragCounter = 0;
+    }
+  }
+
+  onFileDrop(event: DragEvent): void {
+    if (this.draggedFolder) { return; }
+    event.preventDefault();
+    event.stopPropagation();
+    this.fileDragOver = false;
+    this.fileDragCounter = 0;
+
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) { return; }
+
+    const projectId = this.selectedFolder?.project_id || this.openProject?.project_id;
+    for (let i = 0; i < files.length; i++) {
+      this.uploadFile(files[i], projectId);
+    }
   }
 
   // ============== Image helpers ==============
@@ -625,6 +841,95 @@ export class DocumentLibraryComponent implements OnInit {
     this.lastSelectedIndex = -1;
   }
 
+  onContentBackgroundClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('.thumbnail-card') || target.closest('.details-row') || target.closest('.subfolder-card')) {
+      return;
+    }
+    this.clearSelection();
+    this.clearFolderSelection();
+  }
+
+  onTreeBackgroundClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('.tree-node')) { return; }
+    this.navigateBreadcrumb(null);
+  }
+
+  // ============== Page Search / Jump ==============
+
+  get filteredPages(): PageInfo[] {
+    if (!this.openProject) { return []; }
+    let pages = this.openProject.pages;
+
+    const q = this.pageSearchQuery.trim();
+    if (q) {
+      const lower = q.toLowerCase();
+      pages = pages.filter(p => p.filename.toLowerCase().includes(lower));
+    }
+
+    return [...pages].sort((a, b) => {
+      let cmp = 0;
+      switch (this.sortColumn) {
+        case 'name':
+          cmp = a.filename.localeCompare(b.filename);
+          break;
+        case 'type':
+          cmp = (a.file_type || '').localeCompare(b.file_type || '');
+          break;
+        case 'size':
+          cmp = (a.file_size || 0) - (b.file_size || 0);
+          break;
+        case 'date':
+          cmp = (a.modified_at || '').localeCompare(b.modified_at || '');
+          break;
+        case 'page':
+          cmp = a.page_number - b.page_number;
+          break;
+      }
+      return this.sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  toggleSort(column: 'name' | 'type' | 'size' | 'date' | 'page'): void {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+  }
+
+  onPageSearchEnter(): void {
+    if (!this.openProject) { return; }
+    const q = this.pageSearchQuery.trim();
+    const num = parseInt(q, 10);
+    if (!isNaN(num) && num >= 1 && num <= this.openProject.pages.length) {
+      // Jump to that page number — scroll the thumbnail into view
+      const el = document.getElementById('page-thumb-' + num);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
+  clearPageSearch(): void {
+    this.pageSearchQuery = '';
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) { return '—'; }
+    if (bytes < 1024) { return bytes + ' B'; }
+    if (bytes < 1048576) { return (bytes / 1024).toFixed(1) + ' KB'; }
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  formatDate(iso: string): string {
+    if (!iso) { return '—'; }
+    const d = new Date(iso);
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   // ============== Viewer ==============
 
   openViewer(page: PageInfo): void {
@@ -652,10 +957,27 @@ export class DocumentLibraryComponent implements OnInit {
 
   @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (!this.viewerPage) { return; }
-    if (event.key === 'Escape') { this.closeViewer(); }
-    else if (event.key === 'ArrowLeft') { this.viewerPrev(); }
-    else if (event.key === 'ArrowRight') { this.viewerNext(); }
+    if (this.viewerPage) {
+      if (event.key === 'Escape') { this.closeViewer(); }
+      else if (event.key === 'ArrowLeft') { this.viewerPrev(); }
+      else if (event.key === 'ArrowRight') { this.viewerNext(); }
+      return;
+    }
+    if (event.key === 'Delete') {
+      if (this.selectedPages.size > 0) {
+        this.deleteSelectedPages();
+      } else if (this.selectedFolders.size > 0) {
+        this.deleteSelectedFolders();
+      }
+    }
+    if (event.ctrlKey && event.key === 'a') {
+      event.preventDefault();
+      if (this.openProject) {
+        this.selectAllPages();
+      } else {
+        this.selectAllFolders();
+      }
+    }
   }
 
   // ============== Open in Tool ==============
@@ -701,7 +1023,7 @@ export class DocumentLibraryComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (!confirmed || !this.openProject) { return; }
-      this.pagesService.deletePages(this.openProject.project_id, [page.page_number]).subscribe({
+      this.pagesService.deletePages(this.openProject.project_id, [page.filename]).subscribe({
         next: () => {
           this.selectedPages.delete(page.page_number);
           this.notificationService.showSuccess(`Deleted ${page.filename}`);
@@ -728,8 +1050,11 @@ export class DocumentLibraryComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (!confirmed || !this.openProject) { return; }
-      const pageNums = Array.from(this.selectedPages);
-      this.pagesService.deletePages(this.openProject.project_id, pageNums).subscribe({
+      // Resolve selected page numbers to filenames
+      const filenames = this.openProject.pages
+        .filter(p => this.selectedPages.has(p.page_number))
+        .map(p => p.filename);
+      this.pagesService.deletePages(this.openProject.project_id, filenames).subscribe({
         next: () => {
           this.notificationService.showSuccess(`Deleted ${count} page(s)`);
           this.selectedPages.clear();

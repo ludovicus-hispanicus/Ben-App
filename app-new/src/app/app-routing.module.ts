@@ -9,6 +9,7 @@ import { CureComponent } from './components/cure/cure.component';
 import { DocumentLibraryComponent } from './components/document-library/document-library.component';
 
 
+
 const routes: Routes = [
   {
     path: '',
@@ -48,7 +49,7 @@ const routes: Routes = [
   {
     path: 'library',
     component: DocumentLibraryComponent
-  }
+  },
 ];
 
 @NgModule({

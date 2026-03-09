@@ -1,24 +1,9 @@
 from openai import OpenAI
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple, Optional
 import logging
 from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
-
-# Prompts for different output modes
-PROMPTS = {
-    "plain": "OCR this image. Output the text exactly as shown, line by line. Do not include any introduction or explanation.",
-    "markdown": "OCR this image and output as markdown format. Preserve structure with headers, bold, italic as appropriate.",
-    "dictionary": """Transcribe this Akkadian dictionary entry to markdown.
-
-FORMATTING RULES (apply to ALL text):
-1. **BOLD** → headword (first word, appears larger/darker)
-2. *italic* → all Akkadian words (transliterated cuneiform)
-3. UPPERCASE → Sumerian logograms (e.g., DINGIR, LÚ)
-4. Keep line breaks as in original
-5. Output ONLY the formatted text, no explanations
-
-Return ONLY the transliterated text with markdown formatting.""",
-}
+from common.ocr_prompts import resolve_prompt, wrap_prompt_for_batch, parse_batch_response
 
 
 class OpenAIOcrClient(BaseOcrClient):
@@ -29,10 +14,7 @@ class OpenAIOcrClient(BaseOcrClient):
         logging.info(f"OpenAIOcrClient initialized with model: {self.model_name}")
 
     def ocr_image(self, image_base64: str, image_width: int, image_height: int, prompt: str = None) -> Dict[str, Any]:
-        # Select prompt based on mode (default to dictionary for Akkadian texts)
-        output_mode = prompt if prompt in PROMPTS else "dictionary"
-        ocr_prompt = PROMPTS[output_mode]
-        logging.info(f"OpenAI OCR using prompt mode: {output_mode}")
+        ocr_prompt = resolve_prompt(prompt)
 
         try:
             response = self.client.chat.completions.create(
@@ -57,10 +39,11 @@ class OpenAIOcrClient(BaseOcrClient):
             content = response.choices[0].message.content
             text_lines = [line.strip() for line in content.split('\n') if line.strip()]
 
-            # Dummy dimensions
+            # Estimated evenly-spaced dimensions
+            line_height = image_height // max(1, len(text_lines))
             dimensions = [
-                Dimensions(x=0, y=0, width=image_width, height=image_height // max(1, len(text_lines)))
-                for _ in text_lines
+                Dimensions(x=0, y=i * line_height, width=image_width, height=line_height)
+                for i in range(len(text_lines))
             ]
             
             return {"lines": text_lines, "dimensions": dimensions}
@@ -68,3 +51,25 @@ class OpenAIOcrClient(BaseOcrClient):
         except Exception as e:
             logging.error(f"OpenAI OCR extraction failed: {e}")
             return {"lines": [], "dimensions": []}
+
+    def ocr_images(self, images: List[Tuple[str, int, int]], prompt: Optional[str] = None) -> List[Dict[str, Any]]:
+        ocr_prompt = resolve_prompt(prompt)
+        wrapped = wrap_prompt_for_batch(ocr_prompt, len(images))
+
+        content: list = [{"type": "text", "text": wrapped}]
+        dims = []
+        for img_b64, w, h in images:
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}})
+            dims.append((w, h))
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=2048 * len(images),
+            )
+            text = response.choices[0].message.content
+            return parse_batch_response(text, len(images), dims)
+        except Exception as e:
+            logging.error(f"OpenAI multi-image OCR failed: {e}")
+            return [{"lines": [], "dimensions": []} for _ in images]

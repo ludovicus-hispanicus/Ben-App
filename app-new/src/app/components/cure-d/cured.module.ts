@@ -23,6 +23,8 @@ import { MatInputModule } from "@angular/material/input";
 import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { MatSelectModule } from "@angular/material/select";
 import { ReactiveFormsModule } from "@angular/forms";
+import { MoveTextDialogComponent } from "../common/move-text-dialog/move-text-dialog.component";
+import { PartDialogComponent } from "../common/part-dialog/part-dialog.component";
 
 
 @NgModule({
@@ -54,6 +56,12 @@ import { ReactiveFormsModule } from "@angular/forms";
     ],
     declarations: [
         CuredComponent,
+        MoveTextDialogComponent,
+        PartDialogComponent,
+    ],
+    entryComponents: [
+        MoveTextDialogComponent,
+        PartDialogComponent,
     ],
     exports: [
         CuredComponent,

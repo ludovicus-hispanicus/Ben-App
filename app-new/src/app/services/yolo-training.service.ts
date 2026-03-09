@@ -92,6 +92,18 @@ export class YoloTrainingService {
     );
   }
 
+  deleteClassFromDataset(datasetName: string, classId: number): Observable<{
+    success: boolean;
+    dataset_id: string;
+    classes: { id: number; name: string; color?: string }[];
+    deleted: string;
+    message: string;
+  }> {
+    return this.http.delete<any>(
+      `${environment.apiUrl}${this.baseUrl}/datasets/${datasetName}/classes/${classId}`
+    );
+  }
+
   updateClassColor(datasetName: string, classId: number, color: string): Observable<{
     success: boolean;
     dataset_id: string;
@@ -267,6 +279,22 @@ export class YoloTrainingService {
     if (projectName) params.project_name = projectName;
     return this.http.post<any>(
       `${environment.apiUrl}${this.baseUrl}/datasets/${datasetName}/save-to-library`,
+      {},
+      { params }
+    );
+  }
+
+  saveAhwEntriesToLibrary(datasetName: string, projectId?: string, projectName?: string): Observable<{
+    project_id: string;
+    name: string;
+    entry_count: number;
+    manifest: any[];
+  }> {
+    const params: any = {};
+    if (projectId) params.project_id = projectId;
+    if (projectName) params.project_name = projectName;
+    return this.http.post<any>(
+      `${environment.apiUrl}${this.baseUrl}/datasets/${datasetName}/save-ahw-entries`,
       {},
       { params }
     );

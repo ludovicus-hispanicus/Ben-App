@@ -6,11 +6,11 @@
 
     <!-- Create project -->
     <div class="create-project-row">
-      <input [(ngModel)]="newProjectName" placeholder="New project name..."
+      <input [(ngModel)]="newProjectName" placeholder="New dataset..."
              (keyup.enter)="createProject()" class="folder-name-input" />
-      <button mat-icon-button color="primary" (click)="createProject()"
-              [disabled]="!newProjectName.trim()" matTooltip="Create project">
-        <mat-icon>create_new_folder</mat-icon>
+      <button mat-raised-button color="primary" (click)="createProject()"
+              [disabled]="!newProjectName.trim()">
+        <mat-icon>add</mat-icon>
       </button>
     </div>
 
@@ -31,11 +31,11 @@
 
     <div class="sidebar-btn-row">
       <button mat-stroked-button class="browse-server-btn" (click)="browseServer()">
-        <mat-icon>folder_open</mat-icon> Browse Server
+        <mat-icon>folder_open</mat-icon> Server
       </button>
       <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
               matTooltip="Upload a folder of images as a batch">
-        <mat-icon>snippet_folder</mat-icon> Upload Folder
+        <mat-icon>snippet_folder</mat-icon> Folder
       </button>
       <input #uploadFolder (change)="handleFolderInput($event)" type="file"
              webkitdirectory directory multiple style="display:none"/>
@@ -43,29 +43,29 @@
 
     <div class="sidebar-divider"></div>
 
-    <!-- General line counting -->
+    <!-- Training data stats -->
     <div class="training-mini-stats">
       <div class="mini-stat">
         <span class="mini-stat-value">{{ curatedStats.total.lines }}</span>
-        <span class="mini-stat-label">Curated Lines</span>
+        <span class="mini-stat-label">Lines</span>
       </div>
+      <div class="mini-stat-separator">/</div>
       <div class="mini-stat">
         <span class="mini-stat-value">{{ curatedStats.total.texts }}</span>
-        <span class="mini-stat-label">Curated Texts</span>
+        <span class="mini-stat-label">Texts</span>
       </div>
     </div>
 
-    <!-- Recommended lines for training -->
-    <div class="training-line-recs">
-      <div class="line-rec">
-        <span class="line-rec-label">Kraken</span>
-        <span class="line-rec-value">{{ curatedStats.kraken.lines }}</span>
-        <span class="line-rec-hint">/ {{ getKrakenTrainingTarget() }} recommended</span>
-      </div>
-      <div class="line-rec">
-        <span class="line-rec-label">VLM</span>
-        <span class="line-rec-value">{{ curatedStats.vlm.lines }}</span>
-        <span class="line-rec-hint">/ {{ getVlmTrainingTarget() }} recommended</span>
+    <div class="training-recs">
+      <span class="rec-hint"><strong>{{ getKrakenTrainingTarget() }}</strong> lines for Kraken</span>
+      <span class="rec-hint"><strong>{{ getVlmTrainingTarget() }}</strong> texts for VLM</span>
+    </div>
+
+    <!-- Per-project breakdown -->
+    <div class="project-stats-breakdown" *ngIf="getProjectsWithCuratedData().length > 0">
+      <div class="project-stat-row" *ngFor="let p of getProjectsWithCuratedData()">
+        <span class="project-stat-name">{{ p.name }}</span>
+        <span class="project-stat-values">{{ p.curated_lines }} lines · {{ p.curated_count }} texts</span>
       </div>
     </div>
 
@@ -99,20 +99,35 @@
   <div class="cured-main">
     <!-- Project cards view -->
     <div *ngIf="showProjectList" class="main-panel">
+      <div class="project-toolbar" *ngIf="projects.length > 0">
+        <div class="project-search-box">
+          <mat-icon class="project-search-icon">search</mat-icon>
+          <input [(ngModel)]="projectSearchQuery" placeholder="Search projects..." class="project-search-input" />
+          <button *ngIf="projectSearchQuery" mat-icon-button class="project-search-clear" (click)="clearProjectSearch()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <span class="project-toolbar-count">{{ filteredProjects.length }} project{{ filteredProjects.length === 1 ? '' : 's' }}</span>
+      </div>
+
       <div class="project-grid">
-        <div class="project-card" *ngFor="let project of projects" (click)="openProject(project)">
-          <div class="project-actions">
-            <button mat-icon-button (click)="renameProject(project, $event)" matTooltip="Rename">
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button mat-icon-button color="warn" (click)="deleteProject(project, $event)" matTooltip="Delete">
-              <mat-icon>delete</mat-icon>
-            </button>
-          </div>
+        <div *ngFor="let project of filteredProjects"
+             class="project-card"
+             [class.selected]="selectedProjectCard?.project_id === project.project_id"
+             (click)="selectProjectCard(project)"
+             (dblclick)="openProject(project)"
+             (contextmenu)="onProjectContextMenu(project, $event)">
           <mat-icon class="project-icon">folder</mat-icon>
+          <mat-icon *ngIf="project.curated_count > 0 && project.curated_count >= project.text_count"
+                    class="project-curated-badge" matTooltip="All texts curated">check_circle</mat-icon>
           <div class="project-info">
-            <span class="project-name">{{ project.name }}</span>
-            <span class="project-meta">{{ project.text_count || 0 }} texts</span>
+            <span class="project-name" *ngIf="editingProject?.project_id !== project.project_id"
+                  (click)="onProjectNameClick(project, $event)">{{ project.name }}</span>
+            <input *ngIf="editingProject?.project_id === project.project_id"
+                   class="project-name-input-inline" [(ngModel)]="editingProjectName"
+                   (keydown.enter)="confirmProjectRename()" (keydown.escape)="cancelProjectRename()"
+                   (blur)="onProjectRenameBlur()" (click)="$event.stopPropagation()" #projectRenameInput>
+            <span class="project-meta">{{ project.curated_count || 0 }}/{{ project.text_count || 0 }} curated</span>
           </div>
         </div>
 
@@ -140,109 +155,255 @@
         </button>
         <h3>{{ selectedProject?.name }}</h3>
         <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} items</span>
+
+        <span class="header-spacer"></span>
+
+        <div class="text-search-box" *ngIf="curedTexts.length > 0">
+          <mat-icon class="text-search-icon">search</mat-icon>
+          <input [(ngModel)]="searchQuery"
+                 placeholder="Search texts (Enter for KWIC)..."
+                 class="text-search-input"
+                 (keyup.enter)="searchKwic()" />
+          <button *ngIf="searchQuery" mat-icon-button class="text-search-clear"
+                  (click)="clearSearch(); clearKwicSearch()">
+            <mat-icon>close</mat-icon>
+          </button>
+          <button mat-icon-button class="text-search-kwic"
+                  (click)="searchKwic()"
+                  [disabled]="searchQuery.trim().length < 2"
+                  matTooltip="Search transliteration content (KWIC)">
+            <mat-icon>manage_search</mat-icon>
+          </button>
+        </div>
+
+        <div class="view-toggle" *ngIf="curedTexts.length > 0">
+          <button [class.active-view]="textViewMode === 'grid'" (click)="textViewMode = 'grid'; clearTextSelection()" matTooltip="Grid view">
+            <mat-icon>grid_view</mat-icon>
+          </button>
+          <button [class.active-view]="textViewMode === 'list'" (click)="textViewMode = 'list'; clearTextSelection()" matTooltip="Details view">
+            <mat-icon>view_list</mat-icon>
+          </button>
+        </div>
+
+        <button mat-icon-button [matMenuTriggerFor]="projectExportMenu" matTooltip="Export project"
+                *ngIf="curedTexts.length > 0 && selectedProject?.project_id !== -1">
+          <mat-icon>download</mat-icon>
+        </button>
+        <mat-menu #projectExportMenu="matMenu">
+          <div class="export-menu-section">Single file</div>
+          <button mat-menu-item (click)="exportProject('txt')">
+            <mat-icon>description</mat-icon> TXT
+          </button>
+          <button mat-menu-item (click)="exportProject('atf')">
+            <mat-icon>code</mat-icon> ATF (eBL)
+          </button>
+          <button mat-menu-item (click)="exportProject('json')">
+            <mat-icon>data_object</mat-icon> JSON
+          </button>
+          <button mat-menu-item (click)="exportProject('tsv')">
+            <mat-icon>table_chart</mat-icon> TSV
+          </button>
+          <mat-divider></mat-divider>
+          <div class="export-menu-section">ZIP (individual files)</div>
+          <button mat-menu-item (click)="exportProject('zip_txt')">
+            <mat-icon>folder_zip</mat-icon> TXT files
+          </button>
+          <button mat-menu-item (click)="exportProject('zip_json')">
+            <mat-icon>folder_zip</mat-icon> JSON files
+          </button>
+          <mat-divider></mat-divider>
+          <div class="export-menu-section">CuReD dataset</div>
+          <button mat-menu-item (click)="exportProjectCured()">
+            <mat-icon>dataset</mat-icon> Export (images + transliterations)
+          </button>
+        </mat-menu>
+
+        <button mat-icon-button [matMenuTriggerFor]="importMenu" matTooltip="Import CuReD data"
+                *ngIf="selectedProject?.project_id !== -1">
+          <mat-icon>upload_file</mat-icon>
+        </button>
+        <mat-menu #importMenu="matMenu">
+          <button mat-menu-item (click)="importZipInput.click()">
+            <mat-icon>folder_zip</mat-icon> From ZIP file
+          </button>
+          <button mat-menu-item (click)="importFolderInput.click()">
+            <mat-icon>folder_open</mat-icon> From folder
+          </button>
+        </mat-menu>
+        <input #importZipInput type="file" accept=".zip" style="display:none"
+               (change)="handleImportZip($event)" />
+        <input #importFolderInput type="file" webkitdirectory directory multiple style="display:none"
+               (change)="handleImportFolder($event)" />
       </div>
 
-      <div class="text-list-panel">
-        <!-- Filter bar -->
-        <div class="filter-bar" *ngIf="curedTexts.length > 0">
-          <div class="label-filters">
-            <button mat-stroked-button
-                    [class.active]="selectedLabelFilter === null"
-                    (click)="setLabelFilter(null)"
-                    class="filter-chip">
-              All
-            </button>
-            <button mat-stroked-button
-                    *ngFor="let label of availableLabels"
-                    [class.active]="selectedLabelFilter === label"
-                    (click)="setLabelFilter(label)"
-                    class="filter-chip">
-              {{ label }}
-            </button>
-            <button mat-stroked-button
-                    [class.active]="selectedLabelFilter === ''"
-                    (click)="setLabelFilter('')"
-                    class="filter-chip unlabeled-chip">
-              Unlabeled
+      <div class="text-list-panel" (click)="onTextListBackgroundClick($event)">
+        <!-- ===== KWIC CONCORDANCE RESULTS ===== -->
+        <div *ngIf="kwicSearchActive || isSearchingKwic" class="kwic-results-panel">
+          <div class="kwic-panel-header">
+            <h3>Concordance</h3>
+            <span class="kwic-match-count" *ngIf="!isSearchingKwic">{{ kwicResults.length }} match{{ kwicResults.length === 1 ? '' : 'es' }} for "{{ kwicSearchQuery }}"</span>
+            <span class="header-spacer"></span>
+            <button mat-stroked-button (click)="clearKwicSearch(); searchQuery = ''">
+              <mat-icon>arrow_back</mat-icon>
+              Back to list
             </button>
           </div>
-        </div>
 
-        <!-- Table header -->
-        <div class="work-table-header" *ngIf="filteredTexts.length > 0">
-          <div class="col-identifier sortable" (click)="toggleSort('identifier')" [class.sorted]="sortColumn === 'identifier'">
-            Identifier <span class="sort-arrow" *ngIf="sortColumn === 'identifier'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
+          <div class="kwic-loading" *ngIf="isSearchingKwic">
+            <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+            <span>Searching transliterations...</span>
           </div>
-          <div class="col-separator">|</div>
-          <div class="col-part sortable" (click)="toggleSort('part')" [class.sorted]="sortColumn === 'part'">
-            Part <span class="sort-arrow" *ngIf="sortColumn === 'part'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
-          </div>
-          <div class="col-separator">|</div>
-          <div class="col-date sortable" (click)="toggleSort('last_modified')" [class.sorted]="sortColumn === 'last_modified'">
-            Date <span class="sort-arrow" *ngIf="sortColumn === 'last_modified'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
-          </div>
-          <div class="col-separator">|</div>
-          <div class="col-ben-id sortable" (click)="toggleSort('text_id')" [class.sorted]="sortColumn === 'text_id'">
-            BEN ID <span class="sort-arrow" *ngIf="sortColumn === 'text_id'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
-          </div>
-          <div class="col-separator">|</div>
-          <div class="col-label sortable" (click)="toggleSort('label')" [class.sorted]="sortColumn === 'label'">
-            Label <span class="sort-arrow" *ngIf="sortColumn === 'label'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
-          </div>
-          <div class="col-separator">|</div>
-          <div class="col-kraken">Kraken</div>
-          <div class="col-separator">|</div>
-          <div class="col-vlm">VLM</div>
-          <div class="col-separator">|</div>
-          <div class="col-lines sortable" (click)="toggleSort('lines_count')" [class.sorted]="sortColumn === 'lines_count'">
-            Lines <span class="sort-arrow" *ngIf="sortColumn === 'lines_count'">{{ sortDirection === 'asc' ? '&#9650;' : '&#9660;' }}</span>
-          </div>
-          <div class="col-separator">|</div>
-          <div class="col-actions">Actions</div>
-        </div>
 
-        <!-- Items list -->
-        <div class="work-list" *ngIf="filteredTexts.length > 0">
-          <div class="work-item" *ngFor="let item of filteredTexts" (click)="openListItem(item)">
-            <div class="col-identifier clickable" (dblclick)="openIdentifierDialog(item, $event)" matTooltip="Double-click to edit identifiers">
-              <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
+          <div class="kwic-list" *ngIf="!isSearchingKwic && kwicResults.length > 0">
+            <div class="kwic-entry" *ngFor="let result of kwicResults" (click)="openKwicResult(result)">
+              <div class="kwic-header">
+                <span class="kwic-identifier">{{ result.identifier }}</span>
+                <span class="kwic-part" *ngIf="result.part">{{ result.part }}</span>
+                <span class="kwic-line-num">line {{ result.line_index + 1 }}</span>
+              </div>
+              <div class="kwic-context">
+                <div class="kwic-line context" *ngIf="result.line_before">{{ result.line_before }}</div>
+                <div class="kwic-line match" [innerHTML]="highlightKwicMatch(result.matching_line)"></div>
+                <div class="kwic-line context" *ngIf="result.line_after">{{ result.line_after }}</div>
+              </div>
             </div>
-            <div class="col-separator">|</div>
-            <div class="col-part">{{ item.part || '—' }}</div>
-            <div class="col-separator">|</div>
-            <div class="col-date">{{ item.last_modified | date:'d MMM yyyy, HH:mm' }}</div>
-            <div class="col-separator">|</div>
-            <div class="col-ben-id">{{ item.text_id }}</div>
-            <div class="col-separator">|</div>
-            <div class="col-label" (click)="openLabelDialog(item, $event)">
-              <div class="label-chips-row" *ngIf="item.labels?.length > 0; else legacyLabel">
+          </div>
+
+          <div class="empty-list" *ngIf="!isSearchingKwic && kwicResults.length === 0">
+            <mat-icon>search_off</mat-icon>
+            <p>No matches found for "{{ kwicSearchQuery }}"</p>
+          </div>
+        </div>
+
+        <!-- ===== GRID VIEW ===== -->
+        <div class="text-grid" *ngIf="filteredTexts.length > 0 && textViewMode === 'grid' && !kwicSearchActive && !isSearchingKwic">
+          <div class="text-grid-card" *ngFor="let item of filteredTexts"
+               [class.selected]="isTextSelected(item)"
+               (click)="openListItem(item)"
+               (contextmenu)="onTextContextMenu(item, $event)">
+            <div class="text-grid-thumbnail">
+              <img *ngIf="item._thumbnailUrl" [src]="item._thumbnailUrl" alt="thumbnail" />
+              <mat-icon *ngIf="!item._thumbnailUrl">image</mat-icon>
+            </div>
+            <div class="text-grid-info">
+              <span class="text-grid-identifier">
+                <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
+              </span>
+              <span class="text-grid-meta">
+                <span *ngIf="item.part" class="text-grid-part">{{ item.part }}</span>
+                <span class="text-grid-id">BEN {{ item.text_id }}</span>
+              </span>
+              <div class="text-grid-labels" *ngIf="item.labels?.length > 0">
                 <span class="label-mini-chip" *ngFor="let l of item.labels"
                       [style.background]="getLabelColor(l).bg"
                       [style.color]="getLabelColor(l).color"
                       [style.border-color]="getLabelColor(l).border">{{ l }}</span>
               </div>
+              <div class="text-grid-labels" *ngIf="!item.labels?.length && item.label">
+                <span class="label-mini-chip" style="background:#e8eaf6; color:#3949ab; border-color:#9fa8da">{{ item.label }}</span>
+              </div>
+            </div>
+            <div class="text-grid-badges">
+              <mat-icon *ngIf="item.is_curated_kraken || item.is_curated_vlm" class="curated-badge-icon" matTooltip="Curated">check_circle</mat-icon>
+              <span *ngIf="item.lines_count" class="lines-badge">{{ item.lines_count }}L</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LIST / DETAILS VIEW (Explorer style) ===== -->
+        <div class="details-list" *ngIf="textViewMode === 'list' && filteredTexts.length > 0 && !kwicSearchActive && !isSearchingKwic">
+          <div class="details-header">
+            <span class="details-col-icon"></span>
+            <span class="details-col-name sortable" (click)="toggleSort('identifier')" [class.active-sort]="sortColumn === 'identifier'">
+              Identifier
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'identifier'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-part sortable" (click)="toggleSort('part')" [class.active-sort]="sortColumn === 'part'">
+              Part
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'part'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-date sortable" (click)="toggleSort('last_modified')" [class.active-sort]="sortColumn === 'last_modified'">
+              Date
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'last_modified'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-benid sortable" (click)="toggleSort('text_id')" [class.active-sort]="sortColumn === 'text_id'">
+              BEN ID
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'text_id'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-label sortable" (click)="toggleSort('label')" [class.active-sort]="sortColumn === 'label'">
+              Label
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'label'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-curated"
+                  [class.batch-clickable]="selectedTexts.size > 0"
+                  [class.all-curated]="selectedTexts.size > 0 && allSelectedAreCurated()"
+                  (click)="batchCurateFromHeader()"
+                  [matTooltip]="selectedTexts.size > 0 ? 'Click to curate ' + selectedTexts.size + ' selected' : ''">
+              Curated
+            </span>
+            <span class="details-col-lines sortable" (click)="toggleSort('lines_count')" [class.active-sort]="sortColumn === 'lines_count'">
+              Lines
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'lines_count'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-actions">Actions</span>
+          </div>
+          <div class="details-row" *ngFor="let item of filteredTexts"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openListItem(item)">
+            <div class="details-icon details-col-icon">
+              <mat-icon>description</mat-icon>
+            </div>
+            <span class="details-name details-col-name clickable" (click)="$event.stopPropagation()" (dblclick)="openIdentifierDialog(item, $event)" matTooltip="Double-click to edit identifiers">
+              <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
+            </span>
+            <span class="details-part details-col-part clickable" (click)="$event.stopPropagation()" (dblclick)="openPartDialog(item, $event)" matTooltip="Double-click to edit part">{{ item.part || '—' }}</span>
+            <span class="details-date details-col-date">{{ item.last_modified | date:'d MMM yy, HH:mm' }}</span>
+            <span class="details-benid details-col-benid">{{ item.text_id }}</span>
+            <span class="details-label details-col-label" (click)="openLabelDialog(item, $event)">
+              <ng-container *ngIf="item.labels?.length > 0; else legacyLabel">
+                <span class="label-mini-chip" *ngFor="let l of item.labels"
+                      [style.background]="getLabelColor(l).bg"
+                      [style.color]="getLabelColor(l).color"
+                      [style.border-color]="getLabelColor(l).border">{{ l }}</span>
+              </ng-container>
               <ng-template #legacyLabel>
-                <button mat-stroked-button class="label-button" [class.has-label]="item.label">
-                  <mat-icon>label</mat-icon>
-                  <span *ngIf="item.label">{{ item.label }}</span>
-                  <span *ngIf="!item.label" class="no-label">Add label</span>
-                </button>
+                <span class="label-tag" *ngIf="item.label">{{ item.label }}</span>
+                <span *ngIf="!item.label" class="no-label">—</span>
               </ng-template>
-            </div>
-            <div class="col-separator">|</div>
-            <div class="col-kraken">
-              <mat-icon *ngIf="item.is_curated_kraken" class="curated-icon kraken">check_circle</mat-icon>
-              <span *ngIf="!item.is_curated_kraken" class="not-curated">—</span>
-            </div>
-            <div class="col-separator">|</div>
-            <div class="col-vlm">
-              <mat-icon *ngIf="item.is_curated_vlm" class="curated-icon vlm">check_circle</mat-icon>
-              <span *ngIf="!item.is_curated_vlm" class="not-curated">—</span>
-            </div>
-            <div class="col-separator">|</div>
-            <div class="col-lines">{{ item.lines_count || '—' }}</div>
-            <div class="col-separator">|</div>
-            <div class="col-actions">
+            </span>
+            <span class="details-curated details-col-curated clickable"
+                  (click)="toggleSingleTextCuration(item, $event)"
+                  matTooltip="Click to toggle curation">
+              <mat-icon *ngIf="item.is_curated_kraken || item.is_curated_vlm" class="curated-icon">check_circle</mat-icon>
+              <mat-icon *ngIf="!item.is_curated_kraken && !item.is_curated_vlm" class="uncurated-icon">radio_button_unchecked</mat-icon>
+            </span>
+            <span class="details-lines details-col-lines">{{ item.lines_count || '—' }}</span>
+            <div class="details-actions details-col-actions">
+              <button mat-icon-button [matMenuTriggerFor]="rowExport" (click)="$event.stopPropagation()" matTooltip="Download">
+                <mat-icon>download</mat-icon>
+              </button>
+              <mat-menu #rowExport="matMenu">
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'txt')">
+                  <mat-icon>description</mat-icon> TXT
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'atf')">
+                  <mat-icon>code</mat-icon> ATF (eBL)
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'json')">
+                  <mat-icon>data_object</mat-icon> JSON
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'csv')">
+                  <mat-icon>table_chart</mat-icon> CSV
+                </button>
+                <mat-divider></mat-divider>
+                <button mat-menu-item (click)="exportSingleTextCured(item, $event)">
+                  <mat-icon>dataset</mat-icon> CuReD zip
+                </button>
+              </mat-menu>
+              <button mat-icon-button (click)="moveListItem(item, $event)" matTooltip="Move to project">
+                <mat-icon>drive_file_move</mat-icon>
+              </button>
               <button mat-icon-button color="warn" (click)="deleteListItem(item, $event)" matTooltip="Delete">
                 <mat-icon>delete</mat-icon>
               </button>
@@ -250,8 +411,8 @@
           </div>
         </div>
 
-        <div class="empty-list" *ngIf="curedTexts.length > 0 && filteredTexts.length === 0">
-          <p>No items match the selected filter.</p>
+        <div class="empty-list" *ngIf="curedTexts.length > 0 && filteredTexts.length === 0 && !kwicSearchActive && !isSearchingKwic">
+          <p>No items match the search.</p>
         </div>
 
         <div class="empty-list" *ngIf="curedTexts.length === 0">
@@ -321,21 +482,39 @@
 
   <!-- Left Toolbar -->
   <div class="visualizer-toolbar">
+    <button class="tool-btn" *ngIf="!isLoadedFromServer && !viewOnly"
+            (click)="goBack()" matTooltip="Back">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <div class="toolbar-divider" *ngIf="!isLoadedFromServer && !viewOnly"></div>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
             (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (double-click-hold to draw)">
       <mat-icon>pan_tool</mat-icon>
     </button>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Add"
             (click)="canvas?.changeMode(CanvasMode.Add)" matTooltip="Draw selection box (Alt+A)">
-      <mat-icon>add_box</mat-icon>
-    </button>
-    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Adjust"
-            (click)="canvas?.changeMode(CanvasMode.Adjust)" matTooltip="Adjust box (Alt+X)">
-      <mat-icon>transform</mat-icon>
+      <mat-icon>crop_free</mat-icon>
     </button>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Delete"
             (click)="canvas?.changeMode(CanvasMode.Delete)" matTooltip="Delete (Alt+D)">
       <mat-icon>delete</mat-icon>
+    </button>
+    <button class="tool-btn"
+            (click)="cropToSelectedBox()" matTooltip="Crop image to selection box (Ctrl+Shift+C)">
+      <mat-icon>content_cut</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn"
+            [disabled]="isDetectingLines || stage !== 5 || !lines?.length || boundingBoxes.length === lines?.length"
+            (click)="detectLines()" matTooltip="Detect line boxes">
+      <mat-icon>{{ isDetectingLines ? 'hourglass_empty' : 'auto_fix_high' }}</mat-icon>
+    </button>
+    <button class="tool-btn"
+            [disabled]="stage !== 5 || boundingBoxes.length === 0"
+            (click)="clearAllBoxes()" matTooltip="Clear all boxes">
+      <mat-icon>delete_sweep</mat-icon>
     </button>
 
     <div class="toolbar-divider"></div>
@@ -373,13 +552,35 @@
       <!-- Preview before detection -->
       <div *ngIf="stage == 2" class="preview-panel">
         <div class="preview-content model-selection-content" *ngIf="!isLoading">
-          <mat-icon class="preview-icon">auto_awesome</mat-icon>
+          <!-- Workflow steps -->
+          <h3>Workflow</h3>
+          <div class="instructions-steps">
+            <div class="instruction-step" [class.done]="selectedBox">
+              <mat-icon>crop_free</mat-icon>
+              <span>Draw box</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step" [class.done]="selectedOcrModel">
+              <mat-icon>model_training</mat-icon>
+              <span>Model</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step" [class.done]="selectedOcrPrompt">
+              <mat-icon>tune</mat-icon>
+              <span>Mode</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step">
+              <mat-icon>auto_awesome</mat-icon>
+              <span>Generate</span>
+            </div>
+          </div>
+
           <h3>Select OCR Model</h3>
-          <p>Choose the model best suited for your text type</p>
 
           <!-- Categorized Model Selection -->
           <div class="model-categories">
-            <div *ngFor="let category of ocrModelCategories" class="model-category">
+            <div *ngFor="let category of ocrModelCategories" class="model-category" [hidden]="category.models.length === 0">
               <div class="category-header">{{ category.name }}</div>
               <div class="category-models">
                 <button *ngFor="let model of category.models"
@@ -398,7 +599,7 @@
 
           <!-- OCR Mode Selection (for VLM models) -->
           <div class="ocr-mode-section">
-            <div class="mode-header">Mode</div>
+            <h3>Mode</h3>
             <div class="mode-buttons">
               <button *ngFor="let mode of ocrPromptModes"
                       class="mode-btn"
@@ -430,6 +631,20 @@
               <mat-icon matSuffix>key</mat-icon>
               <mat-hint>API key for {{ selectedTeiModelInfo?.label }}. Saved locally.</mat-hint>
             </mat-form-field>
+          </div>
+
+          <!-- Post-OCR Correction Rules -->
+          <div class="ocr-mode-section">
+            <h3>Correction Rules</h3>
+            <div class="mode-buttons">
+              <button *ngFor="let rule of correctionRulesOptions"
+                      class="mode-btn"
+                      [class.selected]="correctionRules === rule.value"
+                      (click)="correctionRules = rule.value"
+                      [matTooltip]="rule.description">
+                {{ rule.label }}
+              </button>
+            </div>
           </div>
 
           <!-- API Key and Model Selection (for cloud API models) -->
@@ -483,11 +698,58 @@
       </div>
 
       <!-- Status info bar -->
-      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed || hasLinkedTranslation)" class="results-info">
+      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed || hasLinkedTranslation || textListNavActive)" class="results-info">
+        <!-- Text list navigation -->
+        <div *ngIf="textListNavActive && filteredTexts.length > 0" class="text-nav">
+          <button mat-icon-button class="text-nav-btn"
+                  [disabled]="!canNavigatePrev"
+                  (click)="navigateToPrevText()"
+                  matTooltip="Previous text">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <mat-select class="text-nav-dropdown"
+                      [value]="textId"
+                      (selectionChange)="navigateToTextByIndex($event.value)">
+            <mat-option *ngFor="let item of filteredTexts; let i = index"
+                        [value]="item.text_id">
+              {{ getTextNavLabel(item) }}
+            </mat-option>
+          </mat-select>
+          <span class="text-nav-counter">{{ currentTextListIndex + 1 }} / {{ filteredTexts.length }}</span>
+          <button mat-icon-button class="text-nav-btn"
+                  [disabled]="!canNavigateNext"
+                  (click)="navigateToNextText()"
+                  matTooltip="Next text">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+          <div class="text-nav-separator"></div>
+        </div>
+
         <span class="info-item" *ngIf="textId">BEN: {{textId}}</span>
         <span class="info-item" *ngIf="transliterationId">Trans: {{transliterationId}}</span>
-        <span class="status-badge kraken" *ngIf="isCuratedKraken">Kraken</span>
-        <span class="status-badge vlm" *ngIf="isCuratedVlm">VLM</span>
+        <!-- Action buttons -->
+        <div class="results-actions" *ngIf="!viewOnly">
+          <button mat-stroked-button [color]="hasUnsavedChanges ? 'warn' : 'primary'"
+                  [disabled]="!hasUnsavedChanges"
+                  (click)="save()" matTooltip="Save (Ctrl+S)" class="results-action-btn">
+            <mat-icon>save</mat-icon>
+            {{ hasUnsavedChanges ? 'Save *' : 'Saved' }}
+          </button>
+          <button mat-stroked-button color="primary"
+                  (click)="curate()" [disabled]="textId == null || !canCurate"
+                  matTooltip="Curate for training" class="results-action-btn"
+                  [class.curated]="isCurated">
+            <mat-icon>verified</mat-icon>
+            {{ isCurated ? 'Curated ✓' : 'Curate' }}
+          </button>
+          <button mat-stroked-button color="warn"
+                  *ngIf="isLoadedFromServer && textId != null"
+                  (click)="deleteCurrentEntry()" matTooltip="Delete text entry"
+                  class="results-action-btn">
+            <mat-icon>delete</mat-icon>
+            Delete
+          </button>
+        </div>
 
         <!-- Translation toggle button -->
         <button *ngIf="hasLinkedTranslation" mat-stroked-button class="translation-toggle"
@@ -578,6 +840,7 @@
         (lineHover)="transliterationLineHover($event)"
         (lineChanged)="onLinesChanged($event)"
         (regexMatchLines)="onRegexMatchLines($event)"
+        (exportRequested)="exportMenuTrigger.openMenu()"
         [lines]="lines"
         [boxAmount]="boundingBoxes.length"
         class="lines-panel"></text-editor>
@@ -585,15 +848,48 @@
   </div>
 </div>
 
-<!-- Hidden Export Menu -->
+<!-- Hidden Export Menu (editor stage) -->
 <div style="visibility: hidden; position: fixed" [matMenuTriggerFor]="exportMenu"></div>
 <mat-menu #exportMenu="matMenu">
-  <button mat-menu-item (click)="exportResult()">
-    <mat-icon>text_snippet</mat-icon>
-    <span>Plain Text</span>
+  <button mat-menu-item (click)="downloadCurrentText('txt')">
+    <mat-icon>description</mat-icon>
+    <span>TXT</span>
   </button>
-  <button mat-menu-item (click)="exportAtfEbl()">
+  <button mat-menu-item (click)="downloadCurrentText('atf')">
     <mat-icon>code</mat-icon>
     <span>ATF (eBL)</span>
   </button>
+  <button mat-menu-item (click)="downloadCurrentText('json')">
+    <mat-icon>data_object</mat-icon>
+    <span>JSON</span>
+  </button>
+  <button mat-menu-item (click)="downloadCurrentText('csv')">
+    <mat-icon>table_chart</mat-icon>
+    <span>CSV</span>
+  </button>
 </mat-menu>
+
+<!-- Context menu for project folders -->
+<div class="project-context-menu" *ngIf="projectContextMenuVisible"
+     [style.left.px]="projectContextMenuX" [style.top.px]="projectContextMenuY">
+  <div class="context-menu-item" (mousedown)="startProjectRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item" (mousedown)="exportProjectCuredFromMenu()">
+    <mat-icon>dataset</mat-icon> Export CuReD zip
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteProjectFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
+  </div>
+</div>
+
+<!-- Context menu for text cards (grid view) -->
+<div class="text-context-menu" *ngIf="textContextMenuVisible"
+     [style.left.px]="textContextMenuX" [style.top.px]="textContextMenuY">
+  <div class="context-menu-item" (mousedown)="curateFromContextMenu()">
+    <mat-icon>verified</mat-icon> Curate
+  </div>
+  <div class="context-menu-item" (mousedown)="uncurateFromContextMenu()">
+    <mat-icon>remove_circle_outline</mat-icon> Uncurate
+  </div>
+</div>

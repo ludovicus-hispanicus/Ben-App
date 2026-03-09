@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ViewChildren, QueryList, ElementRef, HostListener, AfterViewInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { Subject, Subscription, interval } from 'rxjs';
@@ -56,6 +56,10 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   // Datasets
   datasets: DatasetListItem[] = [];
   selectedDataset: DatasetStats | null = null;
+  datasetViewMode: 'grid' | 'list' = 'grid';
+  datasetSearchQuery = '';
+  datasetSortColumn: 'name' | 'images' | 'classes' | 'created' | 'updated' | 'curated' = 'name';
+  datasetSortDirection: 'asc' | 'desc' = 'asc';
 
   // Models
   models: ModelInfo[] = [];
@@ -75,8 +79,25 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   logsAutoRefreshing = false;
   private logsRefreshSub: Subscription | null = null;
 
-  // Inline editing
+  // Inline editing (detail view)
   editingField: 'name' | null = null;
+
+  // Dataset card selection & inline rename
+  selectedDatasetCard: DatasetListItem | null = null;
+  selectedDatasets: Set<string> = new Set();
+  lastSelectedDatasetIndex: number = -1;
+  editingDataset: DatasetListItem | null = null;
+  editingDatasetName = '';
+  private datasetRenameTimer: any = null;
+  private datasetRenameCancelled = false;
+
+  // Dataset context menu
+  datasetContextMenuVisible = false;
+  datasetContextMenuX = 0;
+  datasetContextMenuY = 0;
+  datasetContextMenuNode: DatasetListItem | null = null;
+
+  @ViewChildren('datasetRenameInput') datasetRenameInputs!: QueryList<ElementRef>;
 
   // New dataset form
   newDatasetName = '';
@@ -86,6 +107,15 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   trainingDatasetName = '';
   trainingBaseModel = 'yolov8s.pt';
   trainingOutputName = '';
+
+  // Base model display names
+  baseModelLabels: Record<string, string> = {
+    'yolov8n.pt': 'YOLOv8 Nano (fastest)',
+    'yolov8s.pt': 'YOLOv8 Small (recommended)',
+    'yolov8m.pt': 'YOLOv8 Medium',
+    'yolov8l.pt': 'YOLOv8 Large',
+    'yolov8x.pt': 'YOLOv8 XLarge (most accurate)',
+  };
 
   // Annotation state
   annotationDataset: string = '';
@@ -131,6 +161,18 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   autoAnnotateStatus: AutoAnnotateStatus | null = null;
   isAutoAnnotating: boolean = false;
   private autoAnnotatePollSub: any = null;
+
+  get pretrainedBaseModels(): string[] {
+    return this.baseModels.filter(m => m.startsWith('yolov8'));
+  }
+
+  get trainedBaseModels(): string[] {
+    return this.baseModels.filter(m => !m.startsWith('yolov8'));
+  }
+
+  getBaseModelLabel(model: string): string {
+    return this.baseModelLabels[model] || model;
+  }
 
   constructor(
     private yoloService: YoloTrainingService,
@@ -291,6 +333,8 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   }
 
   selectDataset(dataset: DatasetListItem): void {
+    clearTimeout(this.datasetRenameTimer);
+    this.clearDatasetSelection();
     this.isLoading = true;
     this.yoloService.getDatasetStats(dataset.dataset_id).subscribe({
       next: (stats) => {
@@ -306,6 +350,182 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
 
   closeDataset(): void {
     this.selectedDataset = null;
+  }
+
+  // ============== Dataset Card Selection & Inline Rename ==============
+
+  selectDatasetCard(dataset: DatasetListItem, event: MouseEvent): void {
+    this.selectedDatasetCard = dataset;
+    const index = this.filteredDatasets.indexOf(dataset);
+    const id = dataset.dataset_id;
+
+    if (event.shiftKey && this.lastSelectedDatasetIndex >= 0) {
+      const start = Math.min(this.lastSelectedDatasetIndex, index);
+      const end = Math.max(this.lastSelectedDatasetIndex, index);
+      for (let i = start; i <= end; i++) {
+        this.selectedDatasets.add(this.filteredDatasets[i].dataset_id);
+      }
+    } else if (event.ctrlKey || event.metaKey) {
+      if (this.selectedDatasets.has(id)) {
+        this.selectedDatasets.delete(id);
+      } else {
+        this.selectedDatasets.add(id);
+      }
+    } else {
+      this.selectedDatasets.clear();
+      this.selectedDatasets.add(id);
+    }
+    this.lastSelectedDatasetIndex = index;
+  }
+
+  isDatasetSelected(dataset: DatasetListItem): boolean {
+    return this.selectedDatasets.has(dataset.dataset_id);
+  }
+
+  selectAllDatasets(): void {
+    if (this.selectedDatasets.size === this.filteredDatasets.length) {
+      this.selectedDatasets.clear();
+    } else {
+      this.filteredDatasets.forEach(d => this.selectedDatasets.add(d.dataset_id));
+    }
+  }
+
+  clearDatasetSelection(): void {
+    this.selectedDatasets.clear();
+    this.lastSelectedDatasetIndex = -1;
+  }
+
+  deleteSelectedDatasets(): void {
+    if (this.selectedDatasets.size === 0) { return; }
+    const count = this.selectedDatasets.size;
+    if (!confirm(`Delete ${count} selected dataset(s)?`)) { return; }
+
+    const ids = Array.from(this.selectedDatasets);
+    let completed = 0;
+    let errors = 0;
+    ids.forEach(id => {
+      this.yoloService.deleteDataset(id).subscribe({
+        next: (response) => {
+          completed++;
+          if (completed + errors === ids.length) {
+            this.notification.showSuccess(`Deleted ${completed} dataset(s)`);
+            this.clearDatasetSelection();
+            this.selectedDataset = null;
+            this.loadDashboardData();
+          }
+        },
+        error: () => {
+          errors++;
+          if (completed + errors === ids.length) {
+            this.notification.showError(`Deleted ${completed}, failed ${errors}`);
+            this.clearDatasetSelection();
+            this.loadDashboardData();
+          }
+        }
+      });
+    });
+  }
+
+  onDatasetNameClick(dataset: DatasetListItem, event: MouseEvent): void {
+    event.stopPropagation();
+    // Only start rename if this card is already selected (slow double-click)
+    if (this.selectedDatasetCard?.dataset_id === dataset.dataset_id) {
+      clearTimeout(this.datasetRenameTimer);
+      this.datasetRenameTimer = setTimeout(() => {
+        this.startDatasetRename(dataset);
+      }, 400);
+    }
+  }
+
+  startDatasetRename(dataset: DatasetListItem): void {
+    this.editingDataset = dataset;
+    this.editingDatasetName = dataset.name;
+    this.datasetRenameCancelled = false;
+    setTimeout(() => {
+      const inputs = this.datasetRenameInputs.toArray();
+      if (inputs.length > 0) {
+        const input = inputs[0].nativeElement as HTMLInputElement;
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  confirmDatasetRename(): void {
+    if (!this.editingDataset || this.datasetRenameCancelled) { return; }
+    const dataset = this.editingDataset;
+    const newName = this.editingDatasetName.trim();
+    this.editingDataset = null;
+
+    if (!newName || newName === dataset.name) { return; }
+
+    this.yoloService.updateDatasetMetadata(dataset.dataset_id, { name: newName }).subscribe({
+      next: (response) => {
+        if (response.success) {
+          dataset.name = response.name;
+          this.notification.showSuccess(`Renamed to "${response.name}"`);
+        }
+      },
+      error: () => {
+        this.notification.showError('Failed to rename dataset');
+      }
+    });
+  }
+
+  cancelDatasetRename(): void {
+    this.datasetRenameCancelled = true;
+    this.editingDataset = null;
+    this.editingDatasetName = '';
+  }
+
+  onDatasetRenameBlur(): void {
+    setTimeout(() => {
+      if (this.editingDataset && !this.datasetRenameCancelled) {
+        this.confirmDatasetRename();
+      }
+    }, 100);
+  }
+
+  // ============== Dataset Context Menu ==============
+
+  onDatasetContextMenu(dataset: DatasetListItem, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.datasetContextMenuNode = dataset;
+    this.datasetContextMenuX = event.clientX;
+    this.datasetContextMenuY = event.clientY;
+    this.datasetContextMenuVisible = true;
+  }
+
+  startDatasetRenameFromMenu(): void {
+    if (!this.datasetContextMenuNode) { return; }
+    const dataset = this.datasetContextMenuNode;
+    this.datasetContextMenuVisible = false;
+    this.selectedDatasetCard = dataset;
+    this.startDatasetRename(dataset);
+  }
+
+  deleteDatasetFromMenu(): void {
+    if (!this.datasetContextMenuNode) { return; }
+    const dataset = this.datasetContextMenuNode;
+    this.datasetContextMenuVisible = false;
+    this.deleteDataset(dataset.dataset_id);
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.datasetContextMenuVisible = false;
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey && event.key === 'a' && this.viewMode === ViewMode.Datasets && !this.selectedDataset) {
+      event.preventDefault();
+      this.selectAllDatasets();
+    }
+    if (event.key === 'Delete' && this.viewMode === ViewMode.Datasets && !this.selectedDataset && this.selectedDatasets.size > 0) {
+      this.deleteSelectedDatasets();
+    }
   }
 
   startEditDatasetField(field: 'name'): void {
@@ -374,6 +594,35 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.notification.showError('Failed to save snippets: ' + (err.error?.detail || err.message));
+        }
+      });
+    });
+  }
+
+  saveAhwEntriesToLibrary(): void {
+    if (!this.selectedDataset) return;
+
+    const dialogRef = this.dialog.open(FolderPickerDialogComponent, {
+      width: '550px',
+      data: { title: 'Save AHw Entries to Library' }
+    });
+
+    dialogRef.afterClosed().subscribe((result: FolderPickerResult | null) => {
+      if (!result) return;
+
+      this.notification.showInfo('Merging and saving AHw entries...');
+      this.yoloService.saveAhwEntriesToLibrary(
+        this.selectedDataset.dataset_id,
+        result.project_id,
+        result.project_name
+      ).subscribe({
+        next: (response) => {
+          this.notification.showSuccess(
+            `Saved ${response.entry_count} AHw entries to "${response.name}"`
+          );
+        },
+        error: (err) => {
+          this.notification.showError('Failed to save AHw entries: ' + (err.error?.detail || err.message));
         }
       });
     });
@@ -766,7 +1015,7 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
 
   browseServerForPredict(): void {
     const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-      width: '850px', height: '600px'
+      width: '1000px', height: '720px'
     });
     dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
       if (!result || result.length === 0) return;
@@ -1106,6 +1355,55 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
     return this.selectedDataset ? this.selectedDataset.total_annotations : 0;
   }
 
+  // ============== Dataset Search & Sort ==============
+
+  get filteredDatasets(): DatasetListItem[] {
+    let items = this.datasets;
+
+    const q = this.datasetSearchQuery.trim().toLowerCase();
+    if (q) {
+      items = items.filter(ds => ds.name.toLowerCase().includes(q));
+    }
+
+    return [...items].sort((a, b) => {
+      let cmp = 0;
+      switch (this.datasetSortColumn) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case 'images':
+          cmp = a.image_count - b.image_count;
+          break;
+        case 'classes':
+          cmp = a.class_count - b.class_count;
+          break;
+        case 'created':
+          cmp = (a.created_at || '').localeCompare(b.created_at || '');
+          break;
+        case 'updated':
+          cmp = (a.updated_at || '').localeCompare(b.updated_at || '');
+          break;
+        case 'curated':
+          cmp = (a.curated === b.curated) ? (a.curated_count - b.curated_count) : (a.curated ? 1 : -1);
+          break;
+      }
+      return this.datasetSortDirection === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  toggleDatasetSort(column: 'name' | 'images' | 'classes' | 'created' | 'updated' | 'curated'): void {
+    if (this.datasetSortColumn === column) {
+      this.datasetSortDirection = this.datasetSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.datasetSortColumn = column;
+      this.datasetSortDirection = 'asc';
+    }
+  }
+
+  clearDatasetSearch(): void {
+    this.datasetSearchQuery = '';
+  }
+
   // ============== Annotation Callbacks ==============
 
   onAnnotationSaved(): void {
@@ -1143,7 +1441,7 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
 
   browseProjectForAutoAnnotate(): void {
     const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-      width: '850px', height: '600px'
+      width: '1000px', height: '720px'
     });
     dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
       if (!result || result.length === 0) return;

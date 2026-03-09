@@ -43,10 +43,16 @@ export class FolderPickerDialogComponent implements OnInit {
   }
 
   loadTree(): void {
+    // Remember which nodes were expanded before reload
+    const expandedIds = new Set<string>();
+    this.collectExpanded(this.tree, expandedIds);
+
     this.isLoading = true;
     this.pagesService.getTree().subscribe({
       next: (tree) => {
         this.tree = tree;
+        // Restore expanded state
+        this.restoreExpanded(this.tree, expandedIds);
         this.rebuildFlat();
         this.isLoading = false;
       },
@@ -54,6 +60,20 @@ export class FolderPickerDialogComponent implements OnInit {
         this.isLoading = false;
       }
     });
+  }
+
+  private collectExpanded(nodes: ProjectTreeNode[], ids: Set<string>): void {
+    for (const node of nodes) {
+      if (node.expanded) { ids.add(node.project_id); }
+      if (node.children) { this.collectExpanded(node.children, ids); }
+    }
+  }
+
+  private restoreExpanded(nodes: ProjectTreeNode[], ids: Set<string>): void {
+    for (const node of nodes) {
+      if (ids.has(node.project_id)) { node.expanded = true; }
+      if (node.children) { this.restoreExpanded(node.children, ids); }
+    }
   }
 
   private rebuildFlat(): void {
@@ -113,19 +133,30 @@ export class FolderPickerDialogComponent implements OnInit {
     if (!name) return;
 
     this.isCreating = true;
-    this.pagesService.createProject(name).subscribe({
+    // If a folder is selected, create inside it; otherwise create at root
+    const parentId = this.selectedProjectId || undefined;
+    this.pagesService.createProject(name, parentId).subscribe({
       next: (response) => {
         this.isCreating = false;
         this.newFolderName = '';
-        this.dialogRef.close({
-          project_id: response.project_id,
-          project_name: response.name
-        } as FolderPickerResult);
+        // Mark parent as expanded so it stays open after reload
+        if (parentId) {
+          const parentNode = this.findNode(this.tree, parentId);
+          if (parentNode) { parentNode.expanded = true; }
+        }
+        // Select the newly created folder and refresh tree
+        this.selectedProjectId = response.project_id;
+        this.loadTree();
       },
       error: () => {
         this.isCreating = false;
       }
     });
+  }
+
+  getSelectedFolderName(): string {
+    const folder = this.flatFolders.find(f => f.project_id === this.selectedProjectId);
+    return folder ? folder.name : '';
   }
 
   confirm(): void {

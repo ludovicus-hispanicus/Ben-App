@@ -7,6 +7,7 @@ import { ReplacementMappingsService, ReplacementMapping } from 'src/app/services
 interface OcrPrompt {
   key: string;
   value: string;
+  builtin?: boolean;
   editing?: boolean;
   editValue?: string;
 }
@@ -39,8 +40,16 @@ export class SettingsComponent implements OnInit, OnDestroy {
     defaultOcrModel: 'kraken',
     useGpu: false,
     ollamaUrl: 'http://localhost:11434',
-    autoSave: true
+    autoSave: true,
+    imageScale: 1.0,
   };
+
+  imageScaleOptions: Array<{value: number; label: string}> = [
+    { value: 1.0, label: '600 DPI (Full)' },
+    { value: 0.75, label: '450 DPI' },
+    { value: 0.5, label: '300 DPI' },
+    { value: 0.33, label: '200 DPI' },
+  ];
 
   // OCR model categories - dynamically updated based on installed models
   ocrModelGroups: { label: string; models: { value: string; label: string }[] }[] = [];
@@ -68,6 +77,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
   loadingPrompts = false;
   promptsError: string | null = null;
   defaultPrompt: string = 'dictionary';  // Default prompt for OCR
+  showNewPromptForm = false;
+  newPromptName: string = '';
+  newPromptText: string = '';
+  creatingPrompt = false;
 
   // Available Ollama models
   availableOllamaModels: string[] = [];
@@ -129,6 +142,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.loadGpuStatus();
     this.loadRecommendedModels();
     this.loadKrakenModels();
+    this.loadAppSettings();
 
     // Subscribe to mappings changes
     this.mappingsSubscription = this.mappingsService.mappings$.subscribe(() => {
@@ -416,13 +430,53 @@ export class SettingsComponent implements OnInit, OnDestroy {
     });
   }
 
+  createPrompt(): void {
+    const key = this.newPromptName.trim().toLowerCase().replace(/\s+/g, '_');
+    const value = this.newPromptText.trim();
+    if (!key || !value) return;
+
+    this.creatingPrompt = true;
+    this.http.post<any>(`${environment.apiUrl}/cured/ollama/prompts`, { key, value }).subscribe({
+      next: () => {
+        this.ocrPrompts.push({
+          key, value, builtin: false, editing: false, editValue: value
+        });
+        this.newPromptName = '';
+        this.newPromptText = '';
+        this.showNewPromptForm = false;
+        this.creatingPrompt = false;
+      },
+      error: (error) => {
+        this.creatingPrompt = false;
+        alert(error.error?.detail || 'Failed to create prompt');
+      }
+    });
+  }
+
+  deletePrompt(prompt: OcrPrompt): void {
+    if (!confirm(`Delete prompt "${this.getPromptLabel(prompt.key)}"?`)) return;
+
+    this.http.delete<any>(`${environment.apiUrl}/cured/ollama/prompts/${prompt.key}`).subscribe({
+      next: () => {
+        this.ocrPrompts = this.ocrPrompts.filter(p => p.key !== prompt.key);
+        if (this.defaultPrompt === prompt.key) {
+          this.defaultPrompt = 'dictionary';
+          this.saveDefaultPrompt();
+        }
+      },
+      error: (error) => {
+        alert(error.error?.detail || 'Failed to delete prompt');
+      }
+    });
+  }
+
   getPromptLabel(key: string): string {
     const labels: { [key: string]: string } = {
       'plain': 'Plain Text',
       'markdown': 'Markdown',
       'dictionary': 'Akkadian Dictionary'
     };
-    return labels[key] || key;
+    return labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
   getPromptDescription(key: string): string {
@@ -434,9 +488,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     return descriptions[key] || '';
   }
 
+  loadAppSettings(): void {
+    this.http.get<any>(`${environment.apiUrl}/settings`).subscribe({
+      next: (settings) => {
+        if (settings.image_scale !== undefined) {
+          this.settings.imageScale = settings.image_scale;
+        }
+      },
+      error: () => {} // Use defaults
+    });
+  }
+
   saveSettings(): void {
-    // TODO: Save settings to backend/localStorage
-    console.log('Settings saved:', this.settings);
+    this.http.put<any>(`${environment.apiUrl}/settings`, {
+      image_scale: this.settings.imageScale,
+    }).subscribe({
+      next: () => {
+        console.log('Settings saved');
+      },
+      error: (err) => {
+        console.error('Failed to save settings:', err);
+        alert('Failed to save settings');
+      }
+    });
   }
 
   // --- Replacement Mappings (Utilities tab) ---

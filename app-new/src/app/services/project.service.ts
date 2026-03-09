@@ -76,4 +76,25 @@ export class ProjectService {
             `${environment.apiUrl}${this.baseUrl}/unassigned/texts`
         );
     }
+
+    assignText(textId: number, projectId: number | null): Observable<{ updated: boolean }> {
+        return this.http.patch<{ updated: boolean }>(
+            `${environment.apiUrl}${this.baseUrl}/texts/${textId}/assign`,
+            { project_id: projectId }
+        );
+    }
+
+    exportProject(projectId: number, format: string): Observable<Blob> {
+        return this.http.get(
+            `${environment.apiUrl}${this.baseUrl}/${projectId}/export`,
+            { params: { format }, responseType: 'blob' }
+        );
+    }
+
+    exportSingleText(textId: number, format: string = 'txt'): Observable<Blob> {
+        return this.http.get(
+            `${environment.apiUrl}${this.baseUrl}/texts/${textId}/export`,
+            { params: { format }, responseType: 'blob' }
+        );
+    }
 }

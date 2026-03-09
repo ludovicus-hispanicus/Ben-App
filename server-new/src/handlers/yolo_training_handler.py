@@ -68,6 +68,20 @@ class YoloTrainingHandler:
                 "message": str(e),
             }
 
+    def delete_class_from_dataset(self, dataset_name: str, class_id: int) -> Dict:
+        """Delete a class from a dataset."""
+        try:
+            result = yolo_training_client.delete_class_from_dataset(dataset_name, class_id)
+            return {
+                "success": True,
+                **result,
+            }
+        except ValueError as e:
+            return {
+                "success": False,
+                "message": str(e),
+            }
+
     def update_class_color(self, dataset_name: str, class_id: int, color: str) -> Dict:
         """Update the color of a class in a dataset."""
         try:
@@ -275,6 +289,10 @@ class YoloTrainingHandler:
             project_name: Name for new project (optional, defaults to {dataset_name}_snippets)
         """
         return yolo_training_client.save_snippets_to_library(dataset_name, project_id, project_name)
+
+    def save_ahw_entries_to_library(self, dataset_name: str, project_id: str = None, project_name: str = None) -> Dict:
+        """Save merged AHw dictionary entries to the Pages library."""
+        return yolo_training_client.save_ahw_entries_to_library(dataset_name, project_id, project_name)
 
     # ============== Model Operations ==============
 

@@ -139,6 +139,18 @@
 
 .confirm-bar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  padding-top: 1em;
+  gap: 0.75em;
+  padding-top: 0.75em;
+  border-top: 1px solid #e0e0e0;
+  margin-top: 0.5em;
+
+  .selected-folder-name {
+    color: #666;
+    font-size: 0.9em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

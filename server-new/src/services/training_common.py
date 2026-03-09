@@ -31,6 +31,7 @@ class TrainingProgress:
     started_at: str = None
     completed_at: str = None
     epoch_history: list = None
+    val_loss: float = 0.0
     best_accuracy: float = 0.0
     best_loss: float = float('inf')
     no_improve_count: int = 0
@@ -55,6 +56,7 @@ class TrainingProgress:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "epoch_history": self.epoch_history,
+            "val_loss": self.val_loss,
             "best_accuracy": self.best_accuracy,
             "no_improve_count": self.no_improve_count,
             "early_stopped": self.early_stopped,

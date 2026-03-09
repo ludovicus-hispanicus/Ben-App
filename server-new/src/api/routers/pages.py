@@ -19,7 +19,7 @@ Endpoints:
 """
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
 from starlette.background import BackgroundTask
@@ -28,6 +28,7 @@ from starlette.responses import FileResponse
 from api.dto.pages import (ProjectListResponse, ProjectDetail, UploadResponse,
                            CreateProjectDto, RenameProjectDto, MoveProjectDto)
 from handlers.pages_handler import PagesHandler
+from utils.pdf_utils import PdfUtils
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,12 @@ ALLOWED_PDF_TYPES = {"application/pdf", "application\\pdf"}
 
 
 def _process_upload(file_bytes: bytes, filename: str, content_type: str,
-                    project_id: str = None, project_name: str = None) -> UploadResponse:
+                    project_id: str = None, project_name: str = None,
+                    page_from: int = None, page_to: int = None, dpi: int = None) -> UploadResponse:
     """Shared logic for upload endpoints."""
     if content_type in ALLOWED_PDF_TYPES or filename.lower().endswith(".pdf"):
-        return handler.upload_pdf(file_bytes, filename, project_id=project_id, project_name=project_name)
+        return handler.upload_pdf(file_bytes, filename, project_id=project_id,
+                                  project_name=project_name, page_from=page_from, page_to=page_to, dpi=dpi)
     elif content_type in ALLOWED_IMAGE_TYPES or filename.lower().endswith((".png", ".jpg", ".jpeg")):
         return handler.upload_image(file_bytes, filename, project_id=project_id, project_name=project_name)
     else:
@@ -57,11 +60,28 @@ def _process_upload(file_bytes: bytes, filename: str, content_type: str,
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...), name: str = Form(None)):
+async def upload_file(file: UploadFile = File(...), name: str = Form(None),
+                      page_from: Optional[int] = Form(None), page_to: Optional[int] = Form(None),
+                      dpi: Optional[int] = Form(None)):
     """Upload a PDF (all pages extracted) or a single image. Creates a new project."""
     content_type = file.content_type or ""
     file_bytes = await file.read()
-    return _process_upload(file_bytes, file.filename or "document.pdf", content_type, project_name=name)
+    return _process_upload(file_bytes, file.filename or "document.pdf", content_type,
+                           project_name=name, page_from=page_from, page_to=page_to, dpi=dpi)
+
+
+@router.post("/pdf-page-count")
+async def get_pdf_page_count(file: UploadFile = File(...)):
+    """Get the number of pages in a PDF without extracting them."""
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_PDF_TYPES and not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+    file_bytes = await file.read()
+    try:
+        count = PdfUtils.get_page_count(file_bytes)
+        return {"page_count": count, "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
 
 
 @router.post("/projects", response_model=UploadResponse)
@@ -125,12 +145,15 @@ async def move_project(project_id: str, dto: MoveProjectDto):
 
 
 @router.post("/projects/{project_id}/upload", response_model=UploadResponse)
-async def upload_to_project(project_id: str, file: UploadFile = File(...)):
+async def upload_to_project(project_id: str, file: UploadFile = File(...),
+                            page_from: Optional[int] = Form(None), page_to: Optional[int] = Form(None),
+                            dpi: Optional[int] = Form(None)):
     """Upload a PDF or image to an existing project."""
     content_type = file.content_type or ""
     file_bytes = await file.read()
     try:
-        return _process_upload(file_bytes, file.filename or "document.pdf", content_type, project_id=project_id)
+        return _process_upload(file_bytes, file.filename or "document.pdf", content_type,
+                               project_id=project_id, page_from=page_from, page_to=page_to, dpi=dpi)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
     except ValueError as e:
@@ -161,6 +184,17 @@ async def get_page_thumbnail(project_id: str, page_number: int):
     raise HTTPException(status_code=404, detail="Page not found")
 
 
+@router.get("/projects/{project_id}/file/{filename}")
+async def get_file_by_name(project_id: str, filename: str):
+    """Get an image file by its exact filename (supports custom-named files)."""
+    file_path = handler.get_file_path(project_id, filename)
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+    ext = os.path.splitext(filename)[1].lower()
+    media = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+    return FileResponse(file_path, media_type=media)
+
+
 @router.get("/projects/{project_id}/download")
 async def download_project(project_id: str):
     """Download a project as a ZIP, recursively including child sub-folders."""
@@ -182,10 +216,10 @@ async def download_project(project_id: str):
 
 
 @router.delete("/projects/{project_id}/pages")
-async def delete_pages(project_id: str, page_numbers: List[int] = Body(..., embed=True)):
-    """Delete specific pages from a project."""
+async def delete_pages(project_id: str, filenames: List[str] = Body(..., embed=True)):
+    """Delete specific pages from a project by filename."""
     try:
-        deleted = handler.delete_pages(project_id, page_numbers)
+        deleted = handler.delete_pages(project_id, filenames)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
     return {"deleted": deleted, "message": f"Deleted {deleted} page(s)"}

@@ -70,6 +70,12 @@ class CuredSubmissionDto(BaseModel):
 
 
 
+class BatchCurateDto(BaseModel):
+    text_ids: List[int]
+    curate: bool
+    target: str = "both"  # "kraken", "vlm", or "both"
+
+
 class TransliterationSubmissionPreview(BaseModel):
     transliteration_id: int
     uploader_id: str

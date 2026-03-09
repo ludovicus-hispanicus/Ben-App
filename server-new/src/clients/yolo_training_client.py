@@ -4,6 +4,7 @@ YOLO Training Client - Handles YOLOv8 model training and inference.
 
 import os
 import logging
+import re
 import time
 import base64
 import json
@@ -199,6 +200,93 @@ names:
             "classes": metadata["classes"],
             "added": added,
             "message": f"Added {len(added)} class(es): {', '.join(added)}",
+        }
+
+    def delete_class_from_dataset(self, dataset_name: str, class_id: int) -> Dict:
+        """Delete a class from a dataset. Removes all annotations with that class and re-indexes remaining classes."""
+        dataset_path = DATASETS_PATH / dataset_name
+
+        if not dataset_path.exists():
+            raise ValueError(f"Dataset '{dataset_name}' not found")
+
+        # Load current metadata
+        metadata_path = dataset_path / "metadata.json"
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+
+        # Find the class to delete
+        class_to_delete = None
+        for cls in metadata["classes"]:
+            if cls["id"] == class_id:
+                class_to_delete = cls
+                break
+
+        if not class_to_delete:
+            raise ValueError(f"Class with id {class_id} not found in dataset '{dataset_name}'")
+
+        deleted_name = class_to_delete["name"]
+        old_id = class_to_delete["id"]
+
+        # Remove the class and re-index
+        metadata["classes"] = [c for c in metadata["classes"] if c["id"] != class_id]
+        for i, cls in enumerate(metadata["classes"]):
+            cls["id"] = i
+
+        metadata["updated_at"] = datetime.utcnow().isoformat()
+
+        # Update label files: remove annotations with the deleted class and re-map class indices
+        for split in ["train", "val"]:
+            labels_dir = dataset_path / "labels" / split
+            if not labels_dir.exists():
+                continue
+            for label_file in labels_dir.glob("*.txt"):
+                lines = label_file.read_text().strip().split("\n")
+                new_lines = []
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    parts = line.strip().split()
+                    line_class_id = int(parts[0])
+                    if line_class_id == old_id:
+                        continue  # Remove annotations of deleted class
+                    # Re-map class index
+                    if line_class_id > old_id:
+                        parts[0] = str(line_class_id - 1)
+                    new_lines.append(" ".join(parts))
+                label_file.write_text("\n".join(new_lines) + ("\n" if new_lines else ""))
+
+        # Update metadata.json
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+
+        # Rebuild dataset.yaml
+        all_classes = [c["name"] for c in metadata["classes"]]
+        yaml_content = f"""# YOLO Dataset Configuration
+path: {dataset_path.as_posix()}
+train: images/train
+val: images/val
+
+# Classes
+names:
+"""
+        for i, cls_name in enumerate(all_classes):
+            yaml_content += f"  {i}: {cls_name}\n"
+        yaml_content += f"\n# Number of classes\nnc: {len(all_classes)}\n"
+
+        with open(dataset_path / "dataset.yaml", "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+
+        # Rebuild labels.txt
+        with open(dataset_path / "labels.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(all_classes))
+
+        logger.info(f"Deleted class '{deleted_name}' (id={class_id}) from dataset '{dataset_name}'")
+
+        return {
+            "dataset_id": dataset_name,
+            "classes": metadata["classes"],
+            "deleted": deleted_name,
+            "message": f"Deleted class '{deleted_name}' and updated annotations",
         }
 
     def update_class_color(self, dataset_name: str, class_id: int, color: str) -> Dict:
@@ -996,7 +1084,11 @@ names:
         """Get the path to a model file."""
         # Check if it's a base model
         if model_name in BASE_MODELS:
-            return BASE_MODELS_PATH / model_name
+            local_path = BASE_MODELS_PATH / model_name
+            if local_path.exists():
+                return local_path
+            # Return just the model name so ultralytics auto-downloads it
+            return Path(model_name)
 
         # Check if it's a trained model
         model_path = MODELS_PATH / model_name / "best.pt"
@@ -1826,7 +1918,7 @@ names:
                     crop.save(buf, format="PNG")
                     crop_bytes = buf.getvalue()
 
-                    pages_handler.upload_image(crop_bytes, snippet_name, project_id=child_project_id)
+                    pages_handler.upload_image(crop_bytes, snippet_name, project_id=child_project_id, preserve_name=True)
                     snippet_count += 1
 
                     manifest.append({
@@ -1854,6 +1946,347 @@ names:
             "project_id": result_project_id,
             "name": result_name,
             "snippet_count": snippet_count,
+            "manifest": manifest,
+        }
+
+    def save_ahw_entries_to_library(self, dataset_name: str, project_id: str = None, project_name: str = None) -> Dict:
+        """
+        Save dataset snippets as merged AHw dictionary entries.
+
+        All snippets saved flat into one project (no child folders).
+        Processes pages in order; carries open mainEntry groups across page
+        boundaries so that orphaned partEntries at the top of a page get
+        merged with the mainEntry from the previous page.
+
+        Naming: {dataset}_{pages}_{className}_{idx}.png
+        Cross-page entries use page ranges: e.g. page_0001-page_0002
+        """
+        from handlers.pages_handler import PagesHandler, _resolve_project_path
+
+        dataset_path = DATASETS_PATH / dataset_name
+        if not dataset_path.exists():
+            raise ValueError(f"Dataset '{dataset_name}' not found")
+
+        # Read metadata for class names
+        metadata_path = dataset_path / "metadata.json"
+        class_names = {}
+        if metadata_path.exists():
+            with open(metadata_path, encoding="utf-8") as f:
+                metadata = json.load(f)
+                for c in metadata.get("classes", []):
+                    class_names[c["id"]] = c["name"]
+
+        entry_classes = {"mainEntry", "partEntry"}
+
+        pages_handler = PagesHandler()
+
+        # Create or reuse project
+        if project_id:
+            project_detail = pages_handler.get_project(project_id)
+            if not project_detail:
+                raise ValueError(f"Project '{project_id}' not found")
+            result_project_id = project_id
+            result_name = project_detail.name
+        else:
+            name = project_name or f"{dataset_name}_ahw"
+            resp = pages_handler.create_project(name)
+            result_project_id = resp.project_id
+            result_name = resp.name
+
+        ds_lower = dataset_name.lower()
+
+        # ---- Pass 1: collect per-page data across all splits ----
+        page_data = []
+        for split in ["train", "val"]:
+            images_dir = dataset_path / "images" / split
+            labels_dir = dataset_path / "labels" / split
+            if not images_dir.exists():
+                continue
+
+            for image_file in sorted(images_dir.iterdir()):
+                if not image_file.is_file():
+                    continue
+                if image_file.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif"):
+                    continue
+                label_file = labels_dir / f"{image_file.stem}.txt"
+                if not label_file.exists():
+                    continue
+
+                annotations = []
+                with open(label_file, encoding="utf-8") as f:
+                    for line in f:
+                        parts = line.strip().split()
+                        if len(parts) >= 5:
+                            annotations.append({
+                                "class_id": int(parts[0]),
+                                "x_center": float(parts[1]),
+                                "y_center": float(parts[2]),
+                                "width": float(parts[3]),
+                                "height": float(parts[4]),
+                            })
+                if annotations:
+                    annotations.sort(key=lambda a: a["y_center"])
+                    page_data.append({
+                        "page_stem": image_file.stem,
+                        "split": split,
+                        "image_path": image_file,
+                        "annotations": annotations,
+                    })
+
+        # Sort all pages by page stem so train/val are interleaved by page number
+        page_data.sort(key=lambda pd: pd["page_stem"])
+
+        # ---- Pass 2: build flat ordered annotation list across all pages ----
+        # .copy() is essential – PIL crops are lazy references; after
+        # img.close() the pixel data can become invalid.
+        #
+        # Per-page sort order (two-column dictionary layout):
+        #   Header region: guidewords + pageNumbers — sorted by x_center (left→right)
+        #   Body region: left column (x<0.5) top→bottom, then right column top→bottom
+        #
+        # Classes: guidewords, pageNumber = header
+        #          mainEntry, partEntry, refEntry, etc. = body
+        HEADER_CLASSES = {"guidewords", "pageNumber", "pagenumber"}
+
+        def _is_header(class_name: str) -> bool:
+            return class_name in HEADER_CLASSES or class_name.lower().replace("_", "").replace(" ", "") in HEADER_CLASSES
+
+        def _ann_sort_key(rec):
+            if _is_header(rec["class_name"]):
+                # Header: sort left-to-right by x position
+                # → guideword(left) → pageNumber(center) → guideword(right)
+                return (0, rec["x_center"])
+            # Body: left column first, then right column, each top-to-bottom
+            column = 0 if rec["x_center"] < 0.5 else 1
+            return (1, column, rec["y_center"])
+
+        all_anns = []
+
+        for pd in page_data:
+            try:
+                img = Image.open(pd["image_path"])
+                img_w, img_h = img.size
+            except Exception as e:
+                logger.warning(f"save_ahw_entries: could not open {pd['image_path']}: {e}")
+                continue
+
+            page_stem = pd["page_stem"]
+            split = pd["split"]
+            page_anns = []
+
+            for ann in pd["annotations"]:
+                cname = class_names.get(ann["class_id"], f"class_{ann['class_id']}")
+                cx, cy = ann["x_center"] * img_w, ann["y_center"] * img_h
+                bw, bh = ann["width"] * img_w, ann["height"] * img_h
+                x0 = max(0, int(cx - bw / 2))
+                y0 = max(0, int(cy - bh / 2))
+                x1 = min(img_w, int(cx + bw / 2))
+                y1 = min(img_h, int(cy + bh / 2))
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                crop = img.crop((x0, y0, x1, y1)).copy()
+                page_anns.append({
+                    "class_name": cname,
+                    "class_id": ann["class_id"],
+                    "bbox_px": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+                    "x_center": ann["x_center"],
+                    "y_center": ann["y_center"],
+                    "crop": crop,
+                    "page_stem": page_stem,
+                    "split": split,
+                })
+
+            img.close()
+
+            # Sort: headers first, then left column top-to-bottom, then right column
+            page_anns.sort(key=_ann_sort_key)
+            all_anns.extend(page_anns)
+
+        # ---- Pass 3: assign per-page order numbers ----
+        # Extract page number from page_stem (e.g. "page_0001" → "0001")
+        def _extract_page_num(page_stem: str) -> str:
+            m = re.search(r'(\d+)$', page_stem)
+            return m.group(1) if m else page_stem
+
+        current_page = None
+        page_order = 0
+        for ann in all_anns:
+            if ann["page_stem"] != current_page:
+                current_page = ann["page_stem"]
+                page_order = 0
+            page_order += 1
+            ann["order"] = page_order
+            ann["page_num"] = _extract_page_num(ann["page_stem"])
+
+        # ---- Pass 4a: same-page forward-looking merge → save_items ----
+        # Collect items without saving to disk yet so we can do cross-page
+        # merging in Pass 4b.
+        #
+        # Each save_item has: type, crops (list of PIL), anns (list of recs),
+        # page_num, page_stem, entry_type
+        save_items = []
+        i = 0
+
+        while i < len(all_anns):
+            rec = all_anns[i]
+            group = None
+
+            if rec["class_name"] == "mainEntry":
+                group = [rec]
+                j = i + 1
+                while (j < len(all_anns)
+                       and all_anns[j]["class_name"] == "partEntry"
+                       and all_anns[j]["page_stem"] == rec["page_stem"]):
+                    group.append(all_anns[j])
+                    j += 1
+
+            elif rec["class_name"] == "partEntry":
+                group = [rec]
+                j = i + 1
+                while (j < len(all_anns)
+                       and all_anns[j]["class_name"] == "partEntry"
+                       and all_anns[j]["page_stem"] == rec["page_stem"]):
+                    group.append(all_anns[j])
+                    j += 1
+
+            if group is not None:
+                save_items.append({
+                    "kind": "group",
+                    "entry_type": group[0]["class_name"],
+                    "anns": group,
+                    "crops": [a["crop"] for a in group],
+                    "pages": [group[0]["page_num"]],
+                    "page_stems": [group[0]["page_stem"]],
+                })
+                i = j
+            else:
+                save_items.append({
+                    "kind": "single",
+                    "entry_type": rec["class_name"],
+                    "anns": [rec],
+                    "crops": [rec["crop"]],
+                    "pages": [rec["page_num"]],
+                    "page_stems": [rec["page_stem"]],
+                })
+                i += 1
+
+        # ---- Pass 4b: cross-page merge ----
+        # Separate headers from body so headers don't block cross-page merges.
+        # Merge body entries across pages, then recombine.
+        header_items = []
+        body_items = []
+        for item in save_items:
+            if _is_header(item["entry_type"]):
+                header_items.append(item)
+            else:
+                body_items.append(item)
+
+        # Merge body items across pages:
+        # - orphan partEntry after mainEntry → attach to mainEntry
+        merged_body = []
+        for item in body_items:
+            if (item["entry_type"] == "partEntry"
+                    and merged_body
+                    and merged_body[-1]["entry_type"] == "mainEntry"):
+                prev = merged_body[-1]
+                prev["anns"].extend(item["anns"])
+                prev["crops"].extend(item["crops"])
+                if item["pages"][0] not in prev["pages"]:
+                    prev["pages"].append(item["pages"][0])
+                if item["page_stems"][0] not in prev["page_stems"]:
+                    prev["page_stems"].append(item["page_stems"][0])
+                logger.info(
+                    f"Cross-page merge: partEntry from page {item['pages'][0]} "
+                    f"→ mainEntry from page {prev['pages'][0]}"
+                )
+            else:
+                merged_body.append(item)
+
+        # Recombine: headers first, then body entries
+        merged_items = header_items + merged_body
+
+        # ---- Pass 5: save to disk ----
+        # Naming:
+        #   single page:  {ds_lower}-{page}-{order}-{type}.png
+        #   same-page range: {ds_lower}-{page}-{first}-{last}-{type}.png
+        #   cross-page:   {ds_lower}-{page1}-{order}-p{page2}-{type}.png
+        manifest = []
+        entry_count = 0
+
+        for item in merged_items:
+            anns = item["anns"]
+            crops = item["crops"]
+            entry_type = item["entry_type"]
+            first_page = item["pages"][0]
+            first_order = anns[0]["order"]
+            last_order = anns[-1]["order"]
+
+            # Build merged image
+            if len(crops) == 1:
+                merged_img = crops[0]
+            else:
+                total_w = max(c.width for c in crops)
+                total_h = sum(c.height for c in crops)
+                merged_img = Image.new("RGB", (total_w, total_h), (255, 255, 255))
+                y_off = 0
+                for c in crops:
+                    merged_img.paste(c, (0, y_off))
+                    y_off += c.height
+
+            # Build filename
+            if len(item["pages"]) > 1:
+                # Cross-page: {ds_lower}-{page1}-{order}-p{page2}-{type}.png
+                last_page = item["pages"][-1]
+                fname = f"{ds_lower}-{first_page}-{first_order:03d}-p{last_page}-{entry_type}.png"
+            elif first_order == last_order:
+                fname = f"{ds_lower}-{first_page}-{first_order:03d}-{entry_type}.png"
+            else:
+                fname = f"{ds_lower}-{first_page}-{first_order:03d}-{last_order:03d}-{entry_type}.png"
+
+            buf = BytesIO()
+            merged_img.save(buf, format="PNG")
+            pages_handler.upload_image(buf.getvalue(), fname, project_id=result_project_id, preserve_name=True)
+            entry_count += 1
+
+            manifest.append({
+                "entry": fname,
+                "pages": item["pages"],
+                "page_stems": item["page_stems"],
+                "order_start": first_order,
+                "order_end": last_order,
+                "split": anns[0]["split"],
+                "type": entry_type,
+                "merged_count": len(anns),
+                "merged_from": [
+                    {"class_name": a["class_name"], "order": a["order"],
+                     "page": a["page_num"], "bbox_px": a["bbox_px"]}
+                    for a in anns
+                ],
+                "width_px": merged_img.width,
+                "height_px": merged_img.height,
+            })
+
+        class_breakdown = {}
+        for m_entry in manifest:
+            cn = m_entry["type"]
+            class_breakdown[cn] = class_breakdown.get(cn, 0) + 1
+        cross_page = sum(1 for m_entry in manifest if len(m_entry.get("pages", [])) > 1)
+        merged_entries = sum(1 for m_entry in manifest if m_entry.get("merged_count", 1) > 1)
+        logger.info(
+            f"save_ahw_entries: {entry_count} files ({merged_entries} merged, "
+            f"{cross_page} cross-page), classes: {class_breakdown}"
+        )
+
+        # Save manifest
+        project_path = _resolve_project_path(result_project_id)
+        manifest_path = project_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+
+        logger.info(f"Saved {entry_count} AHw snippets from dataset '{dataset_name}' to project '{result_project_id}'")
+        return {
+            "project_id": result_project_id,
+            "name": result_name,
+            "entry_count": entry_count,
             "manifest": manifest,
         }
 

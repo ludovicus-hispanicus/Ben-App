@@ -9,6 +9,9 @@ class PageInfo(BaseModel):
     page_number: int
     thumbnail_url: str
     full_url: str
+    file_size: int = 0
+    modified_at: str = ""
+    file_type: str = ""
 
 
 class ProjectInfo(BaseModel):

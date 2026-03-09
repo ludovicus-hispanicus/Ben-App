@@ -34,6 +34,11 @@
           <span class="class-count">
             {{ (annotations | filter:'classId':cls.id).length || 0 }}
           </span>
+          <button mat-icon-button class="class-delete-btn"
+                  (click)="deleteClass(cls, $event)"
+                  matTooltip="Delete class">
+            <mat-icon>close</mat-icon>
+          </button>
         </div>
 
         <!-- Add new class inline -->
@@ -95,6 +100,12 @@
 
     <span class="toolbar-divider"></span>
 
+    <button mat-icon-button
+            (click)="toggleDrawMode()"
+            [class.active]="drawModeActive"
+            matTooltip="Draw Mode — click to draw, Shift+click to pan (D)" matTooltipPosition="right">
+      <mat-icon>crop</mat-icon>
+    </button>
     <button mat-icon-button
             (click)="togglePanMode()"
             [class.active]="panModeActive"
@@ -294,6 +305,10 @@
         <div class="shortcut">
           <span class="key">Space</span>
           <span class="action">Pan (hold)</span>
+        </div>
+        <div class="shortcut">
+          <span class="key">D</span>
+          <span class="action">Toggle draw mode</span>
         </div>
         <div class="shortcut">
           <span class="key">Hand</span>

@@ -51,18 +51,32 @@ export class PagesService {
     );
   }
 
-  uploadPdf(file: File, projectName: string): Observable<UploadResponse> {
+  getPdfPageCount(file: File): Observable<{ page_count: number; filename: string }> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<{ page_count: number; filename: string }>(
+      `${environment.apiUrl}${this.baseUrl}/pdf-page-count`, formData
+    );
+  }
+
+  uploadPdf(file: File, projectName: string, pageFrom?: number, pageTo?: number, dpi?: number): Observable<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file, file.name);
     formData.append('name', projectName);
+    if (pageFrom != null) { formData.append('page_from', pageFrom.toString()); }
+    if (pageTo != null) { formData.append('page_to', pageTo.toString()); }
+    if (dpi != null) { formData.append('dpi', dpi.toString()); }
     return this.http.post<UploadResponse>(
       `${environment.apiUrl}${this.baseUrl}/upload`, formData
     );
   }
 
-  uploadFile(file: File, projectId?: string): Observable<UploadResponse> {
+  uploadFile(file: File, projectId?: string, pageFrom?: number, pageTo?: number, dpi?: number): Observable<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file, file.name);
+    if (pageFrom != null) { formData.append('page_from', pageFrom.toString()); }
+    if (pageTo != null) { formData.append('page_to', pageTo.toString()); }
+    if (dpi != null) { formData.append('dpi', dpi.toString()); }
     const url = projectId
       ? `${environment.apiUrl}${this.baseUrl}/projects/${projectId}/upload`
       : `${environment.apiUrl}${this.baseUrl}/upload`;
@@ -89,14 +103,18 @@ export class PagesService {
     return `${environment.apiUrl}${this.baseUrl}/projects/${projectId}/thumbnail/${pageNumber}`;
   }
 
+  getFileUrl(projectId: string, filename: string): string {
+    return `${environment.apiUrl}${this.baseUrl}/projects/${projectId}/file/${filename}`;
+  }
+
   getImageBlob(url: string): Observable<Blob> {
     return this.http.get(url, { responseType: 'blob' });
   }
 
-  deletePages(projectId: string, pageNumbers: number[]): Observable<any> {
+  deletePages(projectId: string, filenames: string[]): Observable<any> {
     return this.http.request('DELETE',
       `${environment.apiUrl}${this.baseUrl}/projects/${projectId}/pages`,
-      { body: { page_numbers: pageNumbers } }
+      { body: { filenames: filenames } }
     );
   }
 

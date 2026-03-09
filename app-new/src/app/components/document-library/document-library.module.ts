@@ -8,7 +8,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
 import { DocumentLibraryComponent } from './document-library.component';
+import { PageRangeDialogComponent } from '../common/page-range-dialog/page-range-dialog.component';
 
 @NgModule({
   imports: [
@@ -21,8 +23,9 @@ import { DocumentLibraryComponent } from './document-library.component';
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatDialogModule,
+    MatSelectModule,
   ],
-  declarations: [DocumentLibraryComponent],
+  declarations: [DocumentLibraryComponent, PageRangeDialogComponent],
   exports: [DocumentLibraryComponent],
 })
 export class DocumentLibraryModule {}

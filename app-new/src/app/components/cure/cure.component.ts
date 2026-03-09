@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { fabric } from 'fabric';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
@@ -123,8 +123,39 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
   public selectedProject: ProjectPreview | null = null;
   public showProjectList: boolean = true;
   public newProjectName: string = '';
+
+  // Project view mode, search & sort
+  public projectViewMode: 'grid' | 'list' = 'grid';
+  public projectSearchQuery: string = '';
+  public projectSortColumn: 'name' | 'texts' | 'curated' | 'created' = 'name';
+  public projectSortDirection: 'asc' | 'desc' = 'asc';
   public projectTexts: TextPreview[] = [];
   public isLoadingTexts: boolean = false;
+
+  // Text view mode, search & sort (inside project)
+  public textViewMode: 'grid' | 'list' = 'list';
+  public textSearchQuery: string = '';
+  public textSortColumn: 'name' | 'label' | 'id' | 'lines' = 'name';
+  public textSortDirection: 'asc' | 'desc' = 'asc';
+
+  // Project card selection & inline rename
+  public selectedProjectCard: ProjectPreview | null = null;
+  public selectedProjects: Set<number> = new Set();
+  public lastSelectedProjectIndex: number = -1;
+  public editingProject: ProjectPreview | null = null;
+  public editingProjectName: string = '';
+  private projectRenameTimer: any = null;
+  private projectRenameCancelled: boolean = false;
+
+  // Text multi-selection
+  public selectedTextItems: Set<number> = new Set();
+  public lastSelectedTextIndex: number = -1;
+
+  // Project context menu
+  public projectContextMenuVisible: boolean = false;
+  public projectContextMenuX: number = 0;
+  public projectContextMenuY: number = 0;
+  public projectContextMenuNode: ProjectPreview | null = null;
 
   // Resizable panels
   public leftPanelWidth: number = 60;
@@ -134,6 +165,7 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
 
   @ViewChild('canvas') canvas: FabricCanvasComponent;
   @ViewChild('lineEditor', { static: false }) lineEditor: TextEditorComponent;
+  @ViewChildren('projectRenameInput') projectRenameInputs!: QueryList<ElementRef>;
 
   constructor(
     private cureService: CureService,
@@ -274,6 +306,8 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showProjectList = false;
     this.isLoadingTexts = true;
     this.projectTexts = [];
+    this.clearProjectSelection();
+    this.clearTextSelection();
     this.projectService.getTexts(project.project_id).subscribe(
       data => {
         this.projectTexts = data;
@@ -290,6 +324,7 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showProjectList = true;
     this.selectedProject = null;
     this.projectTexts = [];
+    this.clearTextSelection();
     this.loadProjects();
   }
 
@@ -391,6 +426,46 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
+  toggleTextSelection(item: TextPreview, event: MouseEvent): void {
+    const index = this.filteredTexts.indexOf(item);
+    const id = item.text_id;
+
+    if (event.shiftKey && this.lastSelectedTextIndex >= 0) {
+      const start = Math.min(this.lastSelectedTextIndex, index);
+      const end = Math.max(this.lastSelectedTextIndex, index);
+      for (let i = start; i <= end; i++) {
+        this.selectedTextItems.add(this.filteredTexts[i].text_id);
+      }
+    } else if (event.ctrlKey || event.metaKey) {
+      if (this.selectedTextItems.has(id)) {
+        this.selectedTextItems.delete(id);
+      } else {
+        this.selectedTextItems.add(id);
+      }
+    } else {
+      this.selectedTextItems.clear();
+      this.selectedTextItems.add(id);
+    }
+    this.lastSelectedTextIndex = index;
+  }
+
+  isTextSelected(item: TextPreview): boolean {
+    return this.selectedTextItems.has(item.text_id);
+  }
+
+  selectAllTexts(): void {
+    if (this.selectedTextItems.size === this.filteredTexts.length) {
+      this.selectedTextItems.clear();
+    } else {
+      this.filteredTexts.forEach(t => this.selectedTextItems.add(t.text_id));
+    }
+  }
+
+  clearTextSelection(): void {
+    this.selectedTextItems.clear();
+    this.lastSelectedTextIndex = -1;
+  }
+
   deleteTextItem(item: TextPreview, event: MouseEvent): void {
     event.stopPropagation();
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -409,6 +484,40 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  deleteSelectedTexts(): void {
+    if (this.selectedTextItems.size === 0) { return; }
+    const count = this.selectedTextItems.size;
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: { message: `Delete ${count} selected text(s)?` }
+    });
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) { return; }
+      const selectedItems = this.filteredTexts.filter(t => this.selectedTextItems.has(t.text_id));
+      let completed = 0;
+      let errors = 0;
+      const total = selectedItems.length;
+      selectedItems.forEach(item => {
+        this.curedService.deleteText(item.text_id).subscribe({
+          next: () => {
+            completed++;
+            this.projectTexts = this.projectTexts.filter(t => t.text_id !== item.text_id);
+            if (completed + errors === total) {
+              this.notificationService.showSuccess(`Deleted ${completed} text(s)`);
+              this.clearTextSelection();
+            }
+          },
+          error: () => {
+            errors++;
+            if (completed + errors === total) {
+              this.notificationService.showError(`Deleted ${completed}, failed ${errors}`);
+              this.clearTextSelection();
+            }
+          }
+        });
+      });
+    });
+  }
+
   createProject(): void {
     if (!this.newProjectName.trim()) return;
     this.cureService.createProject(this.newProjectName.trim()).subscribe(
@@ -421,23 +530,294 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  renameProject(project: ProjectPreview, event: MouseEvent): void {
-    event.stopPropagation();
-    const dialogRef = this.dialog.open(LabelDialogComponent, {
-      data: { label: project.name, title: 'Rename Project' }
+  // ============== Project Filtering & Sorting ==============
+
+  get filteredProjects(): ProjectPreview[] {
+    let list = this.projects;
+
+    // Search filter
+    if (this.projectSearchQuery.trim()) {
+      const q = this.projectSearchQuery.trim().toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q));
+    }
+
+    // Sort
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (this.projectSortColumn) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case 'texts':
+          cmp = (a.text_count || 0) - (b.text_count || 0);
+          break;
+        case 'curated':
+          cmp = (a.curated_count || 0) - (b.curated_count || 0);
+          break;
+        case 'created':
+          cmp = (a.created_at || 0) - (b.created_at || 0);
+          break;
+      }
+      return this.projectSortDirection === 'asc' ? cmp : -cmp;
     });
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.cureService.renameProject(project.project_id, result).subscribe(
-          () => this.loadProjects(),
-          err => this.notificationService.showError('Failed to rename project')
-        );
+    return sorted;
+  }
+
+  toggleProjectSort(column: 'name' | 'texts' | 'curated' | 'created'): void {
+    if (this.projectSortColumn === column) {
+      this.projectSortDirection = this.projectSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.projectSortColumn = column;
+      this.projectSortDirection = 'asc';
+    }
+  }
+
+  clearProjectSearch(): void {
+    this.projectSearchQuery = '';
+  }
+
+  // ============== Text Filtering & Sorting (inside project) ==============
+
+  get filteredTexts(): TextPreview[] {
+    let list = this.projectTexts;
+
+    if (this.textSearchQuery.trim()) {
+      const q = this.textSearchQuery.trim().toLowerCase();
+      list = list.filter(t => {
+        const identifier = this.getItemIdentifier(t).toLowerCase();
+        const label = (t.label || '').toLowerCase();
+        const labels = (t.labels || []).join(' ').toLowerCase();
+        return identifier.includes(q) || label.includes(q) || labels.includes(q)
+          || String(t.text_id).includes(q);
+      });
+    }
+
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (this.textSortColumn) {
+        case 'name':
+          cmp = this.getItemIdentifier(a).localeCompare(this.getItemIdentifier(b));
+          break;
+        case 'label':
+          cmp = (a.label || '').localeCompare(b.label || '');
+          break;
+        case 'id':
+          cmp = (a.text_id || 0) - (b.text_id || 0);
+          break;
+        case 'lines':
+          cmp = (a.lines_count || 0) - (b.lines_count || 0);
+          break;
+      }
+      return this.textSortDirection === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }
+
+  toggleTextSort(column: 'name' | 'label' | 'id' | 'lines'): void {
+    if (this.textSortColumn === column) {
+      this.textSortDirection = this.textSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.textSortColumn = column;
+      this.textSortDirection = 'asc';
+    }
+  }
+
+  clearTextSearch(): void {
+    this.textSearchQuery = '';
+  }
+
+  formatProjectDate(timestamp: number): string {
+    if (!timestamp) return '—';
+    return new Date(timestamp * 1000).toLocaleDateString();
+  }
+
+  // ============== Project Card Selection & Inline Rename ==============
+
+  selectProjectCard(project: ProjectPreview, event?: MouseEvent): void {
+    this.selectedProjectCard = project;
+    const index = this.filteredProjects.indexOf(project);
+    const id = project.project_id;
+
+    if (event?.shiftKey && this.lastSelectedProjectIndex >= 0) {
+      const start = Math.min(this.lastSelectedProjectIndex, index);
+      const end = Math.max(this.lastSelectedProjectIndex, index);
+      for (let i = start; i <= end; i++) {
+        this.selectedProjects.add(this.filteredProjects[i].project_id);
+      }
+    } else if (event?.ctrlKey || event?.metaKey) {
+      if (this.selectedProjects.has(id)) {
+        this.selectedProjects.delete(id);
+      } else {
+        this.selectedProjects.add(id);
+      }
+    } else {
+      this.selectedProjects.clear();
+      this.selectedProjects.add(id);
+    }
+    this.lastSelectedProjectIndex = index;
+  }
+
+  isProjectSelected(project: ProjectPreview): boolean {
+    return this.selectedProjects.has(project.project_id);
+  }
+
+  selectAllProjects(): void {
+    if (this.selectedProjects.size === this.filteredProjects.length) {
+      this.selectedProjects.clear();
+    } else {
+      this.filteredProjects.forEach(p => this.selectedProjects.add(p.project_id));
+    }
+  }
+
+  clearProjectSelection(): void {
+    this.selectedProjects.clear();
+    this.lastSelectedProjectIndex = -1;
+  }
+
+  deleteSelectedProjects(): void {
+    if (this.selectedProjects.size === 0) { return; }
+    const count = this.selectedProjects.size;
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: { message: `Delete ${count} selected project(s)?` }
+    });
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) { return; }
+      const ids = Array.from(this.selectedProjects);
+      let completed = 0;
+      let errors = 0;
+      ids.forEach(id => {
+        this.cureService.deleteProject(id).subscribe({
+          next: () => {
+            completed++;
+            if (completed + errors === ids.length) {
+              this.notificationService.showSuccess(`Deleted ${completed} project(s)`);
+              this.clearProjectSelection();
+              this.loadProjects();
+            }
+          },
+          error: () => {
+            errors++;
+            if (completed + errors === ids.length) {
+              this.notificationService.showError(`Deleted ${completed}, failed ${errors}`);
+              this.clearProjectSelection();
+              this.loadProjects();
+            }
+          }
+        });
+      });
+    });
+  }
+
+  onProjectNameClick(project: ProjectPreview, event: MouseEvent): void {
+    event.stopPropagation();
+    // Only start rename if this card is already selected (slow double-click)
+    if (this.selectedProjectCard?.project_id === project.project_id) {
+      clearTimeout(this.projectRenameTimer);
+      this.projectRenameTimer = setTimeout(() => {
+        this.startProjectRename(project);
+      }, 400);
+    }
+  }
+
+  startProjectRename(project: ProjectPreview): void {
+    this.editingProject = project;
+    this.editingProjectName = project.name;
+    this.projectRenameCancelled = false;
+    setTimeout(() => {
+      const inputs = this.projectRenameInputs.toArray();
+      if (inputs.length > 0) {
+        const input = inputs[0].nativeElement as HTMLInputElement;
+        input.focus();
+        input.select();
       }
     });
   }
 
-  deleteProject(project: ProjectPreview, event: MouseEvent): void {
+  confirmProjectRename(): void {
+    if (!this.editingProject || this.projectRenameCancelled) { return; }
+    const project = this.editingProject;
+    const newName = this.editingProjectName.trim();
+    this.editingProject = null;
+
+    if (!newName || newName === project.name) { return; }
+
+    this.cureService.renameProject(project.project_id, newName).subscribe(
+      () => {
+        project.name = newName;
+        this.notificationService.showSuccess(`Renamed to "${newName}"`);
+      },
+      () => this.notificationService.showError('Failed to rename project')
+    );
+  }
+
+  cancelProjectRename(): void {
+    this.projectRenameCancelled = true;
+    this.editingProject = null;
+    this.editingProjectName = '';
+  }
+
+  onProjectRenameBlur(): void {
+    setTimeout(() => {
+      if (this.editingProject && !this.projectRenameCancelled) {
+        this.confirmProjectRename();
+      }
+    }, 100);
+  }
+
+  // ============== Project Context Menu ==============
+
+  onProjectContextMenu(project: ProjectPreview, event: MouseEvent): void {
+    event.preventDefault();
     event.stopPropagation();
+    this.projectContextMenuNode = project;
+    this.projectContextMenuX = event.clientX;
+    this.projectContextMenuY = event.clientY;
+    this.projectContextMenuVisible = true;
+  }
+
+  startProjectRenameFromMenu(): void {
+    if (!this.projectContextMenuNode) { return; }
+    const project = this.projectContextMenuNode;
+    this.projectContextMenuVisible = false;
+    this.selectedProjectCard = project;
+    this.startProjectRename(project);
+  }
+
+  deleteProjectFromMenu(): void {
+    if (!this.projectContextMenuNode) { return; }
+    const project = this.projectContextMenuNode;
+    this.projectContextMenuVisible = false;
+    this.deleteProject(project);
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.projectContextMenuVisible = false;
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.ctrlKey && event.key === 'a') {
+      if (this.showProjectList && this.viewMode === CureViewMode.Datasets) {
+        event.preventDefault();
+        this.selectAllProjects();
+      } else if (!this.showProjectList && this.stage === 0) {
+        event.preventDefault();
+        this.selectAllTexts();
+      }
+    }
+    if (event.key === 'Delete') {
+      if (this.showProjectList && this.selectedProjects.size > 0 && this.viewMode === CureViewMode.Datasets) {
+        this.deleteSelectedProjects();
+      } else if (!this.showProjectList && this.selectedTextItems.size > 0 && this.stage === 0) {
+        this.deleteSelectedTexts();
+      }
+    }
+  }
+
+  deleteProject(project: ProjectPreview): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: { message: `Delete project "${project.name}"?` }
     });
@@ -501,7 +881,7 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
 
   browseServer(): void {
     const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
-      width: '850px', height: '600px'
+      width: '1000px', height: '720px'
     });
     dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
       if (!result || result.length === 0) return;
@@ -511,6 +891,31 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
         this.processFile(file);
       });
     });
+  }
+
+  handleFolderInput(event: any): void {
+    const files: FileList = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const supportedExts = ['.png', '.jpg', '.jpeg'];
+    const imageFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const name = files[i].name.toLowerCase();
+      if (supportedExts.some(ext => name.endsWith(ext))) {
+        imageFiles.push(files[i]);
+      }
+    }
+
+    if (imageFiles.length === 0) {
+      this.notificationService.showError('No supported image files found (PNG, JPG)');
+      event.target.value = '';
+      return;
+    }
+
+    imageFiles.sort((a, b) => a.name.localeCompare(b.name));
+    this.notificationService.showInfo(`Loaded ${imageFiles.length} images from folder`);
+    this.processFile(imageFiles[0]);
+    event.target.value = '';
   }
 
   processFile(file: File): void {

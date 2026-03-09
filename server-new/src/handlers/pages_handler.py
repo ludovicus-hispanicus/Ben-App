@@ -179,8 +179,15 @@ class PagesHandler:
         return max(nums) + 1 if nums else 1
 
     def upload_pdf(self, pdf_bytes: bytes, filename: str, project_id: str = None,
-                   project_name: str = None) -> UploadResponse:
-        """Upload a PDF, convert all pages to PNG. Creates new project or adds to existing."""
+                   project_name: str = None, page_from: int = None, page_to: int = None,
+                   dpi: int = None) -> UploadResponse:
+        """Upload a PDF, convert pages to PNG. Creates new project or adds to existing.
+
+        Args:
+            page_from: First page to extract (1-indexed, inclusive). None = start from page 1.
+            page_to: Last page to extract (1-indexed, inclusive). None = extract to last page.
+            dpi: Resolution for PDF rendering. None = default (150).
+        """
         if project_id:
             project_path = _resolve_project_path(project_id)
             if not project_path.exists():
@@ -194,7 +201,7 @@ class PagesHandler:
         thumbs_path = project_path / "thumbnails"
         thumbs_path.mkdir(exist_ok=True)
 
-        pages = PdfUtils.extract_all_pages(pdf_bytes)
+        pages = PdfUtils.extract_all_pages(pdf_bytes, page_from=page_from, page_to=page_to, dpi=dpi)
         start_num = self._next_page_number(project_path)
 
         for i, png_bytes in enumerate(pages):
@@ -209,7 +216,10 @@ class PagesHandler:
         (project_path / filename).write_bytes(pdf_bytes)
 
         # Update metadata
-        total_pages = len(list(project_path.glob("page_*.png")))
+        total_pages = len([
+            p for p in project_path.iterdir()
+            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+        ])
         meta = _read_metadata(project_path)
         if not meta:
             meta = {"created_at": datetime.now().isoformat()}
@@ -226,8 +236,12 @@ class PagesHandler:
         )
 
     def upload_image(self, image_bytes: bytes, filename: str, project_id: str = None,
-                     project_name: str = None) -> UploadResponse:
-        """Upload a single image. Creates new project or adds to existing."""
+                     project_name: str = None, preserve_name: bool = False) -> UploadResponse:
+        """Upload a single image. Creates new project or adds to existing.
+
+        Args:
+            preserve_name: If True, use the original filename instead of page_NNN.png.
+        """
         if project_id:
             project_path = _resolve_project_path(project_id)
             if not project_path.exists():
@@ -241,15 +255,20 @@ class PagesHandler:
         thumbs_path = project_path / "thumbnails"
         thumbs_path.mkdir(exist_ok=True)
 
-        page_num = self._next_page_number(project_path)
-        page_path = project_path / f"page_{page_num:03d}.png"
-        page_path.write_bytes(image_bytes)
+        if preserve_name:
+            stem = os.path.splitext(filename)[0]
+            page_path = project_path / filename
+            thumb_path = thumbs_path / f"{stem}.jpg"
+        else:
+            page_num = self._next_page_number(project_path)
+            page_path = project_path / f"page_{page_num:03d}.png"
+            thumb_path = thumbs_path / f"page_{page_num:03d}.jpg"
 
-        thumb_path = thumbs_path / f"page_{page_num:03d}.jpg"
+        page_path.write_bytes(image_bytes)
         self._make_thumbnail(str(page_path), str(thumb_path))
 
         # Update metadata
-        total_pages = len(list(project_path.glob("page_*.png")))
+        total_pages = len(list(project_path.glob("*.png")))
         meta = _read_metadata(project_path)
         if not meta:
             meta = {"created_at": datetime.now().isoformat()}
@@ -284,7 +303,10 @@ class PagesHandler:
                 except Exception:
                     continue
 
-                page_count = len(list(project_dir.glob("page_*.png")))
+                page_count = len([
+                    p for p in project_dir.iterdir()
+                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+                ])
                 projects.append(ProjectInfo(
                     project_id=project_dir.name,
                     name=meta.get("name", project_dir.name),
@@ -298,7 +320,10 @@ class PagesHandler:
             for folder in sorted(PDF_IMAGES_PATH.iterdir()):
                 if not folder.is_dir():
                     continue
-                page_count = len(list(folder.glob("page_*.png")))
+                page_count = len([
+                    p for p in folder.iterdir()
+                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+                ])
                 if page_count == 0:
                     continue
                 pdf_meta = _read_metadata(folder)
@@ -413,14 +438,38 @@ class PagesHandler:
         name = meta.get("name", project_path.name)
 
         pages: List[PageInfo] = []
-        for png in sorted(project_path.glob("page_*.png")):
-            page_num_str = png.stem.replace("page_", "").lstrip("0") or "1"
-            page_num = int(page_num_str)
+        # Find all PNG/JPG images (exclude thumbnails dir, metadata, etc.)
+        image_files = sorted(
+            p for p in project_path.glob("*.png")
+            if p.is_file()
+        )
+        # Also include jpg/jpeg
+        image_files += sorted(
+            p for p in project_path.glob("*.jpg")
+            if p.is_file()
+        )
+        image_files += sorted(
+            p for p in project_path.glob("*.jpeg")
+            if p.is_file()
+        )
+
+        for idx, png in enumerate(image_files):
+            # For page_NNN.png files, extract the number; for others use index+1
+            if png.stem.startswith("page_"):
+                page_num_str = png.stem.replace("page_", "").lstrip("0") or "1"
+                page_num = int(page_num_str)
+            else:
+                page_num = idx + 1
+
+            stat = png.stat()
             pages.append(PageInfo(
                 filename=png.name,
                 page_number=page_num,
-                thumbnail_url=f"/pages/projects/{project_id}/thumbnail/{page_num}",
-                full_url=f"/pages/projects/{project_id}/image/{page_num}",
+                thumbnail_url=f"/pages/projects/{project_id}/file/{png.name}",
+                full_url=f"/pages/projects/{project_id}/file/{png.name}",
+                file_size=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                file_type=png.suffix.lstrip(".").upper(),
             ))
 
         return ProjectDetail(
@@ -431,6 +480,18 @@ class PagesHandler:
         )
 
     # ============== Image Retrieval ==============
+
+    def get_file_path(self, project_id: str, filename: str) -> Optional[str]:
+        """Get the filesystem path for a file by its exact filename."""
+        project_path = _resolve_project_path(project_id)
+        file_path = project_path / filename
+        if file_path.exists() and file_path.is_file():
+            return str(file_path)
+        # Also check thumbnails directory
+        thumb_path = project_path / "thumbnails" / filename
+        if thumb_path.exists() and thumb_path.is_file():
+            return str(thumb_path)
+        return None
 
     def get_page_path(self, project_id: str, page_number: int) -> Optional[str]:
         """Get the filesystem path for a page image."""
@@ -465,31 +526,34 @@ class PagesHandler:
 
     # ============== Delete ==============
 
-    def delete_pages(self, project_id: str, page_numbers: List[int]) -> int:
-        """Delete specific pages from a project. Returns the number of pages deleted."""
+    def delete_pages(self, project_id: str, filenames: List[str]) -> int:
+        """Delete specific pages from a project by filename. Returns the number of pages deleted."""
         project_path = _resolve_project_path(project_id)
         if not project_path.exists():
             raise FileNotFoundError(f"Project '{project_id}' not found")
 
         deleted = 0
-        for page_num in page_numbers:
-            # Try both 3- and 4-digit padding
-            for fmt in [f"page_{page_num:03d}.png", f"page_{page_num:04d}.png"]:
-                page_path = project_path / fmt
-                if page_path.exists():
-                    page_path.unlink()
-                    deleted += 1
-                    # Also remove thumbnail
-                    for tfmt in [f"page_{page_num:03d}.jpg", f"page_{page_num:04d}.jpg"]:
-                        thumb_path = project_path / "thumbnails" / tfmt
-                        if thumb_path.exists():
-                            thumb_path.unlink()
-                    break
+        for fname in filenames:
+            # Sanitize: only allow the basename to prevent path traversal
+            safe_name = Path(fname).name
+            page_path = project_path / safe_name
+            if page_path.exists() and page_path.is_file():
+                page_path.unlink()
+                deleted += 1
+                # Also remove thumbnail (try same stem with .jpg)
+                stem = Path(safe_name).stem
+                for ext in [".jpg", ".jpeg", ".png"]:
+                    thumb_path = project_path / "thumbnails" / f"{stem}{ext}"
+                    if thumb_path.exists():
+                        thumb_path.unlink()
 
         # Update metadata page_count
         meta = _read_metadata(project_path)
         if meta:
-            meta["page_count"] = len(list(project_path.glob("page_*.png")))
+            meta["page_count"] = len([
+                p for p in project_path.iterdir()
+                if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+            ])
             _write_metadata(project_path, meta)
 
         logger.info(f"Deleted {deleted} pages from project '{project_id}'")
@@ -543,7 +607,7 @@ class PagesHandler:
             raise FileNotFoundError(f"Project '{project_id}' not found")
 
         meta = _read_metadata(project_path)
-        project_name = meta.get("name", project_id)
+        project_name = meta.get("name", project_path.name)
 
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip", prefix=f"{project_name}_")
         tmp.close()
@@ -562,21 +626,23 @@ class PagesHandler:
         if not project_path.exists():
             return
 
-        # Add page images
-        for png in sorted(project_path.glob("page_*.png")):
-            zf.write(png, f"{zip_prefix}/{png.name}")
+        # Add page images (all image files, not just page_*.png)
+        image_files = sorted(
+            p for p in project_path.iterdir()
+            if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+        )
+        for img_file in image_files:
+            zf.write(img_file, f"{zip_prefix}/{img_file.name}")
 
         # Add manifest.json if present
         manifest_path = project_path / "manifest.json"
         if manifest_path.exists():
             zf.write(manifest_path, f"{zip_prefix}/manifest.json")
 
-        # Recurse into children
+        # Recurse into children (child.name already resolves metadata name with correct fallback)
         children = self.get_children(project_id)
         for child in children:
-            child_meta = _read_metadata(_resolve_project_path(child.project_id))
-            child_name = child_meta.get("name", child.project_id)
-            self._add_project_to_zip(zf, child.project_id, f"{zip_prefix}/{child_name}")
+            self._add_project_to_zip(zf, child.project_id, f"{zip_prefix}/{child.name}")
 
     # ============== Helpers ==============
 
