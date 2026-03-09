@@ -1,0 +1,893 @@
+<!-- Tabbed container (only visible when not in visualizer stages) -->
+<div class="cure-container" *ngIf="stage < 2">
+
+  <!-- Header -->
+  <div class="header">
+    <h1><span class="highlight">Cu</span>neiform <span class="highlight">Re</span>cognition</h1>
+    <div class="active-model-badge" *ngIf="activeModel?.active">
+      <span class="status-dot"></span>
+      {{ activeModel.model_name }}
+    </div>
+    <div class="active-model-badge no-model" *ngIf="!activeModel?.active">
+      <span class="status-dot"></span>
+      no model
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="nav-tabs">
+    <button [class.active]="viewMode === CureViewMode.Datasets" (click)="setViewMode(CureViewMode.Datasets)">
+      <mat-icon>folder</mat-icon> Datasets
+    </button>
+    <button [class.active]="viewMode === CureViewMode.Models" (click)="setViewMode(CureViewMode.Models)">
+      <mat-icon>model_training</mat-icon> Models
+    </button>
+    <button [class.active]="viewMode === CureViewMode.Training" (click)="setViewMode(CureViewMode.Training)">
+      <mat-icon>fitness_center</mat-icon> Training
+    </button>
+  </div>
+
+  <!-- ====== DATASETS VIEW ====== -->
+  <div class="view-content datasets-view" *ngIf="viewMode === CureViewMode.Datasets && stage === 0">
+
+    <!-- LEFT SIDEBAR (single card) -->
+    <div class="cure-sidebar">
+      <div class="create-dataset-row">
+        <input [(ngModel)]="newDatasetName" placeholder="New dataset..."
+               (keyup.enter)="createDataset()" class="dataset-name-input" />
+        <button mat-raised-button color="primary" (click)="createDataset()"
+                [disabled]="!newDatasetName.trim()">
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- Upload -->
+      <div class="sidebar-upload"
+           (dragover)="onDragOver($event)"
+           (dragleave)="onDragLeave($event)"
+           (drop)="onDrop($event)"
+           [class.drag-over]="isDragOver"
+           (click)="uploadFile.click()">
+        <input #uploadFile (change)="handleFileInput($event)" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none"/>
+        <mat-icon>cloud_upload</mat-icon>
+        <span>Drop file or click</span>
+        <span class="file-types">PDF, PNG, JPG</span>
+      </div>
+
+      <div class="sidebar-btn-row">
+        <button mat-stroked-button class="browse-server-btn" (click)="browseServer()">
+          <mat-icon>folder_open</mat-icon> Server
+        </button>
+        <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+                matTooltip="Upload a folder of images as a batch">
+          <mat-icon>snippet_folder</mat-icon> Folder
+        </button>
+        <input #uploadFolder (change)="handleFolderInput($event)" type="file"
+               webkitdirectory directory multiple style="display:none"/>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- General stats -->
+      <div class="training-mini-stats">
+        <div class="mini-stat">
+          <span class="mini-stat-value">{{ trainingStatus?.total_crops || 0 }}</span>
+          <span class="mini-stat-label">Training Crops</span>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-stat-value">{{ trainingStatus?.unique_labels || 0 }}</span>
+          <span class="mini-stat-label">Classes</span>
+        </div>
+      </div>
+
+      <!-- Training recommendation -->
+      <div class="training-line-recs" *ngIf="trainingStatus">
+        <div class="line-rec">
+          <span class="line-rec-label">Crops</span>
+          <span class="line-rec-value">{{ trainingStatus.total_crops || 0 }}</span>
+          <span class="line-rec-hint">/ 500 recommended</span>
+        </div>
+      </div>
+
+      <div class="sidebar-divider"></div>
+
+      <!-- Active Models -->
+      <div class="active-models-section">
+        <div class="active-models-header">Trained Models</div>
+        <div class="model-item" *ngFor="let m of models">
+          {{ m.name }}
+          <span class="model-active-tag" *ngIf="activeModel?.active && activeModel?.model_name === m.name">active</span>
+        </div>
+        <div class="model-item empty" *ngIf="models.length === 0">No models yet</div>
+      </div>
+    </div>
+
+    <!-- RIGHT MAIN -->
+    <div class="cure-main">
+      <!-- Dataset cards view -->
+      <div *ngIf="showDatasetList" class="main-panel">
+
+        <!-- Toolbar: search + count + view toggle -->
+        <div class="dataset-toolbar" *ngIf="datasets.length > 0">
+          <div class="dataset-search-box">
+            <mat-icon class="search-icon">search</mat-icon>
+            <input [(ngModel)]="datasetSearchQuery" placeholder="Search datasets..." class="dataset-search-input" />
+            <button *ngIf="datasetSearchQuery" class="clear-search-btn" (click)="clearDatasetSearch()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <span class="dataset-count">{{ filteredDatasets.length }} datasets</span>
+          <span class="spacer"></span>
+          <div class="view-toggle">
+            <button [class.active-view]="datasetViewMode === 'grid'" (click)="datasetViewMode = 'grid'" matTooltip="Grid view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button [class.active-view]="datasetViewMode === 'list'" (click)="datasetViewMode = 'list'" matTooltip="List view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid view -->
+        <div class="dataset-grid" *ngIf="datasets.length > 0 && datasetViewMode === 'grid'">
+          <div *ngFor="let dataset of filteredDatasets"
+               class="dataset-card"
+               [class.selected]="isDatasetSelected(dataset)"
+               (click)="selectDatasetCard(dataset, $event)"
+               (dblclick)="selectDataset(dataset)"
+               (contextmenu)="onDatasetContextMenu(dataset, $event)">
+            <mat-icon class="dataset-icon">folder</mat-icon>
+            <div class="dataset-info">
+              <span class="dataset-name" *ngIf="editingDataset?.dataset_id !== dataset.dataset_id"
+                    (click)="onDatasetNameClick(dataset, $event)">{{ dataset.name }}</span>
+              <input *ngIf="editingDataset?.dataset_id === dataset.dataset_id"
+                     class="dataset-name-input-inline" [(ngModel)]="editingDatasetName"
+                     (keydown.enter)="confirmDatasetRename()" (keydown.escape)="cancelDatasetRename()"
+                     (blur)="onDatasetRenameBlur()" (click)="$event.stopPropagation()" #datasetRenameInput>
+              <span class="dataset-meta">{{ dataset.text_count || 0 }} texts</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- List view -->
+        <div class="dataset-details-list" *ngIf="datasets.length > 0 && datasetViewMode === 'list'">
+          <div class="dataset-details-header">
+            <span class="ds-col-icon"></span>
+            <span class="ds-col-name sortable" (click)="toggleDatasetSort('name')"
+                  [class.active-sort]="datasetSortColumn === 'name'">
+              Name
+              <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'name'">
+                {{ datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="ds-col-texts sortable" (click)="toggleDatasetSort('texts')"
+                  [class.active-sort]="datasetSortColumn === 'texts'">
+              Texts
+              <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'texts'">
+                {{ datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="ds-col-curated sortable" (click)="toggleDatasetSort('curated')"
+                  [class.active-sort]="datasetSortColumn === 'curated'">
+              Curated
+              <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'curated'">
+                {{ datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="ds-col-created sortable" (click)="toggleDatasetSort('created')"
+                  [class.active-sort]="datasetSortColumn === 'created'">
+              Created
+              <mat-icon class="sort-arrow" *ngIf="datasetSortColumn === 'created'">
+                {{ datasetSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+          </div>
+          <div *ngFor="let dataset of filteredDatasets"
+               class="dataset-details-row"
+               [class.selected]="isDatasetSelected(dataset)"
+               (click)="selectDatasetCard(dataset, $event)"
+               (dblclick)="selectDataset(dataset)"
+               (contextmenu)="onDatasetContextMenu(dataset, $event)">
+            <span class="ds-col-icon">
+              <mat-icon class="dataset-icon">folder</mat-icon>
+            </span>
+            <span class="ds-col-name">
+              <span class="dataset-name" *ngIf="editingDataset?.dataset_id !== dataset.dataset_id"
+                    (click)="onDatasetNameClick(dataset, $event)">{{ dataset.name }}</span>
+              <input *ngIf="editingDataset?.dataset_id === dataset.dataset_id"
+                     class="dataset-name-input-inline" [(ngModel)]="editingDatasetName"
+                     (keydown.enter)="confirmDatasetRename()" (keydown.escape)="cancelDatasetRename()"
+                     (blur)="onDatasetRenameBlur()" (click)="$event.stopPropagation()" #datasetRenameInput>
+            </span>
+            <span class="ds-col-texts">{{ dataset.text_count || 0 }}</span>
+            <span class="ds-col-curated">
+              <ng-container *ngIf="dataset.curated_count > 0">
+                <mat-icon class="curated-icon">verified</mat-icon> {{ dataset.curated_count }}
+              </ng-container>
+              <span *ngIf="!dataset.curated_count">—</span>
+            </span>
+            <span class="ds-col-created">{{ formatDatasetDate(dataset.created_at) }}</span>
+          </div>
+        </div>
+
+        <!-- Empty state: no search results -->
+        <div class="empty-list" *ngIf="datasets.length > 0 && filteredDatasets.length === 0">
+          <mat-icon>search_off</mat-icon>
+          <p>No matching datasets</p>
+          <span>Try a different search term</span>
+        </div>
+
+        <div class="empty-list" *ngIf="datasets.length === 0">
+          <mat-icon>folder_open</mat-icon>
+          <p>No datasets yet</p>
+          <span>Create a dataset from the sidebar</span>
+        </div>
+      </div>
+
+      <!-- Selected dataset view -->
+      <div *ngIf="!showDatasetList" class="main-panel">
+        <div class="text-list-header">
+          <button mat-icon-button (click)="backToDatasets()" matTooltip="Back to datasets">
+            <mat-icon>arrow_back</mat-icon>
+          </button>
+          <h3>{{ selectedDataset?.name }}</h3>
+          <span class="text-count" *ngIf="datasetTexts.length > 0">({{ datasetTexts.length }} texts)</span>
+        </div>
+
+        <!-- Loading indicator -->
+        <div class="text-list-loading" *ngIf="isLoadingTexts">
+          <mat-spinner diameter="24"></mat-spinner>
+          <span>Loading texts...</span>
+        </div>
+
+        <!-- Toolbar: count + search + view toggle (matches library layout) -->
+        <div class="folder-pages-header" *ngIf="!isLoadingTexts && datasetTexts.length > 0">
+          <span class="pages-count">{{ datasetTexts.length }} texts</span>
+
+          <div class="page-search-box">
+            <mat-icon class="page-search-icon">search</mat-icon>
+            <input [(ngModel)]="textSearchQuery" placeholder="Search texts..." class="page-search-input" />
+            <button *ngIf="textSearchQuery" mat-icon-button class="page-search-clear" (click)="clearTextSearch()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <span class="pages-filtered-count" *ngIf="textSearchQuery && filteredTexts.length !== datasetTexts.length">
+            {{ filteredTexts.length }} match{{ filteredTexts.length === 1 ? '' : 'es' }}
+          </span>
+
+          <span class="header-spacer"></span>
+
+          <div class="view-toggle">
+            <button [class.active-view]="textViewMode === 'grid'" (click)="textViewMode = 'grid'" matTooltip="Grid view">
+              <mat-icon>grid_view</mat-icon>
+            </button>
+            <button [class.active-view]="textViewMode === 'list'" (click)="textViewMode = 'list'" matTooltip="List view">
+              <mat-icon>view_list</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid view -->
+        <div class="text-grid" *ngIf="!isLoadingTexts && datasetTexts.length > 0 && textViewMode === 'grid'">
+          <div *ngFor="let item of filteredTexts"
+               class="text-grid-card"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openSavedResult(item)">
+            <div class="text-grid-thumbnail">
+              <img *ngIf="item._thumbnailUrl" [src]="item._thumbnailUrl" alt="thumbnail" />
+              <mat-icon *ngIf="!item._thumbnailUrl">image</mat-icon>
+            </div>
+            <div class="text-grid-info">
+              <span class="text-grid-name">{{ getItemIdentifier(item) }}</span>
+              <span class="text-grid-meta">
+                <span *ngIf="item.labels?.length > 0">{{ item.labels[0] }}</span>
+                <span *ngIf="!item.labels?.length && item.label">{{ item.label }}</span>
+              </span>
+            </div>
+            <mat-icon *ngIf="item.is_curated_kraken" class="text-grid-curated">check_circle</mat-icon>
+            <div class="text-grid-actions">
+              <button mat-icon-button color="warn" (click)="deleteTextItem(item, $event)" matTooltip="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- List view (Explorer Details style — matches library) -->
+        <div class="details-list" *ngIf="!isLoadingTexts && datasetTexts.length > 0 && textViewMode === 'list'">
+          <div class="details-header">
+            <span class="details-col-icon"></span>
+            <span class="details-col-name sortable" (click)="toggleTextSort('name')"
+                  [class.active-sort]="textSortColumn === 'name'">
+              Name
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'name'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-label sortable" (click)="toggleTextSort('label')"
+                  [class.active-sort]="textSortColumn === 'label'">
+              Label
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'label'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-id sortable" (click)="toggleTextSort('id')"
+                  [class.active-sort]="textSortColumn === 'id'">
+              BEN ID
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'id'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-lines sortable" (click)="toggleTextSort('lines')"
+                  [class.active-sort]="textSortColumn === 'lines'">
+              Lines
+              <mat-icon class="sort-arrow" *ngIf="textSortColumn === 'lines'">
+                {{ textSortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+              </mat-icon>
+            </span>
+            <span class="details-col-status">Status</span>
+            <span class="details-col-actions"></span>
+          </div>
+          <div *ngFor="let item of filteredTexts"
+               class="details-row"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openSavedResult(item)">
+            <div class="details-icon">
+              <mat-icon>description</mat-icon>
+            </div>
+            <span class="details-name">{{ getItemIdentifier(item) }}</span>
+            <span class="details-label">
+              <span *ngIf="item.labels?.length > 0" class="label-tag">{{ item.labels.join(', ') }}</span>
+              <span *ngIf="!item.labels?.length && item.label" class="label-tag">{{ item.label }}</span>
+              <span *ngIf="item.part" class="part-tag">{{ item.part }}</span>
+              <span *ngIf="!item.labels?.length && !item.label">—</span>
+            </span>
+            <span class="details-id">{{ item.text_id }}</span>
+            <span class="details-lines">{{ item.lines_count || '—' }}</span>
+            <span class="details-status">
+              <mat-icon *ngIf="item.is_curated_kraken" class="curated-icon" matTooltip="Curated">check_circle</mat-icon>
+            </span>
+            <div class="details-actions">
+              <button mat-icon-button color="warn" (click)="deleteTextItem(item, $event)" matTooltip="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty search state -->
+        <div class="empty-list" *ngIf="!isLoadingTexts && datasetTexts.length > 0 && filteredTexts.length === 0">
+          <mat-icon>search_off</mat-icon>
+          <p>No matching texts</p>
+          <span>Try a different search term</span>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-list" *ngIf="!isLoadingTexts && datasetTexts.length === 0">
+          <mat-icon>description</mat-icon>
+          <p>No saved texts yet</p>
+          <span>Upload an image and run classification, then save results</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage 1: PDF Page Selection (within Datasets tab) -->
+  <div class="view-content" *ngIf="viewMode === CureViewMode.Datasets && stage === 1">
+    <div style="padding: 1em;">
+      <div class="pdf-navigation" style="display: flex; align-items: center; justify-content: center; gap: 1em; margin-bottom: 1em; flex-wrap: wrap;">
+        <button mat-icon-button (click)="goBack()" matTooltip="Back">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+
+        <button mat-raised-button (click)="prevPageWindow()" [disabled]="visiblePageNumbers[0] <= 1">
+          <mat-icon>chevron_left</mat-icon> Previous
+        </button>
+
+        <div style="display: flex; align-items: center; gap: 0.5em;">
+          <span>Go to page:</span>
+          <input type="number" [(ngModel)]="goToPageInput" min="1" [max]="totalPages"
+                 style="width: 70px; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px;"
+                 (keyup.enter)="jumpToPage()">
+          <button mat-raised-button color="primary" (click)="jumpToPage()">Go</button>
+        </div>
+
+        <span style="color: #666;" *ngIf="visiblePageNumbers.length > 0">
+          Showing pages {{visiblePageNumbers[0]}} - {{visiblePageNumbers[visiblePageNumbers.length - 1]}} of {{totalPages}}
+        </span>
+
+        <button mat-raised-button (click)="nextPageWindow()" [disabled]="visiblePageNumbers[visiblePageNumbers.length - 1] >= totalPages">
+          Next <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+
+      <div class="pdf-thumbnails">
+        <div *ngFor="let page of visiblePageNumbers"
+             class="pdf-thumbnail"
+             [class.selected]="currentpage === page"
+             (click)="selectPageFromThumbnail(page)">
+          <pdf-viewer [src]="pdfSrc"
+                      [page]="page"
+                      [show-all]="false"
+                      [render-text]="false"
+                      [fit-to-page]="true"
+                      style="width: 220px; height: 300px;">
+          </pdf-viewer>
+          <span class="page-number">Page {{page}}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MODELS VIEW ====== -->
+  <div class="view-content" *ngIf="viewMode === CureViewMode.Models">
+    <div class="two-column-layout">
+      <!-- Model List -->
+      <div class="column-left">
+        <h3>Trained Models</h3>
+        <div class="list-section">
+          <div class="list-item" *ngFor="let model of models"
+               [class.selected]="selectedCureModel?.name === model.name"
+               (click)="selectCureModel(model)">
+            <div class="item-info">
+              <span class="item-name">
+                {{ model.name }}
+                <mat-icon *ngIf="activeModel?.active && activeModel?.model_name === model.name" class="active-badge">check_circle</mat-icon>
+              </span>
+              <span class="item-meta">
+                <ng-container *ngIf="model.accuracy">Acc: {{ (model.accuracy * 100).toFixed(1) }}%</ng-container>
+                <ng-container *ngIf="model.epochs"> · {{ model.epochs }} epochs</ng-container>
+              </span>
+            </div>
+            <mat-icon>chevron_right</mat-icon>
+          </div>
+          <div class="empty-state" *ngIf="models.length === 0">
+            No trained models yet. Train one in the Training tab.
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Details -->
+      <div class="column-right" *ngIf="selectedCureModel">
+        <div class="detail-header">
+          <h3>{{ selectedCureModel.name }}</h3>
+          <div class="detail-actions">
+            <button mat-raised-button color="accent"
+                    (click)="activateModel(selectedCureModel.name)"
+                    [disabled]="activeModel?.active && activeModel?.model_name === selectedCureModel.name">
+              <mat-icon>check_circle</mat-icon>
+              {{ activeModel?.active && activeModel?.model_name === selectedCureModel.name ? 'Active Model' : 'Set as Active' }}
+            </button>
+            <button mat-icon-button color="warn"
+                    (click)="deleteCureModel(selectedCureModel.name)"
+                    [disabled]="activeModel?.active && activeModel?.model_name === selectedCureModel.name"
+                    [matTooltip]="activeModel?.active && activeModel?.model_name === selectedCureModel.name ? 'Cannot delete active model' : 'Delete model'">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="model-details">
+          <div class="detail-row" *ngIf="selectedCureModel.epochs">
+            <span class="label">Training Epochs:</span>
+            <span class="value">{{ selectedCureModel.epochs }}</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedCureModel.accuracy">
+            <span class="label">Accuracy:</span>
+            <span class="value">{{ (selectedCureModel.accuracy * 100).toFixed(1) }}%</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedCureModel.size_mb">
+            <span class="label">File Size:</span>
+            <span class="value">{{ selectedCureModel.size_mb.toFixed(1) }} MB</span>
+          </div>
+          <div class="detail-row" *ngIf="selectedCureModel.created">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedCureModel.created }}</span>
+          </div>
+        </div>
+
+        <div class="metrics-section" *ngIf="selectedCureModel.accuracy">
+          <h4>Performance</h4>
+          <div class="metrics-grid">
+            <div class="metric-item">
+              <div class="metric-value">{{ (selectedCureModel.accuracy * 100).toFixed(1) }}%</div>
+              <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-item" *ngIf="selectedCureModel.epochs">
+              <div class="metric-value">{{ selectedCureModel.epochs }}</div>
+              <div class="metric-label">Epochs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== TRAINING VIEW ====== -->
+  <div class="view-content" *ngIf="viewMode === CureViewMode.Training">
+    <div class="training-layout">
+      <!-- Training Configuration -->
+      <div class="training-config">
+        <h3>Start New Training</h3>
+
+        <!-- Training Data Readiness -->
+        <div class="readiness-section" *ngIf="trainingStatus"
+             [class.ready]="trainingStatus.is_ready" [class.not-ready]="!trainingStatus.is_ready">
+          <mat-icon>{{ trainingStatus.is_ready ? 'check_circle' : 'warning' }}</mat-icon>
+          <span>{{ trainingStatus.is_ready ? 'Training data ready' : 'Not enough training data' }}</span>
+          <span class="readiness-detail">{{ trainingStatus.total_crops }} crops · {{ trainingStatus.unique_labels }} classes</span>
+        </div>
+
+        <mat-form-field appearance="outline" *ngIf="models.length > 0">
+          <mat-label>Base Model (optional)</mat-label>
+          <mat-select [(ngModel)]="trainingBaseModel">
+            <mat-option value="">Train from scratch</mat-option>
+            <mat-option *ngFor="let model of models" [value]="model.name">
+              {{ model.name }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Output Model Name</mat-label>
+          <input matInput [(ngModel)]="trainingModelName" placeholder="e.g., cure_model_v2">
+        </mat-form-field>
+
+        <div class="config-section">
+          <h4>Training Configuration</h4>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Epochs</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingEpochs" min="1" max="1000">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Batch Size</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingBatchSize" min="1" max="64">
+            </mat-form-field>
+          </div>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Learning Rate</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingLearningRate" min="0.00001" max="0.1" step="0.0001">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Early Stopping Patience</mat-label>
+              <input matInput type="number" [(ngModel)]="trainingPatience" min="5" max="100">
+            </mat-form-field>
+          </div>
+
+          <div class="config-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Device</mat-label>
+              <mat-select [(ngModel)]="trainingDevice">
+                <mat-option value="auto">Auto (GPU if available)</mat-option>
+                <mat-option value="cpu">CPU</mat-option>
+                <mat-option value="0">GPU 0</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <button mat-raised-button color="primary" (click)="startTraining()"
+                [disabled]="!trainingStatus?.is_ready || isTraining"
+                *ngIf="!isTraining">
+          <mat-icon>play_arrow</mat-icon> Start Training
+        </button>
+        <button mat-raised-button color="warn" (click)="cancelTraining()"
+                *ngIf="isTraining">
+          <mat-icon>stop</mat-icon> Cancel Training
+        </button>
+      </div>
+
+      <!-- Right Panel: Tabbed (Progress / Recent Jobs) -->
+      <div class="training-right-panel">
+        <div class="training-right-tabs">
+          <button [class.active]="trainingRightTab === 'progress'" (click)="trainingRightTab = 'progress'">
+            <mat-icon>trending_up</mat-icon> Progress
+            <span class="tab-badge" *ngIf="isTraining">1</span>
+          </button>
+          <button [class.active]="trainingRightTab === 'jobs'" (click)="trainingRightTab = 'jobs'">
+            <mat-icon>list</mat-icon> Recent Jobs
+          </button>
+        </div>
+
+        <!-- Progress Tab -->
+        <div class="training-right-content" *ngIf="trainingRightTab === 'progress'">
+          <div class="progress-card large" *ngIf="trainingProgress && isTraining">
+            <div class="progress-header">
+              <span class="training-id">{{ trainingProgress.model_name || 'CuRe Training' }}</span>
+              <span class="training-status" [style.color]="getTrainingStatusColor(trainingProgress.status)">
+                {{ trainingProgress.status }}
+              </span>
+            </div>
+
+            <mat-progress-bar mode="determinate"
+              [value]="(trainingProgress.current_epoch / trainingProgress.total_epochs) * 100">
+            </mat-progress-bar>
+
+            <div class="progress-stats">
+              <div class="stat">
+                <span class="label">Epoch</span>
+                <span class="value">{{ trainingProgress.current_epoch }} / {{ trainingProgress.total_epochs }}</span>
+              </div>
+              <div class="stat">
+                <span class="label">Progress</span>
+                <span class="value">{{ ((trainingProgress.current_epoch / trainingProgress.total_epochs) * 100) | number:'1.0-0' }}%</span>
+              </div>
+            </div>
+
+            <div class="metrics-display" *ngIf="trainingProgress.accuracy">
+              <div class="metric">
+                <span class="label">Accuracy</span>
+                <span class="value">{{ (trainingProgress.accuracy * 100) | number:'1.1-1' }}%</span>
+              </div>
+              <div class="metric" *ngIf="trainingProgress.val_accuracy">
+                <span class="label">Val Accuracy</span>
+                <span class="value">{{ (trainingProgress.val_accuracy * 100) | number:'1.1-1' }}%</span>
+              </div>
+              <div class="metric" *ngIf="trainingProgress.loss">
+                <span class="label">Loss</span>
+                <span class="value">{{ trainingProgress.loss | number:'1.4-4' }}</span>
+              </div>
+            </div>
+
+            <div class="error-message" *ngIf="trainingProgress.error">
+              <mat-icon>error</mat-icon>
+              {{ trainingProgress.error }}
+            </div>
+          </div>
+
+          <div class="empty-state" *ngIf="!isTraining">
+            No active training. Start one from the configuration panel.
+          </div>
+        </div>
+
+        <!-- Recent Jobs Tab -->
+        <div class="training-right-content" *ngIf="trainingRightTab === 'jobs'">
+          <div class="jobs-table">
+            <div class="job-row header">
+              <span>Model</span>
+              <span>Status</span>
+              <span>Accuracy</span>
+              <span>Epochs</span>
+            </div>
+            <div class="job-row" *ngIf="trainingProgress && trainingProgress.status !== 'idle'">
+              <span>{{ trainingProgress.model_name || '—' }}</span>
+              <span [style.color]="getTrainingStatusColor(trainingProgress.status)">{{ trainingProgress.status }}</span>
+              <span>{{ trainingProgress.best_accuracy ? ((trainingProgress.best_accuracy * 100) | number:'1.1-1') + '%' : '—' }}</span>
+              <span>{{ trainingProgress.current_epoch }} / {{ trainingProgress.total_epochs }}</span>
+            </div>
+            <div class="empty-row" *ngIf="!trainingProgress || trainingProgress.status === 'idle'">
+              No training jobs yet.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden PDF viewer for page count -->
+<pdf-viewer *ngIf="pdfSrc && totalPages === 0"
+            [src]="pdfSrc"
+            [show-all]="false"
+            [render-text]="false"
+            (after-load-complete)="afterLoadComplete($event)"
+            style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;">
+</pdf-viewer>
+
+<!-- Stages 2 & 3: Visualizer (canvas + right panel) — full screen, outside tabs -->
+<div class="visualizer-container" *ngIf="stage >= 2">
+
+  <!-- Left Toolbar -->
+  <div class="visualizer-toolbar">
+    <button class="tool-btn" (click)="goBack()" matTooltip="Back">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
+            (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan">
+      <mat-icon>pan_tool</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Add"
+            (click)="canvas?.changeMode(CanvasMode.Add)" matTooltip="Draw box">
+      <mat-icon>add_box</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Adjust"
+            (click)="canvas?.changeMode(CanvasMode.Adjust)" matTooltip="Adjust box">
+      <mat-icon>transform</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Delete"
+            (click)="canvas?.changeMode(CanvasMode.Delete)" matTooltip="Delete">
+      <mat-icon>delete</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" [class.active]="canvas?.crosshairEnabled"
+            (click)="canvas?.toggleCrosshair()" matTooltip="Crosshair guide">
+      <mat-icon>add</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" (click)="canvas?.zoomIn()" matTooltip="Zoom in">
+      <mat-icon>zoom_in</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.zoomOut()" matTooltip="Zoom out">
+      <mat-icon>zoom_out</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.forceZoomOut(1)" matTooltip="Reset zoom">
+      <mat-icon>fit_screen</mat-icon>
+    </button>
+  </div>
+
+  <!-- Split Panels -->
+  <div class="split-container">
+    <!-- Left Panel: Canvas -->
+    <div class="panel panel-left" [style.width.%]="leftPanelWidth">
+      <fabric-canvas #canvas
+        [canvasType]="canvasType"
+        (selectionChange)="onBoxSelectionChanged($event)"
+        (boxAdded)="onBoxAdded($event)">
+      </fabric-canvas>
+    </div>
+
+    <!-- Resizer -->
+    <div class="panel-resizer" (mousedown)="startResize($event)" (touchstart)="startResize($event)">
+      <div class="resizer-handle"></div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="panel panel-right" [style.width.%]="100 - leftPanelWidth">
+
+      <!-- Stage 2: Model selection + action buttons -->
+      <div *ngIf="stage == 2" class="preview-panel">
+        <div class="preview-content" *ngIf="!isLoading">
+          <mat-icon class="preview-icon">auto_fix_high</mat-icon>
+          <h3>Detect & Classify Signs</h3>
+          <p>Draw a box around the tablet area to focus detection, or run on the full image</p>
+          <p class="hint-text" *ngIf="selectedBox">
+            <mat-icon inline>crop</mat-icon> Selection box active — detection will run on the selected region
+          </p>
+
+          <!-- Model selector -->
+          <div class="model-selector-panel">
+            <div class="model-selector-header">Model</div>
+            <div class="model-selector-buttons">
+              <button class="model-btn selected">
+                <mat-icon>psychology</mat-icon>
+                Active Model
+              </button>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="action-buttons">
+            <button mat-raised-button color="primary" (click)="detectAndClassify()"
+                    [disabled]="isLoading" class="generate-btn">
+              <mat-icon>auto_fix_high</mat-icon>
+              Detect & Classify
+            </button>
+
+            <button mat-stroked-button (click)="detectOnly()" [disabled]="isLoading"
+                    matTooltip="Detect bounding boxes only (no classification)">
+              <mat-icon>grid_on</mat-icon>
+              Detect Only
+            </button>
+          </div>
+        </div>
+
+        <div class="preview-content" *ngIf="isLoading">
+          <mat-spinner diameter="48"></mat-spinner>
+          <h3 style="margin-top: 1em;">Analyzing signs...</h3>
+        </div>
+      </div>
+
+      <!-- Stage 3: Sign detail + Editor -->
+      <div *ngIf="stage == 3" class="results-right-panel">
+        <!-- Header -->
+        <div class="results-header">
+          <span class="sign-count" *ngIf="signs.length > 0">
+            {{ signs.length }} signs detected
+          </span>
+          <select class="script-select" [(ngModel)]="selectedScript" matTooltip="Cuneiform script period">
+            <option *ngFor="let opt of scriptOptions" [value]="opt.font">{{ opt.label }}</option>
+          </select>
+          <span class="spacer"></span>
+          <button mat-stroked-button
+            (click)="openSaveDialog()"
+            [disabled]="signs.length === 0 || isSaving"
+            matTooltip="Save image, predictions & training crops"
+            class="new-btn">
+            <mat-icon>{{ isSaving ? 'hourglass_empty' : 'save' }}</mat-icon>
+            {{ isSaving ? 'Saving...' : 'Save' }}
+          </button>
+          <button mat-stroked-button
+            (click)="curateCheck()"
+            [disabled]="textId == null || isSaving || isCuratedCure"
+            matTooltip="Mark as curated"
+            class="new-btn"
+            [class.curated]="isCuratedCure">
+            <mat-icon>{{ isCuratedCure ? 'check_circle' : 'verified' }}</mat-icon>
+            {{ isCuratedCure ? 'Curated' : 'Curate' }}
+          </button>
+          <button mat-stroked-button (click)="newOcr()" matTooltip="Start new classification" class="new-btn">
+            <mat-icon>add_photo_alternate</mat-icon> New
+          </button>
+        </div>
+
+        <!-- Sign detail panel -->
+        <div class="sign-detail" *ngIf="selectedSign">
+          <div class="sign-detail-header">
+            <span class="sign-label">{{ selectedSign.label }}</span>
+            <span class="sign-unicode">{{ selectedSign.unicode }}</span>
+            <span class="sign-confidence" [class.high]="selectedSign.confidence >= 0.9"
+                  [class.medium]="selectedSign.confidence >= 0.7 && selectedSign.confidence < 0.9"
+                  [class.low]="selectedSign.confidence < 0.7">
+              {{ (selectedSign.confidence * 100).toFixed(1) }}%
+            </span>
+            <button class="close-detail" (click)="clearSelection()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <div class="top3-predictions" *ngIf="selectedSign.top3 && selectedSign.top3.length > 0">
+            <div class="prediction" *ngFor="let pred of selectedSign.top3; let i = index">
+              <span class="pred-rank">#{{ i + 1 }}</span>
+              <span class="pred-label">{{ pred.label }}</span>
+              <span class="pred-unicode">{{ pred.unicode }}</span>
+              <span class="pred-confidence">{{ (pred.confidence * 100).toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Text editor -->
+        <div class="editor-wrapper" *ngIf="lines.length > 0">
+          <text-editor #lineEditor
+            [canEdit]="true"
+            [lines]="lines"
+            [plainTextMode]="false"
+            [signMap]="signToUnicodeMap"
+            [cuneiformFont]="selectedScript"
+            (lineChanged)="onLinesChanged($event)">
+          </text-editor>
+        </div>
+
+        <!-- Empty state if detection-only -->
+        <div class="detection-only-info" *ngIf="signs.length === 0 && boundingBoxes.length > 0">
+          <mat-icon>info_outline</mat-icon>
+          <span>Detection only — {{ boundingBoxes.length }} bounding boxes shown.</span>
+          <span>Run "Detect & Classify" to get sign labels.</span>
+        </div>
+
+        <!-- Confidence legend -->
+        <div class="confidence-legend" *ngIf="signs.length > 0">
+          <span class="legend-item high">High (&gt;90%)</span>
+          <span class="legend-item medium">Medium (70-90%)</span>
+          <span class="legend-item low">Low (&lt;70%)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu for dataset folders -->
+<div class="dataset-context-menu" *ngIf="datasetContextMenuVisible"
+     [style.left.px]="datasetContextMenuX" [style.top.px]="datasetContextMenuY">
+  <div class="context-menu-item" (mousedown)="startDatasetRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteDatasetFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
+  </div>
+</div>

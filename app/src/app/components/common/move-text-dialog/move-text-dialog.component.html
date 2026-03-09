@@ -1,0 +1,20 @@
+<h2 mat-dialog-title>Move to Dataset</h2>
+<mat-dialog-content>
+  <p>Select a destination dataset:</p>
+  <mat-form-field appearance="outline" style="width: 100%">
+    <mat-label>Dataset</mat-label>
+    <mat-select [(value)]="selectedDatasetId">
+      <mat-option [value]="null">Unassigned</mat-option>
+      <mat-option *ngFor="let d of availableDatasets" [value]="d.dataset_id">
+        {{ d.name }}
+      </mat-option>
+    </mat-select>
+  </mat-form-field>
+  <mat-checkbox *ngIf="hasMultipleSelected" [(ngModel)]="moveAll" style="margin-top: 8px;">
+    Move all {{ data.selectedCount }} selected entries
+  </mat-checkbox>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" (click)="onMove()">Move</button>
+</mat-dialog-actions>

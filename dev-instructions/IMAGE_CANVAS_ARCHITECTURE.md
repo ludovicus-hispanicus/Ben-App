@@ -19,9 +19,9 @@ There are **3 distinct image handling locations**, each with different underlyin
 **Route:** `/cured`, `/cured?productionId=...`
 
 **Files:**
-- `app-new/src/app/components/production/production.component.ts`
-- `app-new/src/app/components/production/production.component.html`
-- `app-new/src/app/components/production/production.component.scss`
+- `app/src/app/components/production/production.component.ts`
+- `app/src/app/components/production/production.component.html`
+- `app/src/app/components/production/production.component.scss`
 
 **Technology:** Simple HTML `<img>` tag with CSS transforms (NO Fabric.js)
 
@@ -73,10 +73,10 @@ scrollStartY: number = 0;
 **Routes:** `/training-data`, `/training-data/editor`
 
 **Files:**
-- `app-new/src/app/components/fabric-canvas/fabric-canvas.component.ts`
-- `app-new/src/app/components/fabric-canvas/fabric-canvas.component.html`
-- `app-new/src/app/components/cure-d/cured.component.ts` (parent that uses it)
-- `app-new/src/app/services/canvas-box.service.ts` (shared gesture handling)
+- `app/src/app/components/fabric-canvas/fabric-canvas.component.ts`
+- `app/src/app/components/fabric-canvas/fabric-canvas.component.html`
+- `app/src/app/components/cure-d/cured.component.ts` (parent that uses it)
+- `app/src/app/services/canvas-box.service.ts` (shared gesture handling)
 
 **Technology:** Fabric.js canvas
 
@@ -130,9 +130,9 @@ this.canvasBoxService.setupWheelZoomPan(this.canvas, {
 **Route:** `/training` (inside YOLO tab)
 
 **Files:**
-- `app-new/src/app/components/yolo-training/annotation-canvas/annotation-canvas.component.ts`
-- `app-new/src/app/components/yolo-training/annotation-canvas/annotation-canvas.component.html`
-- `app-new/src/app/services/canvas-box.service.ts` (shared gesture handling)
+- `app/src/app/components/yolo-training/annotation-canvas/annotation-canvas.component.ts`
+- `app/src/app/components/yolo-training/annotation-canvas/annotation-canvas.component.html`
+- `app/src/app/services/canvas-box.service.ts` (shared gesture handling)
 
 **Technology:** Fabric.js canvas (built directly, not using FabricCanvasComponent)
 
@@ -180,7 +180,7 @@ this.canvasBoxService.setupWheelZoomPan(this.canvas, {
 
 ## Shared Service: CanvasBoxService
 
-**File:** `app-new/src/app/services/canvas-box.service.ts`
+**File:** `app/src/app/services/canvas-box.service.ts`
 
 This service provides consistent gesture handling for all Fabric.js canvases.
 
@@ -255,13 +255,13 @@ All three implementations now follow the same gesture conventions:
 
 ---
 
-## Note on app/ vs app-new/
+## Note on app/ vs app/
 
-The `app/` folder is the older version. The `app-new/` folder is the newer refactored version. Both should be kept in sync for now. Key files exist in both:
+The `app/` folder is the older version. The `app/` folder is the newer refactored version. Both should be kept in sync for now. Key files exist in both:
 
 - `app/src/app/components/fabric-canvas/fabric-canvas.component.ts`
 - `app/src/app/services/canvas-box.service.ts`
-- `app-new/src/app/components/fabric-canvas/fabric-canvas.component.ts`
-- `app-new/src/app/services/canvas-box.service.ts`
+- `app/src/app/components/fabric-canvas/fabric-canvas.component.ts`
+- `app/src/app/services/canvas-box.service.ts`
 
-The ProductionComponent only exists in `app-new/`.
+The ProductionComponent only exists in `app/`.

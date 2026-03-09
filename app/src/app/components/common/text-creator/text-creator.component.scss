@@ -1,0 +1,62 @@
+mat-card {
+    padding: 0px !important;
+  }
+  
+  mat-card-header {
+    background-color: grey;
+    color: white;
+    border-radius: 4px 4px 0 0;
+    mat-card-title {
+      font-weight: 100 !important;
+      margin: 8px 0px !important;
+    }
+  }
+  
+  mat-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0.5em;
+  }
+
+
+.a-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    border: 1px solid black;
+    border-radius: 2%;
+    padding: 0.5em;
+}
+
+table {
+  width: 100%;
+  margin-top: 1em;
+}
+
+
+.id-box {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    a {
+        width: -webkit-fill-available;
+    }
+
+    * {
+        margin: 0.5em;
+    }
+
+}
+
+.search-button {
+    // align-self: center;
+}
+
+.search2-button {
+  // align-self: center;
+  margin-left: 1em;
+}

@@ -1,0 +1,2294 @@
+[
+  {
+    "id": null,
+    "text_id": 3649107,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0001-004-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7686139881,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "abamātu ↑ tiamtu LL."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 106.0,
+                "width": 785.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:48.290820",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "abamātu ↑ tiamtu LL."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 106.0,
+                "width": 785.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3649107_35667988.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab506fa13b8daa53904db5",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 6842133,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0003-039-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 923600923,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "anadaru ↑ ṭarru LL."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 101.0,
+                "width": 740.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:50.217184",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "anadaru ↑ ṭarru LL."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 101.0,
+                "width": 740.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6842133_54196309.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5071a13b8daa53904db6",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 9304305,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0004-014-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8597796854,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "[āpirānu] ↑ awirānum N; apislat ↑ apišalû N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 1616.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:52.065380",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "[āpirānu] ↑ awirānum N; apislat ↑ apišalû N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 1616.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9304305_56565544.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5073a13b8daa53904db7",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 5786238,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0004-027-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9624302371,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "aqappu nA ↑ agappu N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 873.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:53.889788",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "aqappu nA ↑ agappu N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 873.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5786238_94177666.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5074a13b8daa53904db8",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 5492959,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0004-031-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9882917726,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "arad-ekallūtu, -šarrūtu ↑ ʷarad-. . ."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 121.0,
+                "width": 1221.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:55.774649",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "arad-ekallūtu, -šarrūtu ↑ ʷarad-. . ."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 121.0,
+                "width": 1221.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5492959_45153468.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5076a13b8daa53904db9",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 2585767,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0004-059-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5384269204,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "aršu I ↑ eršu II! aršuzuzil ↑ zuzillu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 1256.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:57.623169",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "aršu I ↑ eršu II! aršuzuzil ↑ zuzillu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 1256.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2585767_45557239.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5078a13b8daa53904dba",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 7755467,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0007-052-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7026326617,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "beʾāšu II ↑ beḫāšu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 110.0,
+                "width": 686.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:08:59.509886",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "beʾāšu II ↑ beḫāšu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 110.0,
+                "width": 686.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7755467_15806729.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab507aa13b8daa53904dbb",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 5026086,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0008-011-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7852146819,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "berqu ↑ sankullu 2; [bersisû] ↑ lamsisû."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 110.0,
+                "width": 1357.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:01.369446",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "berqu ↑ sankullu 2; [bersisû] ↑ lamsisû."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 110.0,
+                "width": 1357.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5026086_45451870.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab507ca13b8daa53904dbc",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 8281685,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0008-037-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4552193202,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "birku(m) ↑ ṣabtu LL, wāṣûm 1 e; ṭepû D 2 b."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 1574.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:03.340209",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "birku(m) ↑ ṣabtu LL, wāṣûm 1 e; ṭepû D 2 b."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 1574.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8281685_86595251.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab507ea13b8daa53904dbd",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 4608690,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0010-008-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8965493068,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "damāmiš auch UM 1/1, 2, 47."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 107.0,
+                "width": 1050.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:05.267605",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "damāmiš auch UM 1/1, 2, 47."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 107.0,
+                "width": 1050.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4608690_80116342.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5080a13b8daa53904dbe",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 7133776,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0010-048-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3036672914,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "diadānum ↑ dâdānu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 732.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:09.686723",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "diadānum ↑ dâdānu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 732.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7133776_29007724.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5084a13b8daa53904dbf",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 2705565,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0010-050-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9772202439,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "(↑ibdibbu) ↑ ṣiṣṣippu u maštaqtu 2!"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 115.0,
+                "width": 1257.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:11.609088",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "(↑ibdibbu) ↑ ṣiṣṣippu u maštaqtu 2!"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 115.0,
+                "width": 1257.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2705565_47947370.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5086a13b8daa53904dc0",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 2035988,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0011-018-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7954629034,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "dirratu ↑ tirratu; qerdu N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 102.0,
+                "width": 939.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:13.543107",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "dirratu ↑ tirratu; qerdu N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 102.0,
+                "width": 939.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2035988_74279024.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5088a13b8daa53904dc1",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 2182445,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0011-022-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 535737401,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "dīšā/īʾu ↑ tīšāʾu; dišḫu ↑ tišḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 1101.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:15.447833",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "dīšā/īʾu ↑ tīšāʾu; dišḫu ↑ tišḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 1101.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2182445_13981494.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab508aa13b8daa53904dc2",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3284947,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0011-052-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 564743494,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "ebertu II = ↑ epertu?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 116.0,
+                "width": 789.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:17.387695",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "ebertu II = ↑ epertu?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 116.0,
+                "width": 789.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3284947_89337855.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab508ca13b8daa53904dc3",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 1792759,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0015-016-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 2787135811,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "etellūtu(m) ↑ šuklulu II Š 1 d; wasāmum Š 2; telūtu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 115.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:19.238461",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "etellūtu(m) ↑ šuklulu II Š 1 d; wasāmum Š 2; telūtu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 115.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1792759_69198965.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab508ea13b8daa53904dc4",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 4298092,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0015-042-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8028172070,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "ezzuššiḫe = ↑ izuzušši?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 106.0,
+                "width": 835.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:21.123496",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "ezzuššiḫe = ↑ izuzušši?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 106.0,
+                "width": 835.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4298092_30736477.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5090a13b8daa53904dc5",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 8486380,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0019-040-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7783239975,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "ḫasāpu(m) G aA ↑ ṣillû II 1 a."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 117.0,
+                "width": 1081.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:23.042620",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "ḫasāpu(m) G aA ↑ ṣillû II 1 a."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 117.0,
+                "width": 1081.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8486380_58635631.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5092a13b8daa53904dc6",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3602723,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0026-007-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1702697348,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "kamālu G s. Ee II 93! ↑ šabsiš."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 116.0,
+                "width": 1117.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:24.932724",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "kamālu G s. Ee II 93! ↑ šabsiš."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 116.0,
+                "width": 1117.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3602723_48592148.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5093a13b8daa53904dc7",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3028346,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0026-019-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1188587732,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "kanasarru(m) ↑ talpittu 1."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 119.0,
+                "width": 921.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:26.835589",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "kanasarru(m) ↑ talpittu 1."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 119.0,
+                "width": 921.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3028346_16611657.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5095a13b8daa53904dc8",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 4941764,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0033-047-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9189063294,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "maṣrāḫu 2 [Wz.] ↑ qutnu 2."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 974.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:32.538955",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "maṣrāḫu 2 [Wz.] ↑ qutnu 2."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 974.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4941764_46452687.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab509ba13b8daa53904dc9",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3234442,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0035-010-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1522775682,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "mēšu II jB mé-e[-ša?] KAR 299, 6? ↑ mēsu I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 117.0,
+                "width": 1658.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:34.405968",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "mēšu II jB mé-e[-ša?] KAR 299, 6? ↑ mēsu I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 117.0,
+                "width": 1658.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3234442_69427715.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab509da13b8daa53904dca",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 6312692,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0035-017-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8240560425,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "mikru(m) I 1 aB mê mi-ik-ri-im ARM 14, 23, 15."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 124.0,
+                "width": 1699.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:36.282744",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "mikru(m) I 1 aB mê mi-ik-ri-im ARM 14, 23, 15."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 124.0,
+                "width": 1699.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6312692_14369300.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab509fa13b8daa53904dcb",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 9066755,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0040-025-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4673226672,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "nīlu(m) I ↑ urbatu I 1 (|| ba-an-nú-a)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 1411.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:38.203048",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "nīlu(m) I ↑ urbatu I 1 (‖ ba-an-nú-a)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 114.0,
+                "width": 1413.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:11:28.543355",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "nīlu(m) I ↑ urbatu I 1 (‖ ba-an-nú-a)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 114.0,
+                "width": 1413.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9066755_29567240.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50a1a13b8daa53904dcc",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 1344144,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0040-046-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 499728022,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "nuḫurtu(m) s. Ugar. 5, 118, 34! ↑ tïjatu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 1406.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:40.068122",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "nuḫurtu(m) s. Ugar. 5, 118, 34! ↑ tïjatu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 112.0,
+                "width": 1406.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1344144_27697942.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50a3a13b8daa53904dcd",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 1900777,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0046-013-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6482698009,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "riʾibtu ↑ raʾibtu N. (rijaḫḫu) ↑ urijaḫḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 108.0,
+                "width": 1408.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:41.951558",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "riʾibtu ↑ raʾibtu N. (rijaḫḫu) ↑ urijaḫḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 108.0,
+                "width": 1408.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1900777_27134215.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50a4a13b8daa53904dce",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3173604,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0046-039-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 231522176,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "saḫāḫu(m) D zu ↑ šaḫāḫu D?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 105.0,
+                "width": 1050.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:43.905099",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "saḫāḫu(m) D zu ↑ šaḫāḫu D?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 105.0,
+                "width": 1050.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3173604_99236192.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50a6a13b8daa53904dcf",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 6408416,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0047-004-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9077217110,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "saḫāšu(m) G aB ↑ ḫuḫārum sà-ḫe-eš-tum BM 122691, 3."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 119.0,
+                "width": 1758.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:45.832406",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "saḫāšu(m) G aB ↑ ḫuḫārum sà-ḫe-eš-tum BM 122691, 3."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 119.0,
+                "width": 1758.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6408416_84716819.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50a8a13b8daa53904dd0",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 6111821,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0048-017-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9200932211,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "ʾabāʾu II ↑ ṣapû II N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 111.0,
+                "width": 833.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:47.813243",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "abāʾu II ↑ ṣapû II N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 835.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:10:46.393241",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "abāʾu II ↑ ṣapû II N."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 113.0,
+                "width": 835.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6111821_28724402.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50aaa13b8daa53904dd1",
+    "dataset_id": 4520675
+  },
+  {
+    "id": null,
+    "text_id": 3293171,
+    "publication_id": "Berechtigungen/ahw_berechtigung_auto-0051-039-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6712506928,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "uznu(m) A 9b jB LÚ šá u.II K. 10209, 12."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 122.0,
+                "width": 1481.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:09:49.635588",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "uznu(m) A 9b jB LÚ šá u.II K. 10209, 12."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 122.0,
+                "width": 1481.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-06T23:13:21.476745",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3293171_31271525.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "72ad2b9a"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772835201,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab50aca13b8daa53904dd2",
+    "dataset_id": 4520675
+  }
+]

@@ -177,7 +177,7 @@
       "Bash(wsl -d Ubuntu -- sudo apt-get:*)",
       "Bash(wsl:*)",
       "Bash(git checkout:*)",
-      "Bash(del \"c:\\\\Users\\\\wende\\\\Documents\\\\GitHub\\\\BEn-app\\\\electron-new\\\\setup-headless.bat\")",
+      "Bash(del \"c:\\\\Users\\\\wende\\\\Documents\\\\GitHub\\\\BEn-app\\\\electron\\\\setup-headless.bat\")",
       "Bash(powershell.exe -Command \"Get-NetTCPConnection -LocalPort 5001,4200 -ErrorAction SilentlyContinue | Select-Object LocalPort,State\")",
       "Bash(powershell.exe -Command \"Test-NetConnection -ComputerName localhost -Port 4200 | Select-Object TcpTestSucceeded\")",
       "Bash(powershell.exe -Command \"Test-NetConnection -ComputerName localhost -Port 4200 -ErrorAction SilentlyContinue | Select-Object TcpTestSucceeded\")",
@@ -196,7 +196,7 @@
       "Bash(Select-Object Id, ProcessName, Path)",
       "Bash(Format-Table -AutoSize)",
       "Bash(cmd //c \"taskkill /PID 203412 /F\")",
-      "Bash(cmd //c \"cd /d c:\\\\Users\\\\wende\\\\Documents\\\\GitHub\\\\BEn-app && .venv\\\\Scripts\\\\activate && cd server-new\\\\src && python main.py\")",
+      "Bash(cmd //c \"cd /d c:\\\\Users\\\\wende\\\\Documents\\\\GitHub\\\\BEn-app && .venv\\\\Scripts\\\\activate && cd server\\\\src && python main.py\")",
       "Bash(Select-Object Id, ProcessName, CommandLine)",
       "Bash(.venv/Scripts/pip:*)",
       "Bash(ketos train:*)",
@@ -211,7 +211,7 @@
       "Bash(PYTHONIOENCODING=utf-8 python3:*)",
       "Bash(/c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
       "Bash(PYTHONIOENCODING=utf-8 /c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
-      "Bash(# Test: write an annotation to page_0003 and check if file is modified stat \"\"c:/Users/wende/Documents/GitHub/BEn-app/server-new/src/data/yolo/datasets/ahw_dictionary/labels/val/page_0003.txt\"\")"
+      "Bash(# Test: write an annotation to page_0003 and check if file is modified stat \"\"c:/Users/wende/Documents/GitHub/BEn-app/server/src/data/yolo/datasets/ahw_dictionary/labels/val/page_0003.txt\"\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\wende\\Documents\\GitHub\\BEn-app-native\\server\\src\\entities"

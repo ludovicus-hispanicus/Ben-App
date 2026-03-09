@@ -1,0 +1,5913 @@
+[
+  {
+    "id": null,
+    "text_id": 5099128,
+    "publication_id": "J/ahw_j_auto-0001-004-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7637991390,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*ja* ⸗ *ai* I 1; -*ja* (PrSuff. 1. Sg.) s. GAG S. 258 a."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 126.0,
+                "width": 1668.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:33.457117",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*ja* ⸗ *ai* I 1; -*ja* (PrSuff. 1. Sg.) s. GAG S. 258 a."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 126.0,
+                "width": 1668.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5099128_90951217.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b2812f4c2a4875288a9",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4238895,
+    "publication_id": "J/ahw_j_auto-0001-006-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6240645863,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jabilu* (< kan. *jōbēl*) „Widder“, nA. LL: UDU",
+              "NITA<sup>meš</sup> = *ia-bi-le* AfO 18, 331, 306."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1722.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1722.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:35.579159",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jabilu* (< kan. *jōbēl*) „Widder“, nA. LL: UDU NITA<sup>meš</sup> = *ia-bi-le* AfO 18, 331, 306."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1724.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1724.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:53.802867",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jabilu* (< kan. *jōbēl*) „Widder“, nA. LL: UDU NITA<sup>meš</sup> = *ia-bi-le* AfO 18, 331, 306."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1724.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1724.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4238895_70574861.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b2a12f4c2a4875288aa",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8456073,
+    "publication_id": "J/ahw_j_auto-0001-008-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1219828178,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jābiš* aB neben ⸗ *ajjābiš*: *ia-bi-iš* UM 1/1, 2, 26."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 101.0,
+                "width": 1664.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:37.549582",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jābiš* aB neben ⸗ *ajjābiš*: *ia-bi-iš* UM 1/1, 2, 26."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 101.0,
+                "width": 1664.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8456073_29129735.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b2c12f4c2a4875288ab",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 1206028,
+    "publication_id": "J/ahw_j_auto-0001-010-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5515442203,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jab/puṭu* (wsem. Fw.) eine Pflanze, jB. PfL: <sup>ú</sup>*ia-",
+              "b/pu-ṭu* = <sup>ú</sup>AŠ [*ina*] *Aḫlami* CT 37, 30 III 22."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1751.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:39.497858",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jab/puṭu* (wsem. Fw.) eine Pflanze, jB. PfL: <sup>ú</sup>*ia-b/pu-ṭu* = <sup>ú</sup>AŠ [*ina*] *Aḫlami* CT 37, 30 III 22."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1753.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:01:58.734895",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jab/puṭu* (wsem. Fw.) eine Pflanze, jB. PfL: <sup>ú</sup>*ia-b/pu-ṭu* = <sup>ú</sup>AŠ [*ina*] *Aḫlami* CT 37, 30 III 22."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1753.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1206028_92482606.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b2e12f4c2a4875288ac",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 7928249,
+    "publication_id": "J/ahw_j_auto-0001-011-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6766925583,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jādinu* (u. H.): *ia(-a)-di-nu* liest MSL 8, 9, 33 mit",
+              "Anm. statt *ia(-a)-lum* (⸗ *ālu* II LL)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1755.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 84.0,
+                "width": 1755.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:41.323344",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jādinu* (u. H.): *ia(-a)-di-nu* liest MSL 8, 9, 33 mit Anm. statt *ia(-a)-lum* (⸗ *ālu* II LL)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:39.475907",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jādinu* (u. H.): *ia(-a)-di-nu* liest MSL 8, 9, 33 mit Anm. statt *ia(-a)-lum* (⸗ *ālu* II LL)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7928249_36554504.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3012f4c2a4875288ad",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6810470,
+    "publication_id": "J/ahw_j_auto-0001-012-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7525429728,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jaʾele*, *jaʾere* (od *jēle*, *jēre*?) ↟ *ajjalu* I, *ajjaru* I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 100.0,
+                "width": 1739.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:46.258921",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jaʾele*, *jaʾere* (od *jēle*, *jēre*?) ↟ *ajjalu* I, *ajjaru* I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 100.0,
+                "width": 1739.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6810470_55748934.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3512f4c2a4875288ae",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 9897279,
+    "publication_id": "J/ahw_j_auto-0001-013-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 208176912,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jagâtum* (wsem. F w. ↟ *egû* V), „Beschwerden“, aB",
+              "Māri. *ia-ga-a-tum* sind viel ARM 2, 118, 12 (s. 15)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1755.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 84.0,
+                "width": 1755.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:48.143508",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jagâtum* (wsem. F w. ↟ *egû* V), „Beschwerden“, aB Māri. *ia-ga-a-tum* sind viel ARM 2, 118, 12 (s. 15)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:27.447273",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jagâtum* (wsem. F w. ↟ *egû* V), „Beschwerden“, aB Māri. *ia-ga-a-tum* sind viel ARM 2, 118, 12 (s. 15)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1757.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9897279_85451355.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3712f4c2a4875288af",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 7743359,
+    "publication_id": "J/ahw_j_auto-0001-015-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 707957111,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jaḫi/ilu* (u. H.) in nA LL: *ṣubāt ia-ḫi-li* AfO 18,",
+              "331, 268 zw. Gewändern."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1745.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 86.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:50.111523",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jaḫi/ilu* (u. H.) in nA LL: *ṣubāt ia-ḫi-li* AfO 18, 331, 268 zw. Gewändern."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1747.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1747.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:18.385777",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jaḫi/ilu* (u. H.) in nA LL: *ṣubāt ia-ḫi-li* AfO 18, 331, 268 zw. Gewändern."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1747.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1747.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7743359_59919940.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3912f4c2a4875288b0",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 9570057,
+    "publication_id": "J/ahw_j_auto-0001-016-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6826735103,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jaḫudû* ?, in LL: *ia-ḫu-du-a* = *ia-ḫu-du[-u]* s.",
+              "CAD I 321a (Adj. für Körperfehler?)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:52.420014",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jaḫudû* ?, in LL: *ia-ḫu-du-a* = *ia-ḫu-du[-u]* s. CAD I 321a (Adj. für Körperfehler?)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 94.0,
+                "width": 1748.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 94.0,
+                "width": 1748.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:12.447776",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jaḫudû* ?, in LL: *ia-ḫu-du-a* = *ia-ḫu-du[-u]* s. CAD I 321a (Adj. für Körperfehler?)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 94.0,
+                "width": 1748.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 94.0,
+                "width": 1748.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9570057_68569203.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3b12f4c2a4875288b1",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6507743,
+    "publication_id": "J/ahw_j_auto-0001-018-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9057545702,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jakītu* (u. H.) ein Wurfspeer? Am. *10 qanê* (Rohr)",
+              "*ia-ka-a-tum* aus Eisen, Kupfer VAB 2, 22 III 49f."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1750.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 86.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:54.302726",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jakītu* (u. H.) ein Wurfspeer? Am. *10 qanê* (Rohr) *ia-ka-a-tum* aus Eisen, Kupfer VAB 2, 22 III 49f."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:02:06.508637",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jakītu* (u. H.) ein Wurfspeer? Am. *10 qanê* (Rohr) *ia-ka-a-tum* aus Eisen, Kupfer VAB 2, 22 III 49f."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6507743_33139312.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b3d12f4c2a4875288b2",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5880152,
+    "publication_id": "J/ahw_j_auto-0001-021-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 2408955079,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jamḫadûm** ,,aus Jamḫad“, aB. Gewänder *ia-am-ḫa-du-ú* ARM 7, 238, 11; 251, 6 (s. 5); 9, 102, 7; Gefäß *ia-am-ḫa-di-tum* 268, 1; 271, 6."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 265.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:54:58.988825",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jamḫadûm** ,,aus Jamḫad“, aB. Gewänder *ia-am-ḫa-du-ú* ARM 7, 238, 11; 251, 6 (s. 5); 9, 102, 7; Gefäß *ia-am-ḫa-di-tum* 268, 1; 271, 6."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 265.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5880152_91813289.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4212f4c2a4875288b3",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4738186,
+    "publication_id": "J/ahw_j_auto-0001-022-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1367013541,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jammin(a)** (s. § 47e) ,,wer, welcher?“, jB dicht. *ia-mìn* AfO 19, 56, 37. 39 (38. 40 *mannumma*); (ili) *ia-am-mì-in/mi-na* AK 1, 27, 40 (39 *mannu*)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 252.0,
+                "width": 1744.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:01.012151",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jammin(a)** (s. § 47e) ,,wer, welcher?“, jB dicht. *ia-mìn* AfO 19, 56, 37. 39 (38. 40 *mannumma*); (ili) *ia-am-mì-in/mi-na* AK 1, 27, 40 (39 *mannu*)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 252.0,
+                "width": 1744.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4738186_29897100.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4412f4c2a4875288b4",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 1079321,
+    "publication_id": "J/ahw_j_auto-0001-023-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6168571012,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jamnuqu* (u. H.) ein Gewand, nA. <sup>túg</sup>*ia-am-nu-qu* in LL AfO 18, 330, 241."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 194.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:02.982411",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jamnuqu* (u. H.) ein Gewand, nA. <sup>túg</sup>*ia-am-nu-qu* in LL AfO 18, 330, 241."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 194.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1079321_83207114.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4512f4c2a4875288b5",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 3615386,
+    "publication_id": "J/ahw_j_auto-0001-026-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3988644636,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jannussu* in nA KI.TA *ia-an-nu-si* ADD 880 I 6 ein Ggst.?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 164.0,
+                "width": 1749.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:05.005022",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jannussu* in nA KI.TA *ia-an-nu-si* ADD 880 I 6 ein Ggst.?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 164.0,
+                "width": 1749.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3615386_52885305.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4812f4c2a4875288b6",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5775925,
+    "publication_id": "J/ahw_j_auto-0002-005-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1019064442,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jānummiš* (q ajjānu, annummiš) ,,irgendwohin“? nA. *ana ia!* (Lambert) *-nu-meš* lā illûne ABL 503 Rs. 20."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 250.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:07.061457",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jānummiš* (q ajjānu, annummiš) ,,irgendwohin“? nA. *ana ia!* (Lambert) *-nu-meš* lā illûne ABL 503 Rs. 20."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 250.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5775925_69511092.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4a12f4c2a4875288b7",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6292085,
+    "publication_id": "J/ahw_j_auto-0002-006-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9303181286,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**janūqu** (u. H. ⸢unqu⸣ II?) eine Fleischsorte, nA. *ša ia-nu-qe* ADD 909, 11; im Kultmahl *[i]a!-nu-qu* MVAeG 41/3, 64 III 30."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 265.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:12.201430",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**janūqu** (u. H. ⸢unqu⸣ II?) eine Fleischsorte, nA. *ša ia-nu-qe* ADD 909, 11; im Kultmahl *[i]a!-nu-qu* MVAeG 41/3, 64 III 30."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 265.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6292085_72075304.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b4f12f4c2a4875288b8",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5815748,
+    "publication_id": "J/ahw_j_auto-0002-007-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4774645503,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*janzu* (s. kass. janzi König?) eine Pflanze, jB. LL: *libiš-ḫi-is*<sup>sar</sup> = *ia-an-zu* = *tak-[ ]* LTBA 1, 86 XI 3 u D. (Hg.)"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 247.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:14.201919",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*janzu* (s. kass. janzi König?) eine Pflanze, jB. LL: *libiš-ḫi-is*<sup>sar</sup> = *ia-an-zu* = *tak-[ ]* LTBA 1, 86 XI 3 u D. (Hg.)"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 247.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5815748_91028762.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5112f4c2a4875288b9",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8394068,
+    "publication_id": "J/ahw_j_auto-0002-008-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 2230386748,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*japu* (kan. *jāpê*) ,,schön“, Am. *ia-pu* = *ḫamūdu* (erwünscht) VAB 2, 138, 126."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 176.0,
+                "width": 1740.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:16.203443",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*japu* (kan. *jāpê*) „schön“, Am. *ia-pu* = *ḫamūdu* (erwünscht) VAB 2, 138, 126."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 178.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:13:50.455691",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*japu* (kan. *jāpê*) „schön“, Am. *ia-pu* = *ḫamūdu* (erwünscht) VAB 2, 138, 126."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 178.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8394068_72624788.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5312f4c2a4875288ba",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 2866991,
+    "publication_id": "J/ahw_j_auto-0002-009-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8444555323,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jaquqānu* (u. H.) eine Gartenpflanze, nB. *ia-a-qu-qa-nu*<sup>sar</sup> CT 14, 50, 47."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 181.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:18.134190",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jaquqānu* (u. H.) eine Gartenpflanze, nB. *ia-a-qu-qa-nu*<sup>sar</sup> CT 14, 50, 47."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 181.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2866991_52807926.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5512f4c2a4875288bb",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 2590442,
+    "publication_id": "J/ahw_j_auto-0002-011-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 195142021,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*Jaratu* (= ⸢ḫiari⸣?) MN in Nuzi: *arḫi Ia-ra-tù/ti* JEN 541, 8; SMN 710, 2. 27 (unv.)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 177.0,
+                "width": 1748.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:20.150013",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*Jaratu* (= ↑ *ḫiari* ?) MN in Nuzi: *arḫi Ia-ra-tù/ti* JEN 541, 8; SMN 710, 2. 27 (unv.)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 179.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:13:34.913876",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*Jaratu* (= ↑ *ḫiari* ?) MN in Nuzi: *arḫi Ia-ra-tù/ti* JEN 541, 8; SMN 710, 2. 27 (unv.)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 179.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2590442_16504721.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5712f4c2a4875288bc",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 3451776,
+    "publication_id": "J/ahw_j_auto-0002-013-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5586488295,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jārītu* (d *jāru*) in nA *ia-ri-a-te* ,,Rosettenkleider (?)“",
+              "s. Iraq 21, 110."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1744.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 90.0,
+                "width": 1744.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:24.497047",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jārītu* (d *jāru*) in nA *ia-ri-a-te* „Rosettenkleider (?)“ s. Iraq 21, 110."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:13:13.432879",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jārītu* (d *jāru*) in nA *ia-ri-a-te* „Rosettenkleider (?)“ s. Iraq 21, 110."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3451776_26886673.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5b12f4c2a4875288bd",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5421843,
+    "publication_id": "J/ahw_j_auto-0002-014-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7094552292,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jārītu* (aram. Fw.) ,,Erbe“, spB. PN *ia-a-ri-tu* ša",
+              "PN₂ TCL 12, 122, 15; Nbn. 668, 6 (-{*tu*})."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1750.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 86.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:26.448660",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jārītu* (aram. Fw.) ,,Erbe“, spB. PN *ia-a-ri-tu* ša PN₂ TCL 12, 122, 15; Nbn. 668, 6 (-{*tu*})."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:13:00.771625",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jārītu* (aram. Fw.) ,,Erbe“, spB. PN *ia-a-ri-tu* ša PN₂ TCL 12, 122, 15; Nbn. 668, 6 (-{*tu*})."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5421843_78038114.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5d12f4c2a4875288be",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4078587,
+    "publication_id": "J/ahw_j_auto-0002-015-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5686550265,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jāritūtu* (d *jārītu*) in spB *ia-a-ri-tu-tu* ša PN ul",
+              "e/nippu-š ich/wir trete(n) das Erbe PNs nicht an",
+              "Nbn. 668, 7; TCL 12, 122, 18; *ia!*-*ri-tu-ta-šú* *šá!*?",
+              "PN *īpuš*! UM 13, 82, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 78.0,
+                "width": 1740.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 78.0,
+                "height": 78.0,
+                "width": 1740.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 156.0,
+                "height": 78.0,
+                "width": 1740.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 234.0,
+                "height": 78.0,
+                "width": 1740.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:28.494226",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jāritūtu* (d *jārītu*) in spB *ia-a-ri-tu-tu* ša PN ul *e/nippuš* ich/wir trete(n) das Erbe PNs nicht an",
+              "Nbn. 668, 7; TCL 12, 122, 18; *ia!*-*ri-tu-ta-šú* *šá!*?",
+              "PN *īpuš*! UM 13, 82, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 78.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 156.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 234.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:42.772548",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jāritūtu* (d *jārītu*) in spB *ia-a-ri-tu-tu* ša PN ul *e/nippuš* ich/wir trete(n) das Erbe PNs nicht an Nbn. 668, 7; TCL 12, 122, 18; *ia!*-*ri-tu-ta-šú* *šá!*? PN *īpuš*! UM 13, 82, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 78.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 156.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 234.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:51.800188",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jāritūtu* (d *jārītu*) in spB *ia-a-ri-tu-tu* ša PN ul *e/nippuš* ich/wir trete(n) das Erbe PNs nicht an Nbn. 668, 7; TCL 12, 122, 18; *ia!*-*ri-tu-ta-šú* *šá!*? PN *īpuš*! UM 13, 82, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 78.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 156.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 234.0,
+                "height": 80.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4078587_71604617.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b5f12f4c2a4875288bf",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6347042,
+    "publication_id": "J/ahw_j_auto-0002-016-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1631752589,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jarqānu* (aram. Fw. d *warāqum*) eine Gartenpflanze,",
+              "nB. *ia-ar-qa-nu*<sup>sar</sup> CT 14, 50, 48."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1743.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 88.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:30.441601",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jarqānu* (aram. Fw. d *warāqum*) eine Gartenpflanze, nB. *ia-ar-qa-nu*<sup>sar</sup> CT 14, 50, 48."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:23.540895",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jarqānu* (aram. Fw. d *warāqum*) eine Gartenpflanze, nB. *ia-ar-qa-nu*<sup>sar</sup> CT 14, 50, 48."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6347042_99188702.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6112f4c2a4875288c0",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 2900965,
+    "publication_id": "J/ahw_j_auto-0002-018-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9871437581,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jārtu* d *ajjartu* (spB *ia-áš-tu*₄ VAT 62, 17); *jaru*",
+              "d *jarru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1741.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 92.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:32.448127",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jārtu* d *ajjartu* (spB *ia-áš-tu*₄ VAT 62, 17); *jaru* d *jarru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:07.852215",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jārtu* ↑ *ajjartu* (spB *ia-áš-tu*₄ VAT 62, 17); *jaru* ↑ *jarru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:19.083150",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jārtu* ↑ *ajjartu* (spB *ia-áš-tu*₄ VAT 62, 17); *jaru* ↑ *jarru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 92.0,
+                "height": 94.0,
+                "width": 1743.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2900965_99269970.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6312f4c2a4875288c1",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 3283833,
+    "publication_id": "J/ahw_j_auto-0002-019-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1186641334,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāru ⸗ ajjaru I (s. mA *ia!*-a-ra PKT 42, 27; Zszg.en",
+              "*ia-ar būrāni* usw 23, 20; 42, 25. 32. 36; ⸗ zibnu)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1744.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 84.0,
+                "width": 1744.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:37.026583",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāru ⸗ ajjaru I (s. mA *ia!*-a-ra PKT 42, 27; Zszg.en *ia-ar būrāni* usw 23, 20; 42, 25. 32. 36; ⸗ zibnu)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:11:55.822037",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāru ⸗ ajjaru I (s. mA *ia!*-a-ra PKT 42, 27; Zszg.en *ia-ar būrāni* usw 23, 20; 42, 25. 32. 36; ⸗ *zibnu*)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:12:01.466870",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jāru ⸗ ajjaru I (s. mA *ia!*-a-ra PKT 42, 27; Zszg.en *ia-ar būrāni* usw 23, 20; 42, 25. 32. 36; ⸗ *zibnu*)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3283833_86459268.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6812f4c2a4875288c2",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6171282,
+    "publication_id": "J/ahw_j_auto-0002-021-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8882562455,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jarūru (sum. Fw.) „Klageschrei“, jB. LL: *i*₅*-ru-ru*",
+              "= *ia-ru-ru* RA 16, 167 III 20 u D. ⸗ jarurūtu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1750.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 88.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:38.929847",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jarūru (sum. Fw.) „Klageschrei“, jB. LL: *i*₅*-ru-ru* = *ia-ru-ru* RA 16, 167 III 20 u D. ⸗ *jarurūtu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:11:39.832725",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jarūru (sum. Fw.) „Klageschrei“, jB. LL: *i*₅*-ru-ru* = *ia-ru-ru* RA 16, 167 III 20 u D. ⸗ *jarurūtu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1752.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1752.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6171282_33503964.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6912f4c2a4875288c3",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4120711,
+    "publication_id": "J/ahw_j_auto-0002-026-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9012778064,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāṣiru ug. „Töpfer“: ug. Pl. *ia-ṣí-ru-ma* PRU 3,",
+              "195 B I 12. ⸗ eṣēru."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1737.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 88.0,
+                "width": 1737.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:40.911094",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāṣiru ug. „Töpfer“: ug. Pl. *ia-ṣí-ru-ma* PRU 3, 195 B I 12. ⸗ *eṣēru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1739.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1739.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:11:24.054050",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jāṣiru ug. „Töpfer“: ug. Pl. *ia-ṣí-ru-ma* PRU 3, 195 B I 12. ⸗ *eṣēru*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1739.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 88.0,
+                "height": 90.0,
+                "width": 1739.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4120711_95089079.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6b12f4c2a4875288c4",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5685010,
+    "publication_id": "J/ahw_j_auto-0002-029-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1884192789,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jâšinu Am. (Syr.) statt ⸗ niāši „uns“ (Dat.): *ana*",
+              "*ia-ši-nu* s. VAB 2, S. 1419. ⸗ jâtinu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 98.0,
+                "width": 1686.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 98.0,
+                "height": 98.0,
+                "width": 1686.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:42.901091",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jâšinu Am. (Syr.) statt ⸗ niāši „uns“ (Dat.): *ana ia-ši-nu* s. VAB 2, S. 1419. ⸗ jâtinu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 98.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:11:05.731431",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jâšinu Am. (Syr.) statt ⸗ niāši „uns“ (Dat.): *ana ia-ši-nu* s. VAB 2, S. 1419. ⸗ *jâtinu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 98.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:11:11.871591",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jâšinu Am. (Syr.) statt ⸗ niāši „uns“ (Dat.): *ana ia-ši-nu* s. VAB 2, S. 1419. ⸗ *jâtinu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 98.0,
+                "height": 100.0,
+                "width": 1688.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5685010_58243155.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6d12f4c2a4875288c5",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4233687,
+    "publication_id": "J/ahw_j_auto-0003-007-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5164845956,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jâtinu Am. (Syr.) statt ⸗ niāti „unser“: *kīma ia-ti-*",
+              "*nu* VAB 2, 74, 26. ⸗ jâšinu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1738.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 86.0,
+                "width": 1738.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:44.791599",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jâtinu Am. (Syr.) statt ⸗ niāti „unser“: *kīma ia-ti-nu* VAB 2, 74, 26. ⸗ jâšinu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1740.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1740.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:52.223166",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jâtinu Am. (Syr.) statt ⸗ niāti „unser“: *kīma ia-ti-nu* VAB 2, 74, 26. ⸗ jâšinu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1740.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1740.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4233687_67636672.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b6f12f4c2a4875288c6",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8522678,
+    "publication_id": "J/ahw_j_auto-0003-011-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3082832483,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jāʾu** II, *eʾu/a*, *aʾeu* (u. H.) ein Türriemen, jB. LL:",
+              "(KUŠ) (e)e₆ = *ia-ú* ša dalti Zimol. 22, 64; = *e-ʾu-u*",
+              "s. CAD E 1a; = *e-a* = *ku-ru-us-su* ša dalti MSL 7,",
+              "153, 189; [KUŠ]e₆-e-a = *a-e-[u]* 130, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 76.0,
+                "width": 1754.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 76.0,
+                "height": 76.0,
+                "width": 1754.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 152.0,
+                "height": 76.0,
+                "width": 1754.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 228.0,
+                "height": 76.0,
+                "width": 1754.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:49.534221",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jāʾu** II, *eʾu/a*, *aʾeu* (u. H.) ein Türriemen, jB. LL: (KUŠ) (e)e₆ = *ia-ú* ša dalti Zimol. 22, 64; = *e-ʾu-u* s. CAD E 1a; = *e-a* = *ku-ru-us-su* ša dalti MSL 7, 153, 189; [KUŠ]e₆-e-a = *a-e-[u]* 130, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 76.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 152.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 228.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:23.139641",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jāʾu** II, *eʾu/a*, *aʾeu* (u. H.) ein Türriemen, jB. LL: (KUŠ) (e)e₆ = *ia-ú* ša dalti Zimol. 22, 64; = *e-ʾu-u* s. CAD E 1a; = *e-a* = *ku-ru-us-su* ša dalti MSL 7, 153, 189; <sup>[kuš]</sup>e₆-e-a = *a-e-[u]* 130, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 76.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 152.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 228.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:43.582100",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jāʾu** II, *eʾu/a*, *aʾeu* (u. H.) ein Türriemen, jB. LL: (KUŠ) (e)e₆ = *ia-ú* ša dalti Zimol. 22, 64; = *e-ʾu-u* s. CAD E 1a; = *e-a* = *ku-ru-us-su* ša dalti MSL 7, 153, 189; <sup>[kuš]</sup>e₆-e-a = *a-e-[u]* 130, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 76.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 152.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 228.0,
+                "height": 78.0,
+                "width": 1756.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8522678_47621541.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7412f4c2a4875288c7",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8734576,
+    "publication_id": "J/ahw_j_auto-0003-012-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8308302042,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jaʾʾuku(jûkû?)* ?, in nA *dibbē* (Worte) IA-ú-ku-u-te",
+              "ABL 1002 Rs. 11."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 90.0,
+                "width": 1745.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:51.458111",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jaʾʾuku(jûkû?)* ?, in nA *dibbē* (Worte) IA-ú-ku-u-te ABL 1002 Rs. 11."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1747.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1747.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:12.954859",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jaʾʾuku(jûkû?)* ?, in nA *dibbē* (Worte) IA-ú-ku-u-te ABL 1002 Rs. 11."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1747.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1747.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8734576_52327946.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7612f4c2a4875288c8",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4361409,
+    "publication_id": "J/ahw_j_auto-0003-013-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1732043687,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jaʾumma** d *ajjumma*; *jaʾuru* d *ajjaru* I; *jāʾūtu*,",
+              "*jawû* d *jāʾu* I, *jē* d *ē* II 2; *jērtu* d *ajjartu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1770.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 86.0,
+                "width": 1770.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:53.286078",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jaʾumma** d *ajjumma*; *jaʾuru* d *ajjaru* I; *jāʾūtu*, *jawû* d *jāʾu* I, *jē* d *ē* II 2; *jērtu* d *ajjartu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1772.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1772.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:09.141487",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jaʾumma** d *ajjumma*; *jaʾuru* d *ajjaru* I; *jāʾūtu*, *jawû* d *jāʾu* I, *jē* d *ē* II 2; *jērtu* d *ajjartu*."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 88.0,
+                "width": 1772.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 86.0,
+                "height": 88.0,
+                "width": 1772.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4361409_24253566.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7812f4c2a4875288c9",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 3579158,
+    "publication_id": "J/ahw_j_auto-0003-014-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 800604463,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "*jēru* d *ajjaru* I. II (ITU GUD.SI.SÁ = *ie-e-ru* s.",
+              "BabMen. 112<sup>2</sup>)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1763.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 84.0,
+                "width": 1763.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:55.101644",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "*jēru* d *ajjaru* I. II (ITU GUD.SI.SÁ = *ie-e-ru* s. BabMen. 112<sup>2</sup>)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1765.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1765.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:10:04.345540",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "*jēru* d *ajjaru* I. II (ITU GUD.SI.SÁ = *ie-e-ru* s. BabMen. 112<sup>2</sup>)."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1765.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1765.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3579158_97076438.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7a12f4c2a4875288ca",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 5685097,
+    "publication_id": "J/ahw_j_auto-0003-015-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7098085835,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jū** ein Schmerzensruf, jB. *iu-ú-iu-ú* hält er nicht",
+              "(zurück) TDP 150, 42."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1756.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 84.0,
+                "width": 1756.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:55:56.987151",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jū** ein Schmerzensruf, jB. *iu-ú-iu-ú* hält er nicht (zurück) TDP 150, 42."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1758.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1758.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:09:55.164413",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jū** ein Schmerzensruf, jB. *iu-ú-iu-ú* hält er nicht (zurück) TDP 150, 42."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 86.0,
+                "width": 1758.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 84.0,
+                "height": 86.0,
+                "width": 1758.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5685097_55867403.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7c12f4c2a4875288cb",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 1713410,
+    "publication_id": "J/ahw_j_auto-0003-017-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1492536264,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**[jušru]** ↸ *wušru*; **juttu(n)** ↸ *jā’u* I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 120.0,
+                "width": 1166.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:00.183078",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**[jušru]** ↸ *wušru*; **juttu(n)** ↸ *jāʾu* I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 122.0,
+                "width": 1168.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:09:35.902067",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**[jušru]** ↸ *wušru*; **juttu(n)** ↸ *jāʾu* I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 122.0,
+                "width": 1168.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1713410_79838659.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b7f12f4c2a4875288cc",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4769059,
+    "publication_id": "J/ahw_j_auto-0001-020-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4782214889,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jama/uttu** (s. § 49b) „ein jeder“, m/nA. mA *ia-ma-tu* MVAeG 41/3, 14, 12. 14; *ia-a-ma-at-tu* KAV 205, 29. nA *ia(-a)-mut/mu(-ut)-t<sub>u</sub>/tum* ABL 1008 Rs. 5; 123, 16; 173, 11; 175 Rs. 5; 197, 28; 208 Rs. 2. 12; 314 Rs. 7; 486 Rs. 22; 564, 16 Wz. LÚ (so Deller)?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 501.0,
+                "width": 1754.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:06.946361",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jama/uttu** (s. § 49b) „ein jeder“, m/nA. mA *ia-ma-tu* MVAeG 41/3, 14, 12. 14; *ia-a-ma-at-tu* KAV 205, 29. nA *ia(-a)-mut/mu(-ut)-t<sub>u</sub>/tum* ABL 1008 Rs. 5; 123, 16; 173, 11; 175 Rs. 5; 197, 28; 208 Rs. 2. 12; 314 Rs. 7; 486 Rs. 22; 564, 16 Wz. LÚ (so Deller)?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 501.0,
+                "width": 1754.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4769059_66349074.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b8512f4c2a4875288cd",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 9061859,
+    "publication_id": "J/ahw_j_auto-0001-025-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6138764700,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jānibu, nibu, ainibu**, 1 × *jābinu* (u. H.) ein Stein, jB. LL: <sup>na₄</sup>amar-ḫi-li, <sup>na₄</sup>ia-ni-bu = *ia-ni-bu* K. 4350d, 10f. (Alam); <sup>d</sup>ḫilibû 3 (dazu *ia₄-ni-bu* SplAW 27a 5); <sup>na₄</sup>šuba-unu<sup>ki</sup> = *a-a-ni-bu* RA 13, 187, 2 (Ant.); = <sup>na₄</sup>(iá-)ni-bu CT 14, 15, 11 ‖ 17a I 10 (Z. 11 *j. burrumu*); s. 17c 6. Mag. <sup>na₄</sup>i-a-ni-ba/bu AMT 3, 2, 16; 40, 5, 20; 102, 23; KAR 77, 28; 192 IV 30; 194 I 5. <sup>na₄</sup>ni-bu/ba 71 Rs. 24. 19; RA 18, 164, 4; LKU 32 Rs. 9; AMT 29, 2, 11; 47, 3, 30; KAV 185 V 7; TU 12 Rs. V 4; *ni-bu* KAR 213 zB II 8. III 3. <sup>na₄</sup>ia-a-bi-ni VAT 62, 18 Fehler?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 961.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:08.942152",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jānibu, nibu, ainibu**, 1 × *jābinu* (u. H.) ein Stein, jB. LL: <sup>na₄</sup>amar-ḫi-li, <sup>na₄</sup>ia-ni-bu = *ia-ni-bu* K. 4350d, 10f. (Alam); <sup>d</sup>ḫilibû 3 (dazu *ia₄-ni-bu* SplAW 27a 5); <sup>na₄</sup>šuba-unu<sup>ki</sup> = *a-a-ni-bu* RA 13, 187, 2 (Ant.); = <sup>na₄</sup>(iá-)ni-bu CT 14, 15, 11 ‖ 17a I 10 (Z. 11 *j. burrumu*); s. 17c 6. Mag. <sup>na₄</sup>i-a-ni-ba/bu AMT 3, 2, 16; 40, 5, 20; 102, 23; KAR 77, 28; 192 IV 30; 194 I 5. <sup>na₄</sup>ni-bu/ba 71 Rs. 24. 19; RA 18, 164, 4; LKU 32 Rs. 9; AMT 29, 2, 11; 47, 3, 30; KAV 185 V 7; TU 12 Rs. V 4; *ni-bu* KAR 213 zB II 8. III 3. <sup>na₄</sup>ia-a-bi-ni VAT 62, 18 Fehler?"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 961.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9061859_10006415.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b8812f4c2a4875288ce",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8581715,
+    "publication_id": "J/ahw_j_auto-0002-010-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4444603077,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jara/uḫḫu, ajjarahḫu** II (<sup>d</sup> I), *urijaḫḫu* (u. H.) jB. 1) eine feine Gerstensorte. LL: (še-sag)ŠE.LUGAL = *ia(-a)-ra-aḫ-ḫu* JRAS 1905, 830, 12 (Dir); LTBA 1, 56, 6 u D. (Hh); *še-sag* = *i.* MSL 1, 73, 15; *ia-ru-ḫu* 36, 46. Wz. ŠE.LUGAL AAA 22, 72, 24. 2) ein bräunlicher Edelstein. PfL: <sup>na₄</sup>ia-ra-ḫu, V. <sup>na₄</sup>ú/u₅-ri-ia-ḫu ~ <sup>na₄</sup>šubû sāmu CT 14, 15, 33 ‖ 17a I 14; KADP 12 II 40; 4, 58; <sup>ú</sup>a-a-ra(-a)-ḫu = <sup>ú</sup>ZA.GÌN.DUR₅.RA 12 VI 7 ‖ 22 III 6."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 751.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:10.975700",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jara/uḫḫu, ajjarahḫu** II (<sup>d</sup> I), *urijaḫḫu* (u. H.) jB. 1) eine feine Gerstensorte. LL: (še-sag)ŠE.LUGAL = *ia(-a)-ra-aḫ-ḫu* JRAS 1905, 830, 12 (Dir); LTBA 1, 56, 6 u D. (Hh); *še-sag* = *i.* MSL 1, 73, 15; *ia-ru-ḫu* 36, 46. Wz. ŠE.LUGAL AAA 22, 72, 24. 2) ein bräunlicher Edelstein. PfL: <sup>na₄</sup>ia-ra-ḫu, V. <sup>na₄</sup>ú/u₅-ri-ia-ḫu ~ <sup>na₄</sup>šubû sāmu CT 14, 15, 33 ‖ 17a I 14; KADP 12 II 40; 4, 58; <sup>ú</sup>a-a-ra(-a)-ḫu = <sup>ú</sup>ZA.GÌN.DUR₅.RA 12 VI 7 ‖ 22 III 6."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 751.0,
+                "width": 1746.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8581715_59847202.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b8912f4c2a4875288cf",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 6660347,
+    "publication_id": "J/ahw_j_auto-0002-012-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4333171127,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jarḫu** „Teich“, m/nA, jB. mA (Zisterne) *ša ia-a-ar-ḫe* AOB 38, 11. nA <sup>d</sup>*naḫallu ša anà libbi ia-ar-ḫu ittallakkūni* AR 210, 26 (s. 32); im Garten *j.* 445, 8; *mišli ia-ar-ḫi* VAT 10430, 3; s. BBR 62 Rs. 8. jB *kīma mê ia-ar-ḫi* sei ruhig! ABRT 2, 8 Rs. 7; *šam ia-ar-ḫu* in PfL <sup>d</sup>*aklabû u essû. <sup>d</sup>jarru.*"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 508.0,
+                "width": 1748.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:13.124485",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jarḫu** „Teich“, m/nA, jB. mA (Zisterne) *ša ia-a-ar-ḫe* AOB 38, 11. nA ↑*naḫallu ša anà libbi ia-ar-ḫu ittallakkūni* AR 210, 26 (s. 32); im Garten *j.* 445, 8; *mišli ia-ar-ḫi* VAT 10430, 3; s. BBR 62 Rs. 8. jB *kīma mê ia-ar-ḫi* sei ruhig! ABRT 2, 8 Rs. 7; *šam ia-ar-ḫu* in PfL ↑*aklabû u essû. ↑jarru.*"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 510.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:09:03.714417",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jarḫu** „Teich“, m/nA, jB. mA (Zisterne) *ša ia-a-ar-ḫe* AOB 38, 11. nA ↑*naḫallu ša anà libbi ia-ar-ḫu ittallakkūni* AR 210, 26 (s. 32); im Garten *j.* 445, 8; *mišli ia-ar-ḫi* VAT 10430, 3; s. BBR 62 Rs. 8. jB *kīma mê ia-ar-ḫi* sei ruhig! ABRT 2, 8 Rs. 7; *šam ia-ar-ḫu* in PfL ↑*aklabû u essû. ↑jarru.*"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 510.0,
+                "width": 1750.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6660347_25175457.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b8c12f4c2a4875288d0",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4035814,
+    "publication_id": "J/ahw_j_auto-0002-017-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 116807817,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jarru(m)** (u. H. <sup>d</sup>*jarḫu*) „Teich“, bab. aB *ia-ra-am* (als Rindertränke) TCL 17, 40, 27. Nuzi *ina šapat/lēt* (Rand) *ia-ar-ru* JEN 483, 4; JENu 173, 5; 555, 5; s. *ia-ru* JEN 400, 9. spB *ia-ar-ri marti* Salzlagune VAB 4, 134, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 418.0,
+                "width": 1749.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:15.206742",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jarru(m)** (u. H. <sup>d</sup>*jarḫu*) „Teich“, bab. aB *ia-ra-am* (als Rindertränke) TCL 17, 40, 27. Nuzi *ina šapat/lēt* (Rand) *ia-ar-ru* JEN 483, 4; JENu 173, 5; 555, 5; s. *ia-ru* JEN 400, 9. spB *ia-ar-ri marti* Salzlagune VAB 4, 134, 46."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 418.0,
+                "width": 1749.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4035814_86068458.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b8e12f4c2a4875288d1",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 2291178,
+    "publication_id": "J/ahw_j_auto-0002-022-023-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5744173816,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jarurūtu**, *a(ja)rurūtu* (F. zu <sub>d</sub> *jarūru*) „Wehklage“,",
+              "jB, nA. LL: DUB-i₅-rú-rú = *a-ru-ra-tum* ZA 9,",
+              "164, 23. jB *ina ia-ru-r[u-ti!]* <sub>d</sub> *habāṣu* I Dt. *Ištar*",
+              "*šá ia-a-ru-ra-te* CT 24, 41, 84; *nadû/â* (sie stoßen",
+              "aus) *ia-ru-ra-ti* Era IV 54; *ittadi a-ru-ru-ta* Gilg.",
+              "VI 158. nA *(a-)ia-ru-ru-t<sub>u</sub> usaḫḫurū* (respondieren",
+              "sie) K. 3438a + . . , 9 || 9923, 16; *ia-ru-ra-te* [ ]",
+              "CT 15, 44, 29."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 180.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 270.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 360.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 450.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 540.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 630.0,
+                "height": 90.0,
+                "width": 1751.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:22.140943",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jarurūtu**, *a(ja)rurūtu* (F. zu <sub>d</sub> *jarūru*) „Wehklage“, jB, nA. LL: DUB-i₅-rú-rú = *a-ru-ra-tum* ZA 9, 164, 23. jB *ina ia-ru-r[u-ti!]* <sub>d</sub> *habāṣu* I Dt. *Ištar šá ia-a-ru-ra-te* CT 24, 41, 84; *nadû/â* (sie stoßen aus) *ia-ru-ra-ti* Era IV 54; *ittadi a-ru-ru-ta* Gilg. VI 158. nA *(a-)ia-ru-ru-t<sub>u</sub> usaḫḫurū* (respondieren sie) K. 3438a + . . , 9 || 9923, 16; *ia-ru-ra-te* [ ] CT 15, 44, 29."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 180.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 270.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 360.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 450.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 540.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 630.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:08:22.019724",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jarurūtu**, *a(ja)rurūtu* (F. zu <sub>d</sub> *jarūru*) „Wehklage“, jB, nA. LL: DUB-i₅-rú-rú = *a-ru-ra-tum* ZA 9, 164, 23. jB *ina ia-ru-r[u-ti!]* <sub>d</sub> *habāṣu* I Dt. *Ištar šá ia-a-ru-ra-te* CT 24, 41, 84; *nadû/â* (sie stoßen aus) *ia-ru-ra-ti* Era IV 54; *ittadi a-ru-ru-ta* Gilg. VI 158. nA *(a-)ia-ru-ru-t<sub>u</sub> usaḫḫurū* (respondieren sie) K. 3438a + . . , 9 || 9923, 16; *ia-ru-ra-te* [ ] CT 15, 44, 29."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 90.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 180.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 270.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 360.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 450.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 540.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 630.0,
+                "height": 92.0,
+                "width": 1753.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2291178_78226676.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b9512f4c2a4875288d2",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 9278663,
+    "publication_id": "J/ahw_j_auto-0002-024-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8670582245,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jāruttu** (<sub>d</sub> *ajjaru* I?) ein Strauch u das Parfüm da-",
+              "von, m/spB, mA. LL: *ia-ru-ut-tu* MSL 5, 141, 21",
+              "<sub>d</sub> *tarruqu*; ? ~ <sub>šim</sub>*ia-ru-[tu]* KADP 22 II 38. mA",
+              "*ina mê ša ia-a-ru-[ut-te]* PKT 42, 29; 1 qa *ia-ru-ut-",
+              "ta* 28, 4; s. 45, 22/9. mB Schale *ša ia-ru-ut-ti* VAB",
+              "2, 22 III 30; *ia-ru-ut-tum* UM 2/2, 107, 36. spB",
+              "<sub>šim</sub>*ia-a-ru-ut-tum* UCP 9, 93, 24."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 82.0,
+                "width": 1725.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:23.961606",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jāruttu** (<sub>d</sub> *ajjaru* I?) ein Strauch u das Parfüm davon, m/spB, mA. LL: *ia-ru-ut-tu* MSL 5, 141, 21 <sub>d</sub> *tarruqu*; ? ~ <sub>šim</sub>*ia-ru-[tu]* KADP 22 II 38. mA *ina mê ša ia-a-ru-[ut-te]* PKT 42, 29; 1 qa *ia-ru-ut-ta* 28, 4; s. 45, 22/9. mB Schale *ša ia-ru-ut-ti* VAB 2, 22 III 30; *ia-ru-ut-tum* UM 2/2, 107, 36. spB <sub>šim</sub>*ia-a-ru-ut-tum* UCP 9, 93, 24."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:07:33.809256",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jāruttu** (<sub>d</sub> *ajjaru* I?) ein Strauch u das Parfüm davon, m/spB, mA. LL: *ia-ru-ut-tu* MSL 5, 141, 21 <sub>d</sub> *tarruqu*; ? ~ <sub>šim</sub>*ia-ru-[tu]* KADP 22 II 38. mA *ina mê ša ia-a-ru-[ut-te]* PKT 42, 29; 1 qa *ia-ru-ut-ta* 28, 4; s. 45, 22/9. mB Schale *ša ia-ru-ut-ti* VAB 2, 22 III 30; *ia-ru-ut-tum* UM 2/2, 107, 36. spB <sub>šim</sub>*ia-a-ru-ut-tum* UCP 9, 93, 24."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 84.0,
+                "width": 1727.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9278663_17207855.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b9712f4c2a4875288d3",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 8232937,
+    "publication_id": "J/ahw_j_auto-0003-004-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4175603541,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**(j)ašpû** (u. H. mhe., aram. *jašpé*, ἴασπις) „Jaspis“",
+              "(DACG 170f.), m/spB, nA. mB <sub>na4</sub>*ia-aš-pu* VAB",
+              "2, 22 IV 6; heth. KUB 15, 5 I 4. II 21. jB <sub>na4</sub>*aš-",
+              "pu-ú* TuL 33, 33 (Himmel aus *a.*); AfO 19, 110a",
+              "22; ACh. 2. Spl. 19, 8 (an Mondsichel); Beschr.",
+              "STT 1, 108, [76f.] u D. Berg <sub>na4</sub>*aš-pe-e* Sg. 8, 145;",
+              "s. Wi. 128, 159; an Bauten IAsb. 76c 12; spB",
+              "Siegel aus *a.* VAB 4, 286, 32; in nA Inv. ADD 993",
+              "IV 9; V R 30, 60h; mag. zB TU 12 Rs. Ib 3;",
+              "Sem. 3, 11, 14; AMT 7, 1, 6; TuL 83, 13; KAR",
+              "186, 40; 252 IV 5; *aš-pu-u* 213 p."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 574.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 656.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 738.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 820.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:25.959943",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**(j)ašpû** (u. H. mhe., aram. *jašpé*, ἴασπις) „Jaspis“",
+              "(DACG 170f.), m/spB, nA. mB <sub>na4</sub>*ia-aš-pu* VAB",
+              "2, 22 IV 6; heth. KUB 15, 5 I 4. II 21. jB <sub>na4</sub>*aš-",
+              "pu-ú* TuL 33, 33 (Himmel aus *a.*); AfO 19, 110a",
+              "22; ACh. 2. Spl. 19, 8 (an Mondsichel); Beschr.",
+              "STT 1, 108, [76f.] u D. Berg <sub>na4</sub>*aš-pe-e* Sg. 8, 145;",
+              "s. Wi. 128, 159; an Bauten IAsb. 76c 12; spB",
+              "Siegel aus *a.* VAB 4, 286, 32; in nA Inv. ADD 993",
+              "IV 9; V R 30, 60h; mag. zB TU 12 Rs. Ib 3;",
+              "Sem. 3, 11, 14; AMT 7, 1, 6; TuL 83, 13; KAR",
+              "186, 40; 252 IV 5; *aš-pu-u* 213 p."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 574.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 656.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 738.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 820.0,
+                "height": 82.0,
+                "width": 1742.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8232937_29060202.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b9812f4c2a4875288d4",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 7717464,
+    "publication_id": "J/ahw_j_auto-0002-028-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 2875286671,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jāšibum**, **wāšibum**?, jünger *jašubu*, *aši/ubu*, *šub/pû*",
+              "II (u. H., Kupper, RA 45, 125/8) ,,Rammwidder,",
+              "Mauerbrecher“, a/nB, nA. LL: GÌŠGUD(-maḫ,",
+              "-si-dil) = *a-šu-bu* MSL 6, 90, 86/8 (Z. 89—95",
+              "*qaqqad* Kopf, *šinni* Zahn, *eṣenṣēri* ‘Rückgrat’,",
+              "*umāš* Klammer, *imēri* (D 6), *muttallikat/muttabbilat*",
+              "*a.* Schiebebahn für M.); = [*a*]-*ši-bu* = *šu-bu-ú* 110,",
+              "79. Wz. GÌŠGUD.SI.DIL. 1) aB Turm *u* GÌŠia-ši-ba-am",
+              "stellte er auf ARM 1, 131, 12; s. 2, 7, 12. 18",
+              "(D *maḫāru* D); GÌŠWA(*ia*<sub>8</sub>?)-*ši-ba-am* 5, 2, 13; Öl *ana*",
+              "WA-*ši-bi-im* 7, 16, 2; 63, 2; 69, 3; s. 6, 63, 6’; arch.",
+              "*ina* WA-*ši-bi-im* RA 35, 49: 27b 2. Bo. Wz. ZA 44,",
+              "116/8, 13 (zerbrachen sie). 15f. 32. 2) mB *ia-šu-ba*",
+              "*rabâ* AOB 50: 3, 6. jB *ia-šu-bu-ú* Gilg. VI 40. *ina*",
+              "GÌŠa-ši-bi *danni* (zerstörte ich ihre Mauern) Sg. Lie",
+              "8, 63; *ina šipik eperē u* GÌŠ*šu-pi-i* Tigl. III. 58, 16;",
+              "*qurrub* (heranbringen) / *qitrub šu-pe-e/i* JCS 12,",
+              "81a 7; Sn. 62, 79; 63, 10; 33, 22; *miḫiṣ* (Stoß) *šu-",
+              "pe-!e!* Iraq 7, 101, 15; nB *ina* GÌŠ*šu-bi-i* PRT 1, 10;",
+              "9, 7; AGS 1, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 574.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 656.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 738.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 820.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 902.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 984.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1066.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1148.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1230.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1312.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1394.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1476.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1558.0,
+                "height": 82.0,
+                "width": 1731.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:31.228621",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jāšibum**, **wāšibum**?, jünger *jašubu*, *aši/ubu*, *šub/pû*  II (u. H., Kupper, RA 45, 125/8) „Rammwidder, Mauerbrecher“, a/nB, nA. LL: GÌŠGUD(-maḫ, -si-dil) = *a-šu-bu* MSL 6, 90, 86/8 (Z. 89—95 *qaqqad* Kopf, *šinni* Zahn, *eṣenṣēri* ‘Rückgrat’, *umāš* Klammer, *imēri* (D 6), *muttallikat/muttabbilat* *a.* Schiebebahn für M.); = [*a*]-*ši-bu* = *šu-bu-ú* 110, 79. Wz. GÌŠGUD.SI.DIL. 1) aB Turm *u* GÌŠia-ši-ba-am stellte er auf ARM 1, 131, 12; s. 2, 7, 12. 18 (D *maḫāru* D); GÌŠWA(*ia*<sub>8</sub>?)-*ši-ba-am* 5, 2, 13; Öl *ana* WA-*ši-bi-im* 7, 16, 2; 63, 2; 69, 3; s. 6, 63, 6’; arch. *ina* WA-*ši-bi-im* RA 35, 49: 27b 2. Bo. Wz. ZA 44, 116/8, 13 (zerbrachen sie). 15f. 32. 2) mB *ia-šu-ba* *rabâ* AOB 50: 3, 6. jB *ia-šu-bu-ú* Gilg. VI 40. *ina* GÌŠa-ši-bi *danni* (zerstörte ich ihre Mauern) Sg. Lie 8, 63; *ina šipik eperē u* GÌŠ*šu-pi-i* Tigl. III. 58, 16; *qurrub* (heranbringen) / *qitrub šu-pe-e/i* JCS 12, 81a 7; Sn. 62, 79; 63, 10; 33, 22; *miḫiṣ* (Stoß) *šu- pe-!e!* Iraq 7, 101, 15; nB *ina* GÌŠ*šu-bi-i* PRT 1, 10; 9, 7; AGS 1, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 574.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 656.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 738.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 820.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 902.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 984.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1066.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1148.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1230.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1312.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1394.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1476.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1558.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:06:54.545364",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jāšibum**, **wāšibum**?, jünger *jašubu*, *aši/ubu*, *šub/pû*  II (u. H., Kupper, RA 45, 125/8) „Rammwidder, Mauerbrecher“, a/nB, nA. LL: GÌŠGUD(-maḫ, -si-dil) = *a-šu-bu* MSL 6, 90, 86/8 (Z. 89—95 *qaqqad* Kopf, *šinni* Zahn, *eṣenṣēri* ‘Rückgrat’, *umāš* Klammer, *imēri* (D 6), *muttallikat/muttabbilat* *a.* Schiebebahn für M.); = [*a*]-*ši-bu* = *šu-bu-ú* 110, 79. Wz. GÌŠGUD.SI.DIL. 1) aB Turm *u* GÌŠia-ši-ba-am stellte er auf ARM 1, 131, 12; s. 2, 7, 12. 18 (D *maḫāru* D); GÌŠWA(*ia*<sub>8</sub>?)-*ši-ba-am* 5, 2, 13; Öl *ana* WA-*ši-bi-im* 7, 16, 2; 63, 2; 69, 3; s. 6, 63, 6’; arch. *ina* WA-*ši-bi-im* RA 35, 49: 27b 2. Bo. Wz. ZA 44, 116/8, 13 (zerbrachen sie). 15f. 32. 2) mB *ia-šu-ba* *rabâ* AOB 50: 3, 6. jB *ia-šu-bu-ú* Gilg. VI 40. *ina* GÌŠa-ši-bi *danni* (zerstörte ich ihre Mauern) Sg. Lie 8, 63; *ina šipik eperē u* GÌŠ*šu-pi-i* Tigl. III. 58, 16; *qurrub* (heranbringen) / *qitrub šu-pe-e/i* JCS 12, 81a 7; Sn. 62, 79; 63, 10; 33, 22; *miḫiṣ* (Stoß) *šu- pe-!e!* Iraq 7, 101, 15; nB *ina* GÌŠ*šu-bi-i* PRT 1, 10; 9, 7; AGS 1, 8."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 82.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 164.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 246.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 328.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 410.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 492.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 574.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 656.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 738.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 820.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 902.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 984.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1066.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1148.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1230.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1312.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1394.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1476.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 1558.0,
+                "height": 84.0,
+                "width": 1733.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7717464_21483108.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5b9e12f4c2a4875288d5",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4458287,
+    "publication_id": "J/ahw_j_auto-0001-027-p0002-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3037823493,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jānu**, *ja’nu/a* (< *qajjānu* wo(her)? ug. ’in, he. ain) ,,ist nicht“, m/spB. 1) allg. a) mB *ia-a’-nu* mê BBS: 6 I 19; *ia-a-nu* AfO 18, 370, 18; s. StOr. 22, 42 (1 × *ia-a’-nu-um* BE 17, 26, 20); VAB 2, S. 1418f. p; *i-ia-nu* RA 31, 127, 17; *ia-nu-am-mi* 19, 92, 29; Nuzi Or. 7, 228; AkkBo. 133; *i-ia-nu-uš-šu* er ist nicht JCS 1, 249, 8. jB selten, zB *ia-a-nu* bābu TuL 112 Zeichnung; *ia-a’!-nu* HBA 12, 17; ABRT 1, 4 I 14. *ia-a’-na!* Sn. 52, 35! n/spB p, s. RCA IV 66a; NRVGl. 67; BRAD 99a; GlNBr. 104; SCN 37f. *ša* ... *ia!-a-nu* BBS: 37, 10; s. JCS 5, 74 Rs. 6. 19 (-na); *ia-’a-an* ABL 1335 Rs. 20. b) *q* alla 4; *ālu* ... *ia-a-nu* alla ON ABL 942, 9. c) *kī* (ob) *ibašši* ū *kī ia-a’-nu!* 477 Rs. 13; s. BIN 1, 22, 8; jB (er sagte) *ana ia-a’-nu ibašši* Šurpu II 38; s. 39; ZA 43, 92, 38. d) mB (Axt) *ia-nu-um-ma* UDBD 4920, 8; s. HSS 5, 48, 29; 15, 129, 8. 11; *ia-nu-um-mi* 13, 286, 60f. 2) Frageform. a) nB *ia-a’/a-nu-u* ist nicht so? ABL 290 Rs. 6; 289 Rs. 5; s. 295 Rs. 7. b) n/spB wenn nicht, anderenfalls: *ia-a-nu-ú lā illakkū* 214 Rs. 8; s. 1112 Rs. 5; *i. šarru išemme* CT 22: 46, 11; *kī (i)a-a-nu-u* 46, 27; 58, 13; *i. ul anaddin* TCL 13, 182, 8; s. YOS 7, 116, 12. 15. c) dafür auch *jānumma*: mB *ia-nu-um-ma* wenn nicht(, nimmt er) UM 1/2, 41, 23; s. VAB 2, 16, 50; *ia-nu-ma* PRU 3, 43, 21; *ia-nu-um-ma-a* KBo. 1, 10, 31 (Z. 19. 26 überhaupt nicht). spB *ia-a-nu-um-mu* CT 22: 56, 18; s. 112, 16."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2414.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:40.601136",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jānu**, *ja’nu/a* (< *qajjānu* wo(her)? ug. ’in, he. ain) ,,ist nicht“, m/spB. 1) allg. a) mB *ia-a’-nu* mê BBS: 6 I 19; *ia-a-nu* AfO 18, 370, 18; s. StOr. 22, 42 (1 × *ia-a’-nu-um* BE 17, 26, 20); VAB 2, S. 1418f. p; *i-ia-nu* RA 31, 127, 17; *ia-nu-am-mi* 19, 92, 29; Nuzi Or. 7, 228; AkkBo. 133; *i-ia-nu-uš-šu* er ist nicht JCS 1, 249, 8. jB selten, zB *ia-a-nu* bābu TuL 112 Zeichnung; *ia-a’!-nu* HBA 12, 17; ABRT 1, 4 I 14. *ia-a’-na!* Sn. 52, 35! n/spB p, s. RCA IV 66a; NRVGl. 67; BRAD 99a; GlNBr. 104; SCN 37f. *ša* ... *ia!-a-nu* BBS: 37, 10; s. JCS 5, 74 Rs. 6. 19 (-na); *ia-’a-an* ABL 1335 Rs. 20. b) *q* alla 4; *ālu* ... *ia-a-nu* alla ON ABL 942, 9. c) *kī* (ob) *ibašši* ū *kī ia-a’-nu!* 477 Rs. 13; s. BIN 1, 22, 8; jB (er sagte) *ana ia-a’-nu ibašši* Šurpu II 38; s. 39; ZA 43, 92, 38. d) mB (Axt) *ia-nu-um-ma* UDBD 4920, 8; s. HSS 5, 48, 29; 15, 129, 8. 11; *ia-nu-um-mi* 13, 286, 60f. 2) Frageform. a) nB *ia-a’/a-nu-u* ist nicht so? ABL 290 Rs. 6; 289 Rs. 5; s. 295 Rs. 7. b) n/spB wenn nicht, anderenfalls: *ia-a-nu-ú lā illakkū* 214 Rs. 8; s. 1112 Rs. 5; *i. šarru išemme* CT 22: 46, 11; *kī (i)a-a-nu-u* 46, 27; 58, 13; *i. ul anaddin* TCL 13, 182, 8; s. YOS 7, 116, 12. 15. c) dafür auch *jānumma*: mB *ia-nu-um-ma* wenn nicht(, nimmt er) UM 1/2, 41, 23; s. VAB 2, 16, 50; *ia-nu-ma* PRU 3, 43, 21; *ia-nu-um-ma-a* KBo. 1, 10, 31 (Z. 19. 26 überhaupt nicht). spB *ia-a-nu-um-mu* CT 22: 56, 18; s. 112, 16."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2414.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4458287_66401477.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5ba712f4c2a4875288d6",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 2519381,
+    "publication_id": "J/ahw_j_auto-0002-027-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8645952811,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jāši(m)**, *ajjāši(m)*, spB auch *jâša/u* ,,mir“, bab., nA (s. § 41f. i. j; *q* *jâti*; *anāku*). LL: aB *ša-mu-e* = [a]na! *ia-ši-im* OEC 4, 153 IV 24 (Dir); jB GÁ = ma = *ia-[ši]* MSL 4, 44, 175; GÁ(-ra) = a-na *ì-a-ším* 154, 196f. um, àm, im, mi = *a-na ia-a’-š[im]* 151, 75/8; *ia-še* 174, 118. 1) Dat. a) aB *qibiam ia-ši-im* Gilg. M IV 5; s. VS 16, 93, 26; *ia-a-ši-im* VAB 6, 215, 11; OEC 3, 43, 20. mB *ia-a-ši* MDP 2, 105, 28; jB *šukna ia-ši* AGH 108, 21; s. SBH: 69, 12; nA *šulmu ia-a-ši* Iraq 21, 163b 6; n/spB *ia-a-šú* ABL 846 Rs. 17; YOS 3, 5, 3; s. GlNBr. 104. b) *ana j.*: aB *ana ia-ši-im* zB Sumer 14, 31, 23; selten *i-ia-ši-im* VAB 6, 235, 8; *ia-ši* ABPh. 60, 31. m/spB *ana ia(-a)-ši* s. StOr. 20, 51; AkkBo. 134; VAB 2, S. 1419 (Am. auch hybrid *ia-ši-ia*); LAP 110f. VAB 7, 230, 20; nA *ana ia-a[-š]ú*? ABL 872 Rs. 5. c) *aj-jāši*: aB *a-ia-ši-im* VS 16, 8, 9; s. ALM 23. nA *a-a-ši* TCL 9, 68, 3; nB ABL 1151, 3. d) *ana a.*: aB *ana a-ia-ši* VAB 6, 118, 8; Bo. BoSt. 9, 116, 28; jB Anp. II 26 V. *ana a-a-ši* KAR 297, 16; nA BA 2, 629, 24. 2) seit mB für Gen. od Akk. a) nach Prp. Bo., Am. zB *kī ia-ši* KBo. 1, 15, 4; *ištu ia-ši* RA 19, 96, 20; jB *eli ia-a-ši*, *a-a-ši* Asb. A VI 4; *šá a-a-ši* BBR 101, 2; nB *kī ia-ši* ABL 892 Rs. 12. spB Gen. *šunu u* (s. § 114 i) *ia-a-šá* CT 22: 185, 21. b) Akk. zB *ia-a-ši* jB BWL 194, 23; BRM 4, 12, 34. 79 (vor PrSuff.); AGH 132, 54; spB VAB 4, 66 II 16. *a-a-ši* KAR 73 Rs. 10."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2367.0,
+                "width": 1727.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:42.571835",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jāši(m)**, *ajjāši(m)*, spB auch *jâša/u* ,,mir“, bab., nA (s. § 41f. i. j; *q* *jâti*; *anāku*). LL: aB *ša-mu-e* = [a]na! *ia-ši-im* OEC 4, 153 IV 24 (Dir); jB GÁ = ma = *ia-[ši]* MSL 4, 44, 175; GÁ(-ra) = a-na *ì-a-ším* 154, 196f. um, àm, im, mi = *a-na ia-a’-š[im]* 151, 75/8; *ia-še* 174, 118. 1) Dat. a) aB *qibiam ia-ši-im* Gilg. M IV 5; s. VS 16, 93, 26; *ia-a-ši-im* VAB 6, 215, 11; OEC 3, 43, 20. mB *ia-a-ši* MDP 2, 105, 28; jB *šukna ia-ši* AGH 108, 21; s. SBH: 69, 12; nA *šulmu ia-a-ši* Iraq 21, 163b 6; n/spB *ia-a-šú* ABL 846 Rs. 17; YOS 3, 5, 3; s. GlNBr. 104. b) *ana j.*: aB *ana ia-ši-im* zB Sumer 14, 31, 23; selten *i-ia-ši-im* VAB 6, 235, 8; *ia-ši* ABPh. 60, 31. m/spB *ana ia(-a)-ši* s. StOr. 20, 51; AkkBo. 134; VAB 2, S. 1419 (Am. auch hybrid *ia-ši-ia*); LAP 110f. VAB 7, 230, 20; nA *ana ia-a[-š]ú*? ABL 872 Rs. 5. c) *aj-jāši*: aB *a-ia-ši-im* VS 16, 8, 9; s. ALM 23. nA *a-a-ši* TCL 9, 68, 3; nB ABL 1151, 3. d) *ana a.*: aB *ana a-ia-ši* VAB 6, 118, 8; Bo. BoSt. 9, 116, 28; jB Anp. II 26 V. *ana a-a-ši* KAR 297, 16; nA BA 2, 629, 24. 2) seit mB für Gen. od Akk. a) nach Prp. Bo., Am. zB *kī ia-ši* KBo. 1, 15, 4; *ištu ia-ši* RA 19, 96, 20; jB *eli ia-a-ši*, *a-a-ši* Asb. A VI 4; *šá a-a-ši* BBR 101, 2; nB *kī ia-ši* ABL 892 Rs. 12. spB Gen. *šunu u* (s. § 114 i) *ia-a-šá* CT 22: 185, 21. b) Akk. zB *ia-a-ši* jB BWL 194, 23; BRM 4, 12, 34. 79 (vor PrSuff.); AGH 132, 54; spB VAB 4, 66 II 16. *a-a-ši* KAR 73 Rs. 10."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2367.0,
+                "width": 1727.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2519381_28519847.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5ba912f4c2a4875288d7",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4348578,
+    "publication_id": "J/ahw_j_auto-0003-006-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8390471012,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jāti**, *ijāti*, spB auch *jâtu* „mich, meiner; mir“ (q *jâši*; *anāku*). LL: un, an, in, en, mu, gá-e (-me-en), (i-)me-en = *ia-a-ti* MSL 4, 132/4, 54/8. 106/9; s. 152, 95; CT 12, 4 II 2. 1) mich, verstärkend vor PrSuff. aA *i-a-tí* TC 3, 105, 6. 11; aB (*i-)ia-ti* Sumer 14, 68a 21; UET 5, 81, 16; ARM 2, 20, 7; arch. *i-a-ti-ì* BIN 7, 40, 24. jB *ia(-a)-ti* Sg. Lie 42, 269; nach PrSuff. SBH: 56 Rs. 82. 84; *šimê ia-a-ti* AGH 46, 72. spB zB VAB 4, 220, 44. 2) meiner. a) aA *ša kīma i-a-tí* mein Vertreter zB BIN 4, 32, 2; 47, 23; 68, 22; *kīma i.* ATHE 64, 44; lit. Bell. 14, 224, 20. b) aB *kīma (i-)ia-ti* RA 53, 30, 15. Rs. 9; TCL 17, 42, 9; Am. hybrid *kīma ia-ti-ia* RA 19, 97, 19; *kī ia(-a)-ti* Gilg. XI 3f. c) aB *ša ia-ti* ABPh. 33, 13; q *ezib 1b*; aA *ina ṣēr* ... *i-a-tí* KTBl. 4, 19; q *bari 3*; jB q *ela 1b*. 3) mir. a) aA p, zB *i-a-tí lēpulū-nim* ATHE 31, 30; *ana i-a-tí itūram* 60, 31; s. BIN 4, 230, 6; 224, 9. b) bab. statt q *jâši*: jB *ana ia-a-ti* Ee III 57; *ia-a-ti* zB VAB 7, 242, 39; 276, 16; spB *ana ia-ti* ... *šurkam* 4, 270, 43. 4) als Kasus pendens (alt selten): aA *i-a-tí ina alākī-ja* TC 3, 49, 26; jB *ia-a-ti* KN Sn. 95, 70; für Subj. 122, 20; Ash. S. 19, 27; spB VAB 4, 242, 24; *ia-ti* 112, 18; *ia-a-tú* Nbn. 356, 4. 19."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2033.0,
+                "width": 1737.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:53.536521",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jāti**, *ijāti*, spB auch *jâtu* „mich, meiner; mir“ (q *jâši*; *anāku*). LL: un, an, in, en, mu, gá-e (-me-en), (i-)me-en = *ia-a-ti* MSL 4, 132/4, 54/8. 106/9; s. 152, 95; CT 12, 4 II 2. 1) mich, verstärkend vor PrSuff. aA *i-a-tí* TC 3, 105, 6. 11; aB (*i-)ia-ti* Sumer 14, 68a 21; UET 5, 81, 16; ARM 2, 20, 7; arch. *i-a-ti-ì* BIN 7, 40, 24. jB *ia(-a)-ti* Sg. Lie 42, 269; nach PrSuff. SBH: 56 Rs. 82. 84; *šimê ia-a-ti* AGH 46, 72. spB zB VAB 4, 220, 44. 2) meiner. a) aA *ša kīma i-a-tí* mein Vertreter zB BIN 4, 32, 2; 47, 23; 68, 22; *kīma i.* ATHE 64, 44; lit. Bell. 14, 224, 20. b) aB *kīma (i-)ia-ti* RA 53, 30, 15. Rs. 9; TCL 17, 42, 9; Am. hybrid *kīma ia-ti-ia* RA 19, 97, 19; *kī ia(-a)-ti* Gilg. XI 3f. c) aB *ša ia-ti* ABPh. 33, 13; q *ezib 1b*; aA *ina ṣēr* ... *i-a-tí* KTBl. 4, 19; q *bari 3*; jB q *ela 1b*. 3) mir. a) aA p, zB *i-a-tí lēpulū-nim* ATHE 31, 30; *ana i-a-tí itūram* 60, 31; s. BIN 4, 230, 6; 224, 9. b) bab. statt q *jâši*: jB *ana ia-a-ti* Ee III 57; *ia-a-ti* zB VAB 7, 242, 39; 276, 16; spB *ana ia-ti* ... *šurkam* 4, 270, 43. 4) als Kasus pendens (alt selten): aA *i-a-tí ina alākī-ja* TC 3, 49, 26; jB *ia-a-ti* KN Sn. 95, 70; für Subj. 122, 20; Ash. S. 19, 27; spB VAB 4, 242, 24; *ia-ti* 112, 18; *ia-a-tú* Nbn. 356, 4. 19."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 2033.0,
+                "width": 1737.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4348578_89833107.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5bb412f4c2a4875288d8",
+    "dataset_id": 4553134
+  },
+  {
+    "id": null,
+    "text_id": 4374345,
+    "publication_id": "J/ahw_j_auto-0003-009-010-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 826852370,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "**jâʾu(m)** I, *jāwum*, *jû(m)*; F. *jattum/n*, bab. auch *juttun*; Pl. m. *jāʾutum/n*, f. *jâtum*, *jâttun* (s. § 44; Lewy, Or. 15, 381ff.) „meiner, meiniger“. LL: aB *ḫa-mu(-e) = ia-ú(-um)* OEC 4, 153 IV 22f. (Dir); *dingir-gá = ilum i.* RA 25, 125 II 27; jB *mu*, *nì-gá = iu-ü(-um)* MSL 4, 139, 258/60; 154, 195; 174, 120; 194, 5f. [AN] = *ia-ʾu-u* CT 12, 4 II 1 (Aa); *i. = a-me-lum* OEC 4, 150 III 26 u D. 1) als Attr. a) betont statt PrSuff. aA *ṣubātum i-a-um* TC 3, 77, 7. 16; *ia-a-am libbī* 13, 25; *i-a-tum našpertum* CCT 3, 35b 15; *ṣubātē* ... *i-a-ú-tim* BIN 4, 7, 20; *eliātum i-a-tum* TC 1, 16, 6. aB *kaspum IA-um* v mir VAB 5, 316, 28; *werâm i-a-am* UET 5, 5, 4; *šētūtī i-ia-tam* ARM 2, 113, 28; *qarādū i-a-ú-tu-un* YOS 10, 42 IV 22; *atānātum i-ia-tum!!* ARM 1, 132, 19. b) aA *kaspam lū kūʾam lū i-a-am* BIN 4, 37, 37; *ṣubātū* ... *lū i-a-ú-tum* TTC 14, 37; *lū i-a-tám* CCT 2, 1, 24. 2) ohne Subst. aA *ana i-a-im* KTS 2b 11; 39, 28! *ana* ... *i-a-tim* BIN 4, 38, 17; 2 *i-a-ú-tum* CCT 3, 30, 14. aB *ia-a-ma* VAB 6, 168, 11; *ana IA-im-ma* TCL 18, 151, 30; *ana (lā) ia-a-tim* UET 5, 62, 27; *ia-at-ta-an* ABPh. 21, 22; Pl. *i-iú-ut-ti-in* ARM 2, 63, 12; *ia-at-ti-in* IM 10183, 25. aAK PN *Lippuš-ì-a-um* s. MAD 3, 1. 3) prädikativ. a) aA St. *šūrūtum i-a-ú* CCT 1, 40a 12 Fehler? b) *kaspum i-a-um(-ma)* 34a 27; TC 3, 16, 12; *Stoffe usw i-a-ú-tum* CCT 3, 4, 24; *qātātum i-a(-a)-tum* BIN 6, 176, 11. 16. aB *kaspum IA-ú-um* UM 1/2, 10, 12; s. Berens 99, 6; *kīma (daß) IA-um* BIN 7, 11, 5; *i-a-ú-um* 22, 5. PN aAK *I/Ì-a-um* GN UET 3, 566, 7; 1678, 10f. aB *Ia-wu/ú-um-ilum* Berens 101, 1f.; VAB 6, 217, 3; *Ia-ú-ku-um* ‘Mein ist Deiner’ s. YOS 8, S. 10b; KurzN *Ia-a(-a)-um* Nr. 74b, 7; BIN 7, 67, 27. *têrtum* ... *i-ia-tum* ARM 5, 11, 6; *Lämmer ia-ú-tu-un* YOS 8, 1, 22. jB *atta iu-ú* Maqlû VIII 100; *iu-u (|| me-e) awātī* usw SBH: 56, 69; *iu-um-ma* hat auf mich Bezug CT 20, 44, 59. mA LN *ia-a-ú* KBo. 1, 14, 9f. nA *eleppu šī ia-a-tú* ABL 89, 6 (s. Rs. 6). c) aB *eleppum ul ia-at-tum* TCL 17, 8, 4; Susa *ul ia-ù?-ut-te??* MDP 23, 326, 6; lit. *šiptum* (Beschwörung) *ul ia-a-tum* JCS 9, 11a 31; *ul i-ia-at-tum* MLVS 2, 5, 41. jB *šiptu ul ia-at-tu-un* zB BE 31, 56 Rs. 20; AMT 10, 1, 4; *ia(-a)-at-tu* KAR 114 Rs. 1; BKBM 12, 66; *iu-ut-tu(-un)* 52, 52; KAR 77, 18; CT 23, 3, 13; 10, 20; *ú-tu-un* ZA 16, 158, 20 u D. *lā iu(-ut)-tu-un* šī Dreams 340b 9. 13; 343a 12. *ul iu-ú amēlu* Gilg. X iv 17."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 3940.0,
+                "width": 1739.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-06T23:56:55.408294",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "**jâʾu(m)** I, *jāwum*, *jû(m)*; F. *jattum/n*, bab. auch *juttun*; Pl. m. *jāʾutum/n*, f. *jâtum*, *jâttun* (s. § 44; Lewy, Or. 15, 381ff.) „meiner, meiniger“. LL: aB *ḫa-mu(-e) = ia-ú(-um)* OEC 4, 153 IV 22f. (Dir); *dingir-gá = ilum i.* RA 25, 125 II 27; jB *mu*, *nì-gá = iu-ü(-um)* MSL 4, 139, 258/60; 154, 195; 174, 120; 194, 5f. [AN] = *ia-ʾu-u* CT 12, 4 II 1 (Aa); *i. = a-me-lum* OEC 4, 150 III 26 u D. 1) als Attr. a) betont statt PrSuff. aA *ṣubātum i-a-um* TC 3, 77, 7. 16; *ia-a-am libbī* 13, 25; *i-a-tum našpertum* CCT 3, 35b 15; *ṣubātē* … *i-a-ú-tim* BIN 4, 7, 20; *eliātum i-a-tum* TC 1, 16, 6. aB *kaspum IA-um* v mir VAB 5, 316, 28; *werâm i-a-am* UET 5, 5, 4; *šētūtī i-ia-tam* ARM 2, 113, 28; *qarādū i-a-ú-tu-un* YOS 10, 42 IV 22; *atānātum i-ia-tum!!* ARM 1, 132, 19. b) aA *kaspam lū kūʾam lū i-a-am* BIN 4, 37, 37; *ṣubātū* … *lū i-a-ú-tum* TTC 14, 37; *lū i-a-tám* CCT 2, 1, 24. 2) ohne Subst. aA *ana i-a-im* KTS 2b 11; 39, 28! *ana* … *i-a-tim* BIN 4, 38, 17; 2 *i-a-ú-tum* CCT 3, 30, 14. aB *ia-a-ma* VAB 6, 168, 11; *ana IA-im-ma* TCL 18, 151, 30; *ana (lā) ia-a-tim* UET 5, 62, 27; *ia-at-ta-an* ABPh. 21, 22; Pl. *i-iú-ut-ti-in* ARM 2, 63, 12; *ia-at-ti-in* IM 10183, 25. aAK PN *Lippuš-ì-a-um* s. MAD 3, 1. 3) prädikativ. a) aA St. *šūrūtum i-a-ú* CCT 1, 40a 12 Fehler? b) *kaspum i-a-um(-ma)* 34a 27; TC 3, 16, 12; *Stoffe usw i-a-ú-tum* CCT 3, 4, 24; *qātātum i-a(-a)-tum* BIN 6, 176, 11. 16. aB *kaspum IA-ú-um* UM 1/2, 10, 12; s. Berens 99, 6; *kīma (daß) IA-um* BIN 7, 11, 5; *i-a-ú-um* 22, 5. PN aAK *I/Ì-a-um* GN UET 3, 566, 7; 1678, 10f. aB *Ia-wu/ú-um-ilum* Berens 101, 1f.; VAB 6, 217, 3; *Ia-ú-ku-um* ‘Mein ist Deiner’ s. YOS 8, S. 10b; KurzN *Ia-a(-a)-um* Nr. 74b, 7; BIN 7, 67, 27. *têrtum* … *i-ia-tum* ARM 5, 11, 6; *Lämmer ia-ú-tu-un* YOS 8, 1, 22. jB *atta iu-ú* Maqlû VIII 100; *iu-u (|| me-e) awātī* usw SBH: 56, 69; *iu-um-ma* hat auf mich Bezug CT 20, 44, 59. mA LN *ia-a-ú* KBo. 1, 14, 9f. nA *eleppu šī ia-a-tú* ABL 89, 6 (s. Rs. 6). c) aB *eleppum ul ia-at-tum* TCL 17, 8, 4; Susa *ul ia-ù?-ut-te??* MDP 23, 326, 6; lit. *šiptum* (Beschwörung) *ul ia-a-tum* JCS 9, 11a 31; *ul i-ia-at-tum* MLVS 2, 5, 41. jB *šiptu ul ia-at-tu-un* zB BE 31, 56 Rs. 20; AMT 10, 1, 4; *ia(-a)-at-tu* KAR 114 Rs. 1; BKBM 12, 66; *iu-ut-tu(-un)* 52, 52; KAR 77, 18; CT 23, 3, 13; 10, 20; *ú-tu-un* ZA 16, 158, 20 u D. *lā iu(-ut)-tu-un šī* Dreams 340b 9. 13; 343a 12. *ul iu-ú amēlu* Gilg. X iv 17."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 2.6985898993027604,
+                "height": 3942.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-07T00:04:02.636956",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "**jâʾu(m)** I, *jāwum*, *jû(m)*; F. *jattum/n*, bab. auch *juttun*; Pl. m. *jāʾutum/n*, f. *jâtum*, *jâttun* (s. § 44; Lewy, Or. 15, 381ff.) „meiner, meiniger“. LL: aB *ḫa-mu(-e) = ia-ú(-um)* OEC 4, 153 IV 22f. (Dir); *dingir-gá = ilum i.* RA 25, 125 II 27; jB *mu*, *nì-gá = iu-ü(-um)* MSL 4, 139, 258/60; 154, 195; 174, 120; 194, 5f. [AN] = *ia-ʾu-u* CT 12, 4 II 1 (Aa); *i. = a-me-lum* OEC 4, 150 III 26 u D. 1) als Attr. a) betont statt PrSuff. aA *ṣubātum i-a-um* TC 3, 77, 7. 16; *ia-a-am libbī* 13, 25; *i-a-tum našpertum* CCT 3, 35b 15; *ṣubātē* … *i-a-ú-tim* BIN 4, 7, 20; *eliātum i-a-tum* TC 1, 16, 6. aB *kaspum IA-um* v mir VAB 5, 316, 28; *werâm i-a-am* UET 5, 5, 4; *šētūtī i-ia-tam* ARM 2, 113, 28; *qarādū i-a-ú-tu-un* YOS 10, 42 IV 22; *atānātum i-ia-tum!!* ARM 1, 132, 19. b) aA *kaspam lū kūʾam lū i-a-am* BIN 4, 37, 37; *ṣubātū* … *lū i-a-ú-tum* TTC 14, 37; *lū i-a-tám* CCT 2, 1, 24. 2) ohne Subst. aA *ana i-a-im* KTS 2b 11; 39, 28! *ana* … *i-a-tim* BIN 4, 38, 17; 2 *i-a-ú-tum* CCT 3, 30, 14. aB *ia-a-ma* VAB 6, 168, 11; *ana IA-im-ma* TCL 18, 151, 30; *ana (lā) ia-a-tim* UET 5, 62, 27; *ia-at-ta-an* ABPh. 21, 22; Pl. *i-iú-ut-ti-in* ARM 2, 63, 12; *ia-at-ti-in* IM 10183, 25. aAK PN *Lippuš-ì-a-um* s. MAD 3, 1. 3) prädikativ. a) aA St. *šūrūtum i-a-ú* CCT 1, 40a 12 Fehler? b) *kaspum i-a-um(-ma)* 34a 27; TC 3, 16, 12; *Stoffe usw i-a-ú-tum* CCT 3, 4, 24; *qātātum i-a(-a)-tum* BIN 6, 176, 11. 16. aB *kaspum IA-ú-um* UM 1/2, 10, 12; s. Berens 99, 6; *kīma (daß) IA-um* BIN 7, 11, 5; *i-a-ú-um* 22, 5. PN aAK *I/Ì-a-um* GN UET 3, 566, 7; 1678, 10f. aB *Ia-wu/ú-um-ilum* Berens 101, 1f.; VAB 6, 217, 3; *Ia-ú-ku-um* ‘Mein ist Deiner’ s. YOS 8, S. 10b; KurzN *Ia-a(-a)-um* Nr. 74b, 7; BIN 7, 67, 27. *têrtum* … *i-ia-tum* ARM 5, 11, 6; *Lämmer ia-ú-tu-un* YOS 8, 1, 22. jB *atta iu-ú* Maqlû VIII 100; *iu-u (|| me-e) awātī* usw SBH: 56, 69; *iu-um-ma* hat auf mich Bezug CT 20, 44, 59. mA LN *ia-a-ú* KBo. 1, 14, 9f. nA *eleppu šī ia-a-tú* ABL 89, 6 (s. Rs. 6). c) aB *eleppum ul ia-at-tum* TCL 17, 8, 4; Susa *ul ia-ù?-ut-te??* MDP 23, 326, 6; lit. *šiptum* (Beschwörung) *ul ia-a-tum* JCS 9, 11a 31; *ul i-ia-at-tum* MLVS 2, 5, 41. jB *šiptu ul ia-at-tu-un* zB BE 31, 56 Rs. 20; AMT 10, 1, 4; *ia(-a)-at-tu* KAR 114 Rs. 1; BKBM 12, 66; *iu-ut-tu(-un)* 52, 52; KAR 77, 18; CT 23, 3, 13; 10, 20; *ú-tu-un* ZA 16, 158, 20 u D. *lā iu(-ut)-tu-un šī* Dreams 340b 9. 13; 343a 12. *ul iu-ú amēlu* Gilg. X iv 17."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 2.6985898993027604,
+                "height": 3942.0,
+                "width": 1741.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-07T00:14:20.327154",
+            "is_fixed": true,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4374345_91567020.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "2e8182ed"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772838860,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab5bb612f4c2a4875288d9",
+    "dataset_id": 4553134
+  }
+]

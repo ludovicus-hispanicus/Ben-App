@@ -1,0 +1,930 @@
+[
+  {
+    "id": null,
+    "text_id": 8722095,
+    "publication_id": "H/ahw_h_auto-0048-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7837319805,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "The number **348** is presented in the query, but it is specified that there is a small symbol above the **4**. Given typical typographic or handwriting nuances, this symbol is most likely a **\"2\"**. In many handwriting styles or fonts, the digit **4** can appear with a **\"2\"** above it due to the similar stroke structure. For example, if the **4** is written with an additional vertical line or stroke forming a \"2\" on top, the numeral could be visually interpreted as **328**.",
+              "Thus, the correct interpretation of the given number, including the small symbol above the **4**, is:",
+              "$$",
+              "\\boxed{328}",
+              "$$"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 26.0,
+                "width": 186.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 26.0,
+                "height": 26.0,
+                "width": 186.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 52.0,
+                "height": 26.0,
+                "width": 186.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 78.0,
+                "height": 26.0,
+                "width": 186.0,
+                "index": null
+              },
+              {
+                "x": 0.0,
+                "y": 104.0,
+                "height": 26.0,
+                "width": 186.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:05:49.205468",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8722095_35852212.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478350,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5df8bb4b0f03775f391fd",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 6334804,
+    "publication_id": "H/ahw_h_auto-0049-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3162169427,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "349"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 126.0,
+                "width": 183.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:05:59.026061",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6334804_55093778.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478360,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5df95b4b0f03775f391fe",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 2326745,
+    "publication_id": "H/ahw_h_auto-0050-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3241767893,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "350"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 130.0,
+                "width": 187.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:06:11.825737",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2326745_30258226.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478372,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfa1b4b0f03775f391ff",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 8296930,
+    "publication_id": "H/ahw_h_auto-0051-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5687199571,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "351"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 126.0,
+                "width": 182.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:06:17.952283",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8296930_41529959.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478379,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfa8b4b0f03775f39200",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 1529136,
+    "publication_id": "H/ahw_h_auto-0052-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8337018616,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "352"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 128.0,
+                "width": 186.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:06:38.475904",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1529136_53361026.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478399,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfbcb4b0f03775f39201",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 2319727,
+    "publication_id": "H/ahw_h_auto-0053-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4449511697,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "353"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 130.0,
+                "width": 186.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:06:48.919648",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2319727_49857260.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478409,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfc6b4b0f03775f39202",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 9661375,
+    "publication_id": "H/ahw_h_auto-0054-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8512245190,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "354"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 131.0,
+                "width": 191.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:03.817746",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "9661375_48123586.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478424,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfd5b4b0f03775f39204",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 3032586,
+    "publication_id": "H/ahw_h_auto-0055-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7770132262,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "355"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 130.0,
+                "width": 186.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:13.588431",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3032586_91007819.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478434,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfdfb4b0f03775f39205",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 8119322,
+    "publication_id": "H/ahw_h_auto-0056-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3299760368,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "356"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 130.0,
+                "width": 190.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:22.678943",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8119322_77847064.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478443,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfe8b4b0f03775f39206",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 7135240,
+    "publication_id": "H/ahw_h_auto-0057-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3977555710,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "357"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 131.0,
+                "width": 188.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:28.843211",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7135240_15536119.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478449,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dfefb4b0f03775f39207",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 7971858,
+    "publication_id": "H/ahw_h_auto-0058-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1701386093,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "358"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 134.0,
+                "width": 190.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:40.917105",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7971858_74707006.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478462,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5dffbb4b0f03775f39208",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 8715141,
+    "publication_id": "H/ahw_h_auto-0059-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 183233385,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "359"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 127.0,
+                "width": 185.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:50.242863",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "8715141_81185623.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478471,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5e004b4b0f03775f39209",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 5482092,
+    "publication_id": "H/ahw_h_auto-0060-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9980154120,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "360"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 134.0,
+                "width": 191.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:07:59.884759",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5482092_69334393.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478480,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5e00eb4b0f03775f3920a",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 6696712,
+    "publication_id": "H/ahw_h_auto-0061-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9240863918,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "361"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 130.0,
+                "width": 179.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:08:20.271837",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6696712_91952362.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478501,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5e021b4b0f03775f3920b",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 3202085,
+    "publication_id": "H/ahw_h_auto-0062-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4476939112,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "362"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 127.0,
+                "width": 190.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:08:30.013039",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3202085_24385546.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478511,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5e02bb4b0f03775f3920c",
+    "dataset_id": 6033381
+  },
+  {
+    "id": null,
+    "text_id": 5137528,
+    "publication_id": "H/ahw_h_auto-0063-002-pageNumber.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8300179902,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "363"
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 132.0,
+                "width": 187.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-02T20:08:45.592555",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5137528_21606320.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "9453c2e4"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772478526,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a5e03bb4b0f03775f3920d",
+    "dataset_id": 6033381
+  }
+]

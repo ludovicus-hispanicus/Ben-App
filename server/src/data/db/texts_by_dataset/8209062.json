@@ -1,0 +1,26 @@
+[
+  {
+    "id": null,
+    "text_id": 6340831,
+    "publication_id": "Tet/ahw_tet-0018-019-mainEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ae4930f1"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772839366,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69ab61c61761a38e07c6a0f8",
+    "dataset_id": 8209062
+  }
+]

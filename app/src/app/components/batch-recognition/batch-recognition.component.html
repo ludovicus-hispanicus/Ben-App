@@ -1,0 +1,439 @@
+<div class="batch-recognition">
+
+  <!-- ====== LEFT PANEL: Batch Configuration ====== -->
+  <div class="config-panel">
+    <div class="panel-header">
+      <mat-icon>batch_prediction</mat-icon>
+      <h3>Batch Recognition</h3>
+    </div>
+
+    <!-- Source Folder -->
+    <div class="config-section">
+      <label class="config-label">Source Folder</label>
+
+      <!-- Selected source display -->
+      <div class="folder-display" *ngIf="hasSource">
+        <mat-icon>{{ sourceMode === 'local' ? 'computer' : 'folder' }}</mat-icon>
+        <span [matTooltip]="sourceMode === 'local' ? localFolderPath : ''">{{ sourceDisplayName }}</span>
+        <span class="folder-image-count" *ngIf="sourceMode === 'local' && localFolderImageCount">{{ localFolderImageCount }} images</span>
+        <button mat-icon-button (click)="clearSource()" matTooltip="Clear">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Browse Server + Upload Folder buttons -->
+      <div class="sidebar-btn-row" *ngIf="!hasSource">
+        <button mat-stroked-button class="browse-server-btn" (click)="browseSource()">
+          <mat-icon>folder_open</mat-icon> Browse Server
+        </button>
+        <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+                matTooltip="Select a local folder of images">
+          <mat-icon>snippet_folder</mat-icon> Upload Folder
+        </button>
+        <input #uploadFolder (change)="handleFolderInput($event)" type="file"
+               webkitdirectory directory multiple style="display:none"/>
+      </div>
+    </div>
+
+    <!-- Class Filter (shown when classes detected in source) -->
+    <div class="config-section" *ngIf="availableClasses.length > 1">
+      <label class="config-label">Classes <span class="optional">({{ selectedImageCount }} images)</span></label>
+      <div class="class-badges">
+        <button *ngFor="let cls of availableClasses"
+                class="class-badge"
+                [class.selected]="isClassSelected(cls.name)"
+                [class.excluded]="!isClassSelected(cls.name)"
+                (click)="toggleClass(cls.name)">
+          {{ cls.name }} <span class="class-count">{{ cls.count }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Destination (optional) -->
+    <div class="config-section">
+      <label class="config-label">Destination <span class="optional">(optional)</span></label>
+
+      <!-- Mode toggle buttons -->
+      <div class="sidebar-btn-row dest-mode-row">
+        <button mat-stroked-button class="browse-server-btn"
+                [class.mode-active]="destinationMode === 'library'"
+                (click)="setDestinationMode('library')">
+          <mat-icon>folder_special</mat-icon> Library Dataset
+        </button>
+        <button mat-stroked-button class="upload-folder-btn"
+                [class.mode-active]="destinationMode === 'export'"
+                (click)="setDestinationMode('export')">
+          <mat-icon>save_alt</mat-icon> Export Folder
+        </button>
+      </div>
+
+      <!-- Library mode: CuReD datasets -->
+      <div class="dest-library" *ngIf="destinationMode === 'library'">
+        <div class="dest-section-label">CuReD</div>
+        <div class="create-dataset-row">
+          <input [(ngModel)]="newDatasetName" placeholder="New dataset name..."
+                 (keyup.enter)="createNewDataset()" class="folder-name-input" />
+          <button mat-icon-button color="primary" (click)="createNewDataset()"
+                  [disabled]="isCreatingDataset || !newDatasetName.trim()" matTooltip="Create dataset">
+            <mat-icon>create_new_folder</mat-icon>
+          </button>
+        </div>
+        <div class="dest-dataset-badges">
+          <button *ngFor="let p of curedDatasets"
+                  class="dataset-badge"
+                  [class.selected]="destinationDatasetId === p.dataset_id"
+                  (click)="onDestinationDatasetChange(p.dataset_id)"
+                  [matTooltip]="p.text_count ? p.text_count + ' texts' : ''">
+            <mat-icon class="badge-icon">folder</mat-icon>
+            {{ p.name }}
+          </button>
+          <span class="no-datasets" *ngIf="curedDatasets.length === 0">No datasets yet</span>
+        </div>
+      </div>
+
+      <!-- Export mode: folder selector + options -->
+      <div class="dest-export" *ngIf="destinationMode === 'export'">
+        <div class="folder-display" *ngIf="destinationFolderPath">
+          <mat-icon>computer</mat-icon>
+          <span [matTooltip]="destinationFolderPath">{{ destinationFolderName }}</span>
+          <button mat-icon-button (click)="clearDestination()" matTooltip="Clear">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <button mat-stroked-button (click)="destFolderInput.click()" *ngIf="!destinationFolderPath" class="browse-btn">
+          <mat-icon>folder_open</mat-icon> Select Folder
+        </button>
+        <input #destFolderInput (change)="handleDestinationFolderInput($event)" type="file"
+               webkitdirectory directory multiple style="display:none"/>
+
+        <!-- Export options -->
+        <div class="export-options" *ngIf="destinationFolderPath">
+          <label class="export-option">
+            <input type="checkbox" checked disabled> Transliteration text (.txt)
+          </label>
+          <label class="export-option">
+            <input type="checkbox" [(ngModel)]="exportImages"> Copy images
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Batch Mode -->
+    <div class="config-section">
+      <label class="config-label">Images per Call</label>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <select [(ngModel)]="batchMode" class="batch-size-input" style="flex: 1;">
+          <option value="fixed">Fixed</option>
+          <option value="dynamic">Dynamic (by image size)</option>
+        </select>
+        <input *ngIf="batchMode === 'fixed'" type="number" [(ngModel)]="batchSize" min="0" class="batch-size-input" style="width: 70px;" placeholder="0">
+        <input *ngIf="batchMode === 'dynamic'" type="text" value="-" readonly class="batch-size-input" style="width: 70px; text-align: center; opacity: 0.5;">
+      </div>
+    </div>
+
+    <!-- Image Scale -->
+    <div class="config-section">
+      <label class="config-label">Image Resolution <span class="optional">(reduces tokens)</span></label>
+      <select [(ngModel)]="imageScale" class="batch-size-input">
+        <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <!-- Start Button -->
+    <button mat-raised-button color="primary" class="start-btn"
+            [disabled]="!canStart"
+            (click)="startBatch()">
+      <mat-icon>{{ isStarting ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
+      {{ isStarting ? 'Starting...' : 'Start Batch' }}
+    </button>
+
+    <!-- Active Jobs Progress (supports multiple concurrent jobs) -->
+    <ng-container *ngFor="let jobId of activeJobIds">
+      <div class="progress-section" *ngIf="jobStatuses.get(jobId) as status">
+        <div class="progress-header">
+          <span class="progress-label">{{ status.source_project_name || 'Processing...' }} ({{ status.model }})</span>
+          <span class="progress-count">{{ status.current_image }} / {{ status.total_images }}</span>
+        </div>
+        <mat-progress-bar [mode]="status.status === 'pending' ? 'indeterminate' : 'determinate'" [value]="status.progress_percent"></mat-progress-bar>
+        <div class="progress-detail" *ngIf="status.current_filename">
+          {{ status.status === 'pending' ? status.current_filename : 'Current: ' + status.current_filename }}
+        </div>
+        <button mat-stroked-button color="warn" (click)="cancelBatch(jobId)" class="cancel-btn">
+          <mat-icon>stop</mat-icon> Cancel
+        </button>
+      </div>
+    </ng-container>
+
+    <!-- Results Summary (for selected/focused job) — compact, links to report tab -->
+    <div class="results-section" *ngIf="selectedJobStatus && !activeJobIds.has(selectedJobId!) && selectedJobStatus.status !== 'pending'">
+      <div class="results-header">
+        <mat-icon [style.color]="getStatusColor(selectedJobStatus.status)">{{ getStatusIcon(selectedJobStatus.status) }}</mat-icon>
+        <span class="results-status">{{ selectedJobStatus.status | titlecase }}</span>
+        <span class="results-stats-inline">
+          {{ selectedJobStatus.processed_images }} processed<span *ngIf="selectedJobStatus.failed_images > 0" class="failed-count">, {{ selectedJobStatus.failed_images }} failed</span>
+        </span>
+        <button mat-stroked-button class="view-report-btn" (click)="rightTab = 'report'; viewJobReport(selectedJobId!)">
+          View Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Recent Jobs -->
+    <div class="recent-jobs" *ngIf="recentJobs.length > 0">
+      <div class="section-divider"></div>
+      <label class="config-label">Recent Jobs</label>
+      <div class="job-list">
+        <div class="job-item" *ngFor="let job of recentJobs"
+             [class.active]="selectedJobId === job.job_id"
+             (click)="viewJobReport(job.job_id)"
+             matTooltip="Click to view report">
+          <mat-icon [style.color]="getStatusColor(job.status)" class="job-status-icon">
+            {{ getStatusIcon(job.status) }}
+          </mat-icon>
+          <div class="job-info">
+            <span class="job-name">{{ job.source_project_name }}</span>
+            <span class="job-detail">{{ job.model }} &middot; {{ job.processed_images }}/{{ job.total_images }}</span>
+          </div>
+          <button mat-icon-button class="job-continue-btn"
+                  *ngIf="job.status !== 'running' && job.status !== 'pending' && job.processed_images < job.total_images"
+                  (click)="continueBatch(job.job_id); $event.stopPropagation()"
+                  matTooltip="Continue: process remaining {{ job.total_images - job.processed_images }} images">
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== RIGHT PANEL: Settings / Report ====== -->
+  <div class="model-panel">
+    <div class="right-panel-tabs">
+      <button class="tab-btn" [class.active]="rightTab === 'settings'" (click)="rightTab = 'settings'">
+        <mat-icon>settings</mat-icon> Settings
+      </button>
+      <button class="tab-btn" [class.active]="rightTab === 'report'" (click)="rightTab = 'report'">
+        <mat-icon>assessment</mat-icon> Report
+      </button>
+    </div>
+
+    <!-- ====== SETTINGS TAB ====== -->
+    <div *ngIf="rightTab === 'settings'">
+
+    <!-- Categorized Model Selection -->
+    <div class="model-categories">
+      <div *ngFor="let category of ocrModelCategories" class="model-category">
+        <div class="category-header">{{ category.name }}</div>
+        <div class="category-models">
+          <button *ngFor="let model of category.models"
+                  class="model-btn"
+                  [class.selected]="selectedModel === model.value"
+                  [class.available]="isModelAvailable(model.value)"
+                  [class.unavailable]="!isModelAvailable(model.value)"
+                  (click)="selectModel(model.value)"
+                  [matTooltip]="getModelTooltip(model)">
+            {{ model.label }}
+            <mat-icon *ngIf="!isModelAvailable(model.value)" class="download-icon">cloud_download</mat-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompt Mode Selection -->
+    <div class="mode-section">
+      <div class="section-label">Prompt</div>
+      <div class="mode-buttons">
+        <button *ngFor="let mode of ocrPromptModes"
+                class="mode-btn"
+                [class.selected]="selectedPrompt === mode.value"
+                (click)="selectedPrompt = mode.value; editingPrompt = false; showNewPromptForm = false"
+                [matTooltip]="mode.description">
+          {{ mode.label }}
+        </button>
+        <button class="mode-btn"
+                [class.selected]="selectedPrompt === 'custom'"
+                (click)="selectedPrompt = 'custom'; editingPrompt = false; showNewPromptForm = false"
+                matTooltip="One-off prompt (not saved)">
+          Custom
+        </button>
+        <button class="mode-btn add-prompt-btn"
+                (click)="showNewPromptForm = !showNewPromptForm; editingPrompt = false"
+                [class.selected]="showNewPromptForm"
+                matTooltip="Create a new named prompt">
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
+
+      <!-- New prompt form -->
+      <div class="new-prompt-form" *ngIf="showNewPromptForm">
+        <input type="text" [(ngModel)]="newPromptName" class="new-prompt-name-input" placeholder="Prompt name (e.g. Sumerian Dictionary)">
+        <textarea [(ngModel)]="newPromptText" rows="6" class="prompt-edit-input" placeholder="Enter the OCR prompt instructions..."></textarea>
+        <div class="prompt-edit-actions">
+          <button mat-stroked-button (click)="showNewPromptForm = false" class="prompt-action-btn">Cancel</button>
+          <button mat-raised-button color="primary" (click)="createPrompt()" class="prompt-action-btn"
+                  [disabled]="creatingPrompt || !newPromptName.trim() || !newPromptText.trim()">
+            {{ creatingPrompt ? 'Creating...' : 'Create' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Prompt text display -->
+      <div class="prompt-display" *ngIf="!editingPrompt && !showNewPromptForm">
+        <div class="prompt-display-header">
+          <button mat-icon-button (click)="startEditingPrompt()" matTooltip="Edit prompt" class="prompt-edit-btn">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button *ngIf="isCustomPromptSelected()" (click)="deletePrompt()" matTooltip="Delete prompt" class="prompt-edit-btn prompt-delete-btn">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+        <pre class="prompt-text">{{ getSelectedPromptText() }}</pre>
+      </div>
+
+      <!-- Prompt editing -->
+      <div class="prompt-edit-area" *ngIf="editingPrompt && !showNewPromptForm">
+        <textarea [(ngModel)]="editPromptValue"
+                  rows="8"
+                  class="prompt-edit-input"
+                  [placeholder]="selectedPrompt === 'custom' ? 'Enter your custom OCR prompt...' : ''"></textarea>
+        <div class="prompt-edit-actions">
+          <button mat-stroked-button (click)="cancelEditingPrompt()" class="prompt-action-btn">Cancel</button>
+          <button mat-raised-button color="primary" (click)="savePrompt()" class="prompt-action-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-OCR Correction Rules -->
+    <div class="config-section">
+      <div class="section-label">Correction Rules</div>
+      <div class="mode-buttons">
+        <button *ngFor="let rule of correctionRulesOptions"
+                class="mode-btn"
+                [class.selected]="correctionRules === rule.value"
+                (click)="correctionRules = rule.value"
+                [matTooltip]="rule.description">
+          {{ rule.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- API Key Section -->
+    <div class="api-key-section" *ngIf="requiresApiKey()">
+      <mat-form-field appearance="outline" class="api-key-input">
+        <mat-label>API Key</mat-label>
+        <input matInput [(ngModel)]="apiKey" type="password"
+               [placeholder]="getApiKeyPlaceholder()">
+        <mat-icon matSuffix>key</mat-icon>
+        <mat-hint>Required for cloud models. Saved locally per model.</mat-hint>
+      </mat-form-field>
+
+      <!-- Sub-model selection dropdown -->
+      <mat-form-field appearance="outline" class="sub-model-select" *ngIf="hasSubModels()">
+        <mat-label>Model Version</mat-label>
+        <mat-select [(ngModel)]="selectedSubModel" (selectionChange)="onSubModelChange()">
+          <mat-option *ngFor="let subModel of apiSubModels[selectedModel]" [value]="subModel.value">
+            {{ subModel.label }} - {{ subModel.description }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    </div><!-- /settings tab -->
+
+    <!-- ====== REPORT TAB ====== -->
+    <div *ngIf="rightTab === 'report'" class="report-tab">
+
+      <!-- No job selected -->
+      <div class="report-empty" *ngIf="!reportStatus">
+        <mat-icon>info_outline</mat-icon>
+        <span>Start a batch job or select one from Recent Jobs to see the report.</span>
+      </div>
+
+      <!-- Job report -->
+      <ng-container *ngIf="reportStatus">
+        <div class="report-header">
+          <mat-icon [style.color]="getStatusColor(reportStatus.status)">{{ getStatusIcon(reportStatus.status) }}</mat-icon>
+          <span class="report-title">{{ reportStatus.source_project_name || 'Batch Job' }}</span>
+          <span class="report-job-id">{{ reportStatus.job_id }}</span>
+        </div>
+
+        <!-- Job overview -->
+        <div class="report-section">
+          <div class="report-section-label">Overview</div>
+          <table class="report-table">
+            <tr><td>Status</td><td>{{ reportStatus.status | titlecase }}</td></tr>
+            <tr><td>Model</td><td>{{ reportStatus.model }}</td></tr>
+            <tr><td>Prompt</td><td>{{ reportStatus.prompt }}</td></tr>
+            <tr><td>Images</td><td>{{ reportStatus.processed_images }} / {{ reportStatus.total_images }} processed<span *ngIf="reportStatus.failed_images > 0">, {{ reportStatus.failed_images }} failed</span></td></tr>
+            <tr><td>Batch Mode</td><td>{{ reportStatus.batch_size && reportStatus.batch_size < 0 ? 'Dynamic' : 'Fixed (' + (reportStatus.batch_size || 1) + ')' }}</td></tr>
+            <tr *ngIf="reportStatus.image_scale"><td>Image Scale</td><td>{{ reportStatus.image_scale }}</td></tr>
+            <tr *ngIf="reportStatus.correction_rules"><td>Corrections</td><td>{{ reportStatus.correction_rules }}</td></tr>
+            <tr *ngIf="reportStatus.created_at"><td>Started</td><td>{{ reportStatus.created_at | date:'short' }}</td></tr>
+            <tr *ngIf="reportStatus.completed_at"><td>Completed</td><td>{{ reportStatus.completed_at | date:'short' }}</td></tr>
+            <tr *ngIf="reportStatus.started_at && reportStatus.completed_at"><td>Duration</td><td>{{ getDuration(reportStatus.started_at, reportStatus.completed_at) }}</td></tr>
+          </table>
+        </div>
+
+        <!-- Dynamic batching report -->
+        <div class="report-section" *ngIf="reportStatus.dynamic_report && reportStatus.dynamic_report.length > 0">
+          <div class="report-section-label">Dynamic Batching</div>
+          <table class="report-table report-table-full">
+            <thead>
+              <tr><th>Category</th><th>Images</th><th>Batch Size</th><th>Chunks</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let cat of reportStatus.dynamic_report">
+                <td><span class="category-tag cat-{{ cat.category }}">{{ cat.category }}</span></td>
+                <td>{{ cat.image_count }}</td>
+                <td>{{ cat.batch_size }}</td>
+                <td>{{ cat.chunks }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="report-total-row">
+                <td>Total</td>
+                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'image_count') }}</td>
+                <td></td>
+                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Processed results list -->
+        <div class="report-section" *ngIf="reportStatus.results && reportStatus.results.length > 0">
+          <div class="report-section-label">
+            Processed ({{ reportStatus.results.length }})
+            <button mat-stroked-button class="remove-markers-btn"
+                    *ngIf="hasTiledResults(reportStatus)"
+                    (click)="removeTileMarkers(reportStatus)"
+                    [disabled]="removingMarkers">
+              <mat-icon>cleaning_services</mat-icon>
+              Remove Tile Markers
+            </button>
+          </div>
+          <div class="report-results-list">
+            <a class="report-result-item result-link" *ngFor="let r of reportStatus.results"
+               [href]="getCuredLink(r)" target="_blank">
+              <span class="report-result-filename">{{ r.filename }}</span>
+              <span class="report-result-lines">{{ r.lines_count }} lines</span>
+              <mat-icon class="tiled-icon" *ngIf="r.was_tiled" matTooltip="Image was split into tiles — check for overlaps">vertical_split</mat-icon>
+            </a>
+          </div>
+        </div>
+
+        <!-- Failed results list -->
+        <div class="report-section" *ngIf="reportStatus.failed_results && reportStatus.failed_results.length > 0">
+          <div class="report-section-label report-failed-label">Failed ({{ reportStatus.failed_results.length }})</div>
+          <div class="report-results-list">
+            <div class="report-result-item failed" *ngFor="let f of reportStatus.failed_results">
+              <mat-icon class="report-failed-icon">error_outline</mat-icon>
+              <span class="report-result-filename">{{ f.filename }}</span>
+              <span class="report-result-error">{{ f.error }}</span>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+    </div><!-- /report tab -->
+
+  </div>
+
+</div>

@@ -1,0 +1,442 @@
+<div class="settings-container">
+  <h2>Settings</h2>
+  <p class="subtitle">Configure CuReD preferences</p>
+
+  <mat-tab-group>
+    <!-- OCR Engine Tab -->
+    <mat-tab label="OCR Engine">
+      <div class="tab-content">
+        <div class="settings-section">
+          <h3>Default Model</h3>
+
+          <div class="setting-item">
+            <label>Default OCR Model</label>
+            <select [(ngModel)]="settings.defaultOcrModel" class="form-control">
+              <optgroup *ngFor="let group of ocrModelGroups" [label]="group.label">
+                <option *ngFor="let model of group.models" [value]="model.value">
+                  {{model.label}}
+                </option>
+              </optgroup>
+            </select>
+            <small>Select the default OCR engine for text recognition</small>
+          </div>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" [(ngModel)]="settings.useGpu">
+              Use GPU acceleration (if available)
+            </label>
+            <small>Enable GPU for faster processing (requires CUDA)</small>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Ollama Configuration</h3>
+
+          <div class="setting-item">
+            <label>Ollama Server URL</label>
+            <input type="text" [(ngModel)]="settings.ollamaUrl" class="form-control" placeholder="http://localhost:11434">
+            <small>URL of the local Ollama server for VLM models</small>
+          </div>
+
+          <div class="ollama-status">
+            <span class="status-indicator"
+                  [class.status-checking]="ollamaStatus === 'checking'"
+                  [class.status-available]="ollamaStatus === 'available'"
+                  [class.status-unavailable]="ollamaStatus === 'unavailable'"></span>
+            <span *ngIf="ollamaStatus === 'checking'">Checking Ollama...</span>
+            <span *ngIf="ollamaStatus === 'available'">Ollama is running</span>
+            <span *ngIf="ollamaStatus === 'unavailable'">Ollama not available</span>
+            <button class="btn-link" (click)="checkOllamaStatus()">Refresh</button>
+          </div>
+
+          <!-- Available Ollama Models -->
+          <div class="setting-item" *ngIf="ollamaStatus === 'available'">
+            <label>Installed Vision Models</label>
+            <div class="ollama-models-list" *ngIf="!loadingModels">
+              <span *ngIf="availableOllamaModels.length === 0" class="no-models">
+                No vision models found. Install models below or run: <code>ollama pull qwen3-vl:4b</code>
+              </span>
+              <div class="model-chip" *ngFor="let model of availableOllamaModels">
+                {{ model }}
+              </div>
+            </div>
+            <div *ngIf="loadingModels" class="loading">Loading models...</div>
+          </div>
+        </div>
+
+        <!-- Recommended Models for Download -->
+        <div class="settings-section" *ngIf="ollamaStatus === 'available'">
+          <h3>Download OCR Models</h3>
+          <p class="section-description">
+            Recommended vision models for OCR. Click download to install directly from Ollama.
+            <span *ngIf="gpuStatus?.cuda_available">
+              Your GPU: {{ gpuStatus.gpu_name }} ({{ gpuStatus.gpu_memory_gb }}GB)
+            </span>
+          </p>
+
+          <div *ngIf="loadingRecommended" class="loading">Loading recommended models...</div>
+
+          <div class="recommended-models" *ngIf="!loadingRecommended">
+            <div class="model-card" *ngFor="let model of recommendedModels"
+                 [class.installed]="model.installed"
+                 [class.downloading]="downloadingModel === model.id"
+                 [class.can-run]="canRunOnGpu(model)">
+              <div class="model-card-header">
+                <div class="model-card-info">
+                  <strong>{{ model.name }}</strong>
+                  <span class="model-size">{{ model.size_gb }}GB download</span>
+                </div>
+                <div class="model-card-status">
+                  <span class="installed-badge" *ngIf="model.installed">Installed</span>
+                  <span class="vram-badge" [class.fits]="canRunOnGpu(model)">
+                    {{ model.vram_gb }}GB VRAM
+                  </span>
+                </div>
+              </div>
+              <p class="model-card-description">{{ model.description }}</p>
+
+              <!-- Download progress -->
+              <div class="download-progress" *ngIf="downloadingModel === model.id && downloadProgress">
+                <div class="progress-bar">
+                  <div class="progress-fill" [style.width.%]="downloadProgress.percent"></div>
+                </div>
+                <span class="progress-text">{{ downloadProgress.status }} - {{ downloadProgress.percent }}%</span>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="model-card-actions" *ngIf="!model.installed">
+                <button class="btn btn-primary btn-sm"
+                        (click)="downloadModel(model.id)"
+                        [disabled]="downloadingModel !== null">
+                  <span *ngIf="downloadingModel !== model.id">Download</span>
+                  <span *ngIf="downloadingModel === model.id">Downloading...</span>
+                </button>
+                <span class="gpu-warning" *ngIf="!canRunOnGpu(model) && gpuStatus?.cuda_available">
+                  Needs larger GPU
+                </span>
+              </div>
+              <div class="model-card-actions" *ngIf="model.installed">
+                <span class="ready-text">Ready to use</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GPU Models Section - only show if GPU is available -->
+        <div class="settings-section" *ngIf="gpuStatus?.cuda_available">
+          <h3>GPU Models</h3>
+
+          <div class="gpu-info">
+            <span class="status-indicator status-available"></span>
+            <span>{{ gpuStatus.gpu_name }} ({{ gpuStatus.gpu_memory_gb }} GB VRAM)</span>
+            <button class="btn-link" (click)="loadGpuStatus()">Refresh</button>
+          </div>
+
+          <!-- Nemotron Local -->
+          <div class="gpu-model-item" *ngIf="gpuStatus.models['nemotron_local']?.available">
+            <div class="model-header">
+              <div class="model-info">
+                <strong>Nemotron-Parse</strong>
+                <span class="model-size">~{{ gpuStatus.models['nemotron_local'].vram_required_gb }} GB VRAM</span>
+              </div>
+              <div class="model-status">
+                <span class="status-badge" [class.loaded]="gpuStatus.models['nemotron_local'].loaded"
+                      [class.not-loaded]="!gpuStatus.models['nemotron_local'].loaded">
+                  {{ gpuStatus.models['nemotron_local'].loaded ? 'Loaded' : 'Not loaded' }}
+                </span>
+              </div>
+            </div>
+            <small>NVIDIA's document parsing VLM for OCR with bounding boxes</small>
+            <!-- Load button when not loaded -->
+            <div class="model-actions" *ngIf="!gpuStatus.models['nemotron_local'].loaded">
+              <button class="btn btn-sm btn-primary"
+                      (click)="preloadModel('nemotron_local')"
+                      [disabled]="preloadingModel === 'nemotron_local'">
+                {{ preloadingModel === 'nemotron_local' ? 'Loading...' : 'Load Now' }}
+              </button>
+              <small>Loading takes ~30 seconds on first use</small>
+            </div>
+            <!-- Unload button when loaded -->
+            <div class="model-actions" *ngIf="gpuStatus.models['nemotron_local'].loaded">
+              <button class="btn btn-sm btn-secondary"
+                      (click)="unloadModel('nemotron_local')"
+                      [disabled]="preloadingModel === 'nemotron_local'">
+                {{ preloadingModel === 'nemotron_local' ? 'Unloading...' : 'Unload' }}
+              </button>
+              <small>Free GPU memory for Ollama models</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Show message if no GPU -->
+        <div class="settings-section" *ngIf="gpuStatus && !gpuStatus.cuda_available">
+          <h3>GPU Models</h3>
+          <div class="no-gpu-message">
+            <span class="status-indicator status-unavailable"></span>
+            <span>No CUDA GPU detected. GPU models require an NVIDIA GPU with CUDA support.</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Image Resolution</h3>
+
+          <div class="setting-item">
+            <label>Default Image Scale for VLM OCR</label>
+            <select [(ngModel)]="settings.imageScale" class="form-control">
+              <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+            <small>Reduce image resolution before sending to VLM models. Lower resolution = fewer visual tokens = faster inference. Does not affect Kraken (CPU) models.</small>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>General</h3>
+
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" [(ngModel)]="settings.autoSave">
+              Auto-save transliterations
+            </label>
+            <small>Automatically save changes while editing</small>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" (click)="saveSettings()">Save Settings</button>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- OCR Prompts Tab -->
+    <mat-tab label="OCR Prompts">
+      <div class="tab-content">
+        <div class="settings-section">
+          <p class="section-description">Customize the prompts used by VLM models for OCR</p>
+
+          <!-- Default Prompt Selection -->
+          <div class="setting-item" *ngIf="!loadingPrompts && ocrPrompts.length > 0">
+            <label>Default OCR Prompt</label>
+            <select [(ngModel)]="defaultPrompt" (change)="saveDefaultPrompt()" class="form-control">
+              <option *ngFor="let prompt of ocrPrompts" [value]="prompt.key">
+                {{ getPromptLabel(prompt.key) }}
+              </option>
+            </select>
+            <small>Select the prompt to use for VLM-based OCR (Ollama models)</small>
+          </div>
+
+          <div *ngIf="loadingPrompts" class="loading">Loading prompts...</div>
+          <div *ngIf="promptsError" class="error">{{ promptsError }}</div>
+
+          <!-- Add Prompt Button -->
+          <div class="add-prompt-bar" *ngIf="!loadingPrompts && !promptsError && !showNewPromptForm">
+            <button class="btn btn-primary btn-sm" (click)="showNewPromptForm = true">
+              + Add Custom Prompt
+            </button>
+          </div>
+
+          <!-- New Prompt Form -->
+          <div class="new-prompt-form" *ngIf="showNewPromptForm">
+            <div class="new-prompt-header">
+              <strong>New Custom Prompt</strong>
+            </div>
+            <div class="setting-item">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="newPromptName" class="form-control"
+                     placeholder="e.g. Sumerian Dictionary">
+            </div>
+            <div class="setting-item">
+              <label>Prompt Text</label>
+              <textarea [(ngModel)]="newPromptText" rows="6" class="form-control"
+                        placeholder="Enter the OCR prompt instructions..."></textarea>
+            </div>
+            <div class="edit-actions">
+              <button class="btn btn-primary btn-sm" (click)="createPrompt()"
+                      [disabled]="creatingPrompt || !newPromptName.trim() || !newPromptText.trim()">
+                {{ creatingPrompt ? 'Creating...' : 'Create' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="showNewPromptForm = false">Cancel</button>
+            </div>
+          </div>
+
+          <div class="prompts-list" *ngIf="!loadingPrompts && !promptsError">
+            <div class="prompt-item" *ngFor="let prompt of ocrPrompts"
+                 [class.is-default]="prompt.key === defaultPrompt"
+                 [class.is-custom]="!prompt.builtin">
+              <div class="prompt-header">
+                <div class="prompt-info">
+                  <strong>{{ getPromptLabel(prompt.key) }}</strong>
+                  <span class="prompt-key">({{ prompt.key }})</span>
+                  <span class="default-badge" *ngIf="prompt.key === defaultPrompt">Default</span>
+                  <span class="custom-badge" *ngIf="!prompt.builtin">Custom</span>
+                </div>
+                <div class="prompt-actions" *ngIf="!prompt.editing">
+                  <button class="btn-icon" (click)="startEditing(prompt)" title="Edit prompt">
+                    ✏️
+                  </button>
+                  <button class="btn-icon btn-icon-delete" *ngIf="!prompt.builtin" (click)="deletePrompt(prompt)" title="Delete prompt">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+              <small class="prompt-description">{{ getPromptDescription(prompt.key) }}</small>
+
+              <!-- View mode -->
+              <div class="prompt-value" *ngIf="!prompt.editing">
+                <pre>{{ prompt.value }}</pre>
+              </div>
+
+              <!-- Edit mode -->
+              <div class="prompt-edit" *ngIf="prompt.editing">
+                <textarea [(ngModel)]="prompt.editValue" rows="8" class="form-control"></textarea>
+                <div class="edit-actions">
+                  <button class="btn btn-primary btn-sm" (click)="savePrompt(prompt)">Save</button>
+                  <button class="btn btn-secondary btn-sm" (click)="cancelEditing(prompt)">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Trained Models Tab -->
+    <mat-tab label="Trained Models">
+      <div class="tab-content">
+        <div class="settings-section">
+          <h3>Kraken OCR Models</h3>
+          <p class="section-description">
+            Manage trained Kraken OCR models. Models trained from the Training page appear here automatically.
+          </p>
+
+          <!-- Active Model Info -->
+          <div class="active-model-info" *ngIf="activeKrakenModel">
+            <div class="active-model-header">
+              <strong>Currently Active:</strong>
+              <span class="active-model-name">{{ activeKrakenModel.name }}</span>
+              <span class="model-badge" *ngIf="activeKrakenModel.is_pretrained">Pre-trained</span>
+              <span class="model-badge custom" *ngIf="!activeKrakenModel.is_pretrained">Custom</span>
+            </div>
+            <small>Size: {{ activeKrakenModel.size_mb }} MB</small>
+          </div>
+
+          <!-- Loading state -->
+          <div *ngIf="loadingKrakenModels" class="loading">Loading models...</div>
+
+          <!-- Models List -->
+          <div class="models-list" *ngIf="!loadingKrakenModels">
+            <div *ngIf="krakenModels.length === 0" class="no-models">
+              No trained models found. Train a model from the Training page to see it here.
+            </div>
+
+            <div class="model-item" *ngFor="let model of krakenModels"
+                 [class.is-active]="activeKrakenModel?.name === model.name"
+                 [class.is-protected]="isProtectedModel(model.name)">
+              <div class="model-item-header">
+                <div class="model-item-info">
+                  <strong>{{ model.name }}</strong>
+                  <span class="active-badge" *ngIf="activeKrakenModel?.name === model.name">Active</span>
+                  <span class="protected-badge" *ngIf="isProtectedModel(model.name)">Protected</span>
+                </div>
+                <div class="model-item-meta">
+                  <span class="model-size">{{ model.size_mb }} MB</span>
+                  <span class="model-date">{{ formatDate(model.created) }}</span>
+                </div>
+              </div>
+
+              <div class="model-item-actions">
+                <!-- Activate button -->
+                <button class="btn btn-sm btn-primary"
+                        *ngIf="activeKrakenModel?.name !== model.name"
+                        (click)="activateKrakenModel(model.name)"
+                        [disabled]="activatingModel !== null">
+                  {{ activatingModel === model.name ? 'Activating...' : 'Set as Active' }}
+                </button>
+
+                <!-- Delete button -->
+                <button class="btn btn-sm btn-danger"
+                        *ngIf="!isProtectedModel(model.name)"
+                        (click)="deleteKrakenModel(model.name)"
+                        [disabled]="deletingModel !== null || activeKrakenModel?.name === model.name">
+                  {{ deletingModel === model.name ? 'Deleting...' : 'Delete' }}
+                </button>
+
+                <!-- Info for protected models -->
+                <small *ngIf="isProtectedModel(model.name)" class="protected-info">
+                  System model - cannot be deleted
+                </small>
+
+                <!-- Info for active model -->
+                <small *ngIf="activeKrakenModel?.name === model.name && !isProtectedModel(model.name)" class="active-info">
+                  Deactivate before deleting
+                </small>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-footer">
+            <button class="btn btn-secondary btn-sm" (click)="loadKrakenModels()">
+              Refresh Models
+            </button>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Utilities Tab -->
+    <mat-tab label="Utilities">
+      <div class="tab-content">
+        <div class="settings-section">
+          <h3>Character Replacement Mappings</h3>
+          <p class="section-description">Configure automatic character replacements applied during OCR text import</p>
+
+          <!-- Add new mapping -->
+          <div class="mapping-controls">
+            <input type="text" class="form-control mapping-input" [(ngModel)]="newMappingFrom" placeholder="From">
+            <span class="mapping-arrow">→</span>
+            <input type="text" class="form-control mapping-input" [(ngModel)]="newMappingTo" placeholder="To (empty = remove)">
+            <select class="form-control mapping-select" [(ngModel)]="newMappingCategory">
+              <option value="Custom">Custom</option>
+              <option *ngFor="let cat of mappingCategories" [value]="cat">{{ cat }}</option>
+            </select>
+            <button class="btn btn-primary btn-sm" (click)="addMapping()" [disabled]="!newMappingFrom">
+              Add
+            </button>
+            <button class="btn btn-secondary btn-sm" (click)="resetMappings()">
+              Reset to Defaults
+            </button>
+          </div>
+
+          <!-- Mapping categories -->
+          <div class="mapping-categories">
+            <div class="mapping-category" *ngFor="let category of mappingCategories">
+              <div class="category-header" (click)="toggleCategoryMappings(category)">
+                <span class="category-name">{{ category }}</span>
+                <span class="category-count">({{ getMappingsByCategory(category).length }})</span>
+                <span class="category-toggle">
+                  {{ allCategoryEnabled(category) ? '☑' : '☐' }}
+                </span>
+              </div>
+              <div class="category-mappings">
+                <div class="mapping-row" *ngFor="let mapping of getMappingsByCategory(category)"
+                  [class.disabled]="!mapping.enabled">
+                  <label class="mapping-checkbox">
+                    <input type="checkbox" [checked]="mapping.enabled" (change)="toggleMapping(mapping)">
+                  </label>
+                  <span class="mapping-from">{{ mapping.from || '(empty)' }}</span>
+                  <span class="mapping-arrow">→</span>
+                  <span class="mapping-to">{{ mapping.to || '(remove)' }}</span>
+                  <button class="mapping-delete" (click)="removeMapping(mapping)" title="Remove">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>

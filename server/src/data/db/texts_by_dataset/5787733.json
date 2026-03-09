@@ -1,0 +1,1084 @@
+[
+  {
+    "id": null,
+    "text_id": 6776956,
+    "publication_id": null,
+    "museum_id": "MS.3119",
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 4638208264,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "i d+nà",
+              "d+nà",
+              "I i",
+              "d+nà i",
+              "2",
+              "d+nà",
+              "it",
+              "kur I tú",
+              "I",
+              "tú"
+            ],
+            "boxes": [
+              {
+                "x": 21.0,
+                "y": 30.0,
+                "height": 44.0,
+                "width": 56.0,
+                "index": null
+              },
+              {
+                "x": 90.0,
+                "y": 30.0,
+                "height": 54.0,
+                "width": 491.0,
+                "index": null
+              },
+              {
+                "x": 27.0,
+                "y": 80.0,
+                "height": 56.0,
+                "width": 272.0,
+                "index": null
+              },
+              {
+                "x": 25.0,
+                "y": 142.0,
+                "height": 36.0,
+                "width": 28.0,
+                "index": null
+              },
+              {
+                "x": 461.0,
+                "y": 135.0,
+                "height": 57.0,
+                "width": 79.0,
+                "index": null
+              },
+              {
+                "x": 22.0,
+                "y": 180.0,
+                "height": 70.0,
+                "width": 257.0,
+                "index": null
+              },
+              {
+                "x": 277.0,
+                "y": 195.0,
+                "height": 59.0,
+                "width": 46.0,
+                "index": null
+              },
+              {
+                "x": 397.0,
+                "y": 260.0,
+                "height": 34.0,
+                "width": 66.0,
+                "index": null
+              },
+              {
+                "x": 331.0,
+                "y": 315.0,
+                "height": 88.0,
+                "width": 128.0,
+                "index": null
+              },
+              {
+                "x": 59.0,
+                "y": 369.0,
+                "height": 60.0,
+                "width": 252.0,
+                "index": null
+              },
+              {
+                "x": 104.0,
+                "y": 513.0,
+                "height": 46.0,
+                "width": 52.0,
+                "index": null
+              },
+              {
+                "x": 154.0,
+                "y": 516.0,
+                "height": 36.0,
+                "width": 62.0,
+                "index": null
+              },
+              {
+                "x": 219.0,
+                "y": 512.0,
+                "height": 50.0,
+                "width": 149.0,
+                "index": null
+              },
+              {
+                "x": 278.0,
+                "y": 558.0,
+                "height": 47.0,
+                "width": 59.0,
+                "index": null
+              },
+              {
+                "x": 203.0,
+                "y": 585.0,
+                "height": 31.0,
+                "width": 114.0,
+                "index": null
+              }
+            ],
+            "time": "2026-02-21T19:39:35.586187",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "6776956_67655892.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [],
+    "is_in_use": false,
+    "use_start_time": 1771699175,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "label": "training",
+    "part": "obverse",
+    "_id": "6999fbe74e9f0afac11423fd",
+    "dataset_id": 5787733
+  },
+  {
+    "id": null,
+    "text_id": 3701360,
+    "publication_id": null,
+    "museum_id": "MS.3119",
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3896098904,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "i",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [
+              {
+                "x": 28.0,
+                "y": 33.0,
+                "height": 45.0,
+                "width": 57.0,
+                "index": null
+              },
+              {
+                "x": 29.0,
+                "y": 183.0,
+                "height": 75.0,
+                "width": 311.0,
+                "index": null
+              },
+              {
+                "x": 173.0,
+                "y": 372.0,
+                "height": 54.0,
+                "width": 146.0,
+                "index": null
+              },
+              {
+                "x": 111.0,
+                "y": 516.0,
+                "height": 47.0,
+                "width": 113.0,
+                "index": null
+              },
+              {
+                "x": 226.0,
+                "y": 515.0,
+                "height": 51.0,
+                "width": 150.0,
+                "index": null
+              },
+              {
+                "x": 285.0,
+                "y": 561.0,
+                "height": 48.0,
+                "width": 60.0,
+                "index": null
+              },
+              {
+                "x": 197.0,
+                "y": 588.0,
+                "height": 32.0,
+                "width": 128.0,
+                "index": null
+              }
+            ],
+            "time": "2026-02-21T21:30:18.270353",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "i",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:21:34.351765",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "e-nu-ma",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:21:40.772634",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "e-nu-ma",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:21:51.354808",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:01.100583",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:20.510925",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:36.470568",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš an mi",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:47.449730",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš an mi en nu",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:53.537082",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš an mi en nu ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:56.857520",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš an mi en nu un",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:22:59.509554",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš an mi en nu un an-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:05.649108",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an mi en nu un an-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:13.056660",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an  mi en nu un an-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:14.740025",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu un an-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:22.323030",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-unan-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:27.718036",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:29.690113",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:32.626167",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta x",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:37.432221",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:23:39.865706",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:38:53.434184",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "me iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:04.339960",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ me iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:19.288753",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "d+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:24.411886",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠd+nà",
+              "am",
+              "I al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:32.311970",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠd+nà",
+              "DIŠam",
+              "DIŠI al",
+              "2",
+              "šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:38.182216",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠd+nà",
+              "DIŠam",
+              "DIŠI al",
+              "DIŠ2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:42.776061",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ d+nà",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:48.990066",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:39:54.498614",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:07.298182",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:12.976875",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR ",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:21.960477",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na ",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:26.542451",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:39.478723",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚBAD",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:44.946731",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BAD",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:46.674587",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:40:55.310740",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:41:15.305105",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi ",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:41:19.246677",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:41:26.387029",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-21T23:41:37.236225",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-23T23:20:10.439479",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-23T23:23:12.363024",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-24T10:48:00.562261",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-25T11:33:04.357806",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-25T12:02:33.541163",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "DIŠ ina iti aš  an-mi en-nu-un-an-ta ",
+              "DIŠ an-mi DUG GAR a-na LÚ BE",
+              "DIŠ am-mi UD-ni TE GAR",
+              "DIŠ I al",
+              "DIŠ 2",
+              "DIŠ šú"
+            ],
+            "boxes": [],
+            "time": "2026-02-26T19:53:18.393531",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3701360_13216833.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [],
+    "is_in_use": false,
+    "use_start_time": 1772131999,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "label": "training",
+    "part": "obverse",
+    "_id": "699a15da3ecc106e4550c18b",
+    "dataset_id": 5787733
+  }
+]

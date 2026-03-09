@@ -67,7 +67,7 @@ runs/
 *.pdf
 deepseek-ocr/
 vlm-ocr/
-server-new/data/
+server/data/
 **/unsloth_compiled_cache/
 **/vlm-training/
 

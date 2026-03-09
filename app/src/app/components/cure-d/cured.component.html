@@ -1,0 +1,895 @@
+<!-- Stage 0: Dashboard -->
+<div *ngIf="stage == 0" class="cured-dashboard">
+
+  <!-- LEFT: Sidebar -->
+  <div class="cured-sidebar">
+
+    <!-- Create dataset -->
+    <div class="create-dataset-row">
+      <input [(ngModel)]="newDatasetName" placeholder="New dataset..."
+             (keyup.enter)="createDataset()" class="folder-name-input" />
+      <button mat-raised-button color="primary" (click)="createDataset()"
+              [disabled]="!newDatasetName.trim()">
+        <mat-icon>add</mat-icon>
+      </button>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Upload zone -->
+    <div class="sidebar-upload"
+         (dragover)="onDragOver($event)"
+         (dragleave)="onDragLeave($event)"
+         (drop)="onDrop($event)"
+         [class.drag-over]="isDragOver"
+         (click)="uploadFile.click()">
+      <input #uploadFile (change)="handleFileInput($event)" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display:none"/>
+      <mat-icon>cloud_upload</mat-icon>
+      <span>Drop file or click</span>
+      <span class="file-types">PDF, PNG, JPG</span>
+    </div>
+
+    <div class="sidebar-btn-row">
+      <button mat-stroked-button class="browse-server-btn" (click)="browseServer()">
+        <mat-icon>folder_open</mat-icon> Server
+      </button>
+      <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+              matTooltip="Upload a folder of images as a batch">
+        <mat-icon>snippet_folder</mat-icon> Folder
+      </button>
+      <input #uploadFolder (change)="handleFolderInput($event)" type="file"
+             webkitdirectory directory multiple style="display:none"/>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Training data stats -->
+    <div class="training-mini-stats">
+      <div class="mini-stat">
+        <span class="mini-stat-value">{{ curatedStats.total.lines }}</span>
+        <span class="mini-stat-label">Lines</span>
+      </div>
+      <div class="mini-stat-separator">/</div>
+      <div class="mini-stat">
+        <span class="mini-stat-value">{{ curatedStats.total.texts }}</span>
+        <span class="mini-stat-label">Texts</span>
+      </div>
+    </div>
+
+    <div class="training-recs">
+      <span class="rec-hint"><strong>{{ getKrakenTrainingTarget() }}</strong> lines for Kraken</span>
+      <span class="rec-hint"><strong>{{ getVlmTrainingTarget() }}</strong> texts for VLM</span>
+    </div>
+
+    <!-- Per-dataset breakdown -->
+    <div class="dataset-stats-breakdown" *ngIf="getDatasetsWithCuratedData().length > 0">
+      <div class="dataset-stat-row" *ngFor="let p of getDatasetsWithCuratedData()">
+        <span class="dataset-stat-name">{{ p.name }}</span>
+        <span class="dataset-stat-values">{{ p.curated_lines }} lines · {{ p.curated_count }} texts</span>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Active Models -->
+    <div class="active-models-section">
+      <div class="active-models-header">Active Models</div>
+
+      <div class="models-group">
+        <div class="models-group-label">Kraken (local)</div>
+        <ng-container *ngFor="let m of getKrakenModels()">
+          <div class="model-item">{{ m.label }}</div>
+        </ng-container>
+      </div>
+
+      <div class="models-group">
+        <div class="models-group-label">Ollama (local)</div>
+        <div class="model-item" *ngFor="let m of getOllamaModels()">{{ m.label }}</div>
+      </div>
+
+      <div class="models-group">
+        <div class="models-group-label">API</div>
+        <div class="model-item" *ngFor="let m of getApiModels()">{{ m.label }}</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: Main Panel -->
+  <div class="cured-main">
+    <!-- Dataset cards view -->
+    <div *ngIf="showDatasetList" class="main-panel">
+      <div class="dataset-toolbar" *ngIf="datasets.length > 0">
+        <div class="dataset-search-box">
+          <mat-icon class="dataset-search-icon">search</mat-icon>
+          <input [(ngModel)]="datasetSearchQuery" placeholder="Search datasets..." class="dataset-search-input" />
+          <button *ngIf="datasetSearchQuery" mat-icon-button class="dataset-search-clear" (click)="clearDatasetSearch()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <span class="dataset-toolbar-count">{{ filteredDatasets.length }} dataset{{ filteredDatasets.length === 1 ? '' : 's' }}</span>
+      </div>
+
+      <div class="dataset-grid">
+        <div *ngFor="let dataset of filteredDatasets"
+             class="dataset-card"
+             [class.selected]="selectedDatasetCard?.dataset_id === dataset.dataset_id"
+             (click)="selectDatasetCard(dataset)"
+             (dblclick)="openDataset(dataset)"
+             (contextmenu)="onDatasetContextMenu(dataset, $event)">
+          <mat-icon class="dataset-icon">folder</mat-icon>
+          <mat-icon *ngIf="dataset.curated_count > 0 && dataset.curated_count >= dataset.text_count"
+                    class="dataset-curated-badge" matTooltip="All texts curated">check_circle</mat-icon>
+          <div class="dataset-info">
+            <span class="dataset-name" *ngIf="editingDataset?.dataset_id !== dataset.dataset_id"
+                  (click)="onDatasetNameClick(dataset, $event)">{{ dataset.name }}</span>
+            <input *ngIf="editingDataset?.dataset_id === dataset.dataset_id"
+                   class="dataset-name-input-inline" [(ngModel)]="editingDatasetName"
+                   (keydown.enter)="confirmDatasetRename()" (keydown.escape)="cancelDatasetRename()"
+                   (blur)="onDatasetRenameBlur()" (click)="$event.stopPropagation()" #datasetRenameInput>
+            <span class="dataset-meta">{{ dataset.curated_count || 0 }}/{{ dataset.text_count || 0 }} curated</span>
+          </div>
+        </div>
+
+        <!-- Unassigned card -->
+        <div class="dataset-card unassigned-card" (click)="loadUnassignedTexts()">
+          <mat-icon class="dataset-icon unassigned-icon">folder_off</mat-icon>
+          <div class="dataset-info">
+            <span class="dataset-name">Unassigned</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-list" *ngIf="datasets.length === 0">
+        <mat-icon>folder_open</mat-icon>
+        <p>No datasets yet</p>
+        <span>Create a dataset from the sidebar</span>
+      </div>
+    </div>
+
+    <!-- Selected dataset view (text list) -->
+    <div *ngIf="!showDatasetList" class="main-panel">
+      <div class="text-list-header">
+        <button mat-icon-button (click)="backToDatasets()" matTooltip="Back to datasets">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <h3>{{ selectedDataset?.name }}</h3>
+        <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} items</span>
+
+        <span class="header-spacer"></span>
+
+        <div class="text-search-box" *ngIf="curedTexts.length > 0">
+          <mat-icon class="text-search-icon">search</mat-icon>
+          <input [(ngModel)]="searchQuery"
+                 placeholder="Search texts (Enter for KWIC)..."
+                 class="text-search-input"
+                 (keyup.enter)="searchKwic()" />
+          <button *ngIf="searchQuery" mat-icon-button class="text-search-clear"
+                  (click)="clearSearch(); clearKwicSearch()">
+            <mat-icon>close</mat-icon>
+          </button>
+          <button mat-icon-button class="text-search-kwic"
+                  (click)="searchKwic()"
+                  [disabled]="searchQuery.trim().length < 2"
+                  matTooltip="Search transliteration content (KWIC)">
+            <mat-icon>manage_search</mat-icon>
+          </button>
+        </div>
+
+        <div class="view-toggle" *ngIf="curedTexts.length > 0">
+          <button [class.active-view]="textViewMode === 'grid'" (click)="textViewMode = 'grid'; clearTextSelection()" matTooltip="Grid view">
+            <mat-icon>grid_view</mat-icon>
+          </button>
+          <button [class.active-view]="textViewMode === 'list'" (click)="textViewMode = 'list'; clearTextSelection()" matTooltip="Details view">
+            <mat-icon>view_list</mat-icon>
+          </button>
+        </div>
+
+        <button mat-icon-button [matMenuTriggerFor]="datasetExportMenu" matTooltip="Export dataset"
+                *ngIf="curedTexts.length > 0 && selectedDataset?.dataset_id !== -1">
+          <mat-icon>download</mat-icon>
+        </button>
+        <mat-menu #datasetExportMenu="matMenu">
+          <div class="export-menu-section">Single file</div>
+          <button mat-menu-item (click)="exportDataset('txt')">
+            <mat-icon>description</mat-icon> TXT
+          </button>
+          <button mat-menu-item (click)="exportDataset('atf')">
+            <mat-icon>code</mat-icon> ATF (eBL)
+          </button>
+          <button mat-menu-item (click)="exportDataset('json')">
+            <mat-icon>data_object</mat-icon> JSON
+          </button>
+          <button mat-menu-item (click)="exportDataset('tsv')">
+            <mat-icon>table_chart</mat-icon> TSV
+          </button>
+          <mat-divider></mat-divider>
+          <div class="export-menu-section">ZIP (individual files)</div>
+          <button mat-menu-item (click)="exportDataset('zip_txt')">
+            <mat-icon>folder_zip</mat-icon> TXT files
+          </button>
+          <button mat-menu-item (click)="exportDataset('zip_json')">
+            <mat-icon>folder_zip</mat-icon> JSON files
+          </button>
+          <mat-divider></mat-divider>
+          <div class="export-menu-section">CuReD dataset</div>
+          <button mat-menu-item (click)="exportDatasetCured()">
+            <mat-icon>dataset</mat-icon> Export (images + transliterations)
+          </button>
+        </mat-menu>
+
+        <button mat-icon-button [matMenuTriggerFor]="importMenu" matTooltip="Import CuReD data"
+                *ngIf="selectedDataset?.dataset_id !== -1">
+          <mat-icon>upload_file</mat-icon>
+        </button>
+        <mat-menu #importMenu="matMenu">
+          <button mat-menu-item (click)="importZipInput.click()">
+            <mat-icon>folder_zip</mat-icon> From ZIP file
+          </button>
+          <button mat-menu-item (click)="importFolderInput.click()">
+            <mat-icon>folder_open</mat-icon> From folder
+          </button>
+        </mat-menu>
+        <input #importZipInput type="file" accept=".zip" style="display:none"
+               (change)="handleImportZip($event)" />
+        <input #importFolderInput type="file" webkitdirectory directory multiple style="display:none"
+               (change)="handleImportFolder($event)" />
+      </div>
+
+      <div class="text-list-panel" (click)="onTextListBackgroundClick($event)">
+        <!-- ===== KWIC CONCORDANCE RESULTS ===== -->
+        <div *ngIf="kwicSearchActive || isSearchingKwic" class="kwic-results-panel">
+          <div class="kwic-panel-header">
+            <h3>Concordance</h3>
+            <span class="kwic-match-count" *ngIf="!isSearchingKwic">{{ kwicResults.length }} match{{ kwicResults.length === 1 ? '' : 'es' }} for "{{ kwicSearchQuery }}"</span>
+            <span class="header-spacer"></span>
+            <button mat-stroked-button (click)="clearKwicSearch(); searchQuery = ''">
+              <mat-icon>arrow_back</mat-icon>
+              Back to list
+            </button>
+          </div>
+
+          <div class="kwic-loading" *ngIf="isSearchingKwic">
+            <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+            <span>Searching transliterations...</span>
+          </div>
+
+          <div class="kwic-list" *ngIf="!isSearchingKwic && kwicResults.length > 0">
+            <div class="kwic-entry" *ngFor="let result of kwicResults" (click)="openKwicResult(result)">
+              <div class="kwic-header">
+                <span class="kwic-identifier">{{ result.identifier }}</span>
+                <span class="kwic-part" *ngIf="result.part">{{ result.part }}</span>
+                <span class="kwic-line-num">line {{ result.line_index + 1 }}</span>
+              </div>
+              <div class="kwic-context">
+                <div class="kwic-line context" *ngIf="result.line_before">{{ result.line_before }}</div>
+                <div class="kwic-line match" [innerHTML]="highlightKwicMatch(result.matching_line)"></div>
+                <div class="kwic-line context" *ngIf="result.line_after">{{ result.line_after }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-list" *ngIf="!isSearchingKwic && kwicResults.length === 0">
+            <mat-icon>search_off</mat-icon>
+            <p>No matches found for "{{ kwicSearchQuery }}"</p>
+          </div>
+        </div>
+
+        <!-- ===== GRID VIEW ===== -->
+        <div class="text-grid" *ngIf="filteredTexts.length > 0 && textViewMode === 'grid' && !kwicSearchActive && !isSearchingKwic">
+          <div class="text-grid-card" *ngFor="let item of filteredTexts"
+               [class.selected]="isTextSelected(item)"
+               (click)="openListItem(item)"
+               (contextmenu)="onTextContextMenu(item, $event)">
+            <div class="text-grid-thumbnail">
+              <img *ngIf="item._thumbnailUrl" [src]="item._thumbnailUrl" alt="thumbnail" />
+              <mat-icon *ngIf="!item._thumbnailUrl">image</mat-icon>
+            </div>
+            <div class="text-grid-info">
+              <span class="text-grid-identifier">
+                <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
+              </span>
+              <span class="text-grid-meta">
+                <span *ngIf="item.part" class="text-grid-part">{{ item.part }}</span>
+                <span class="text-grid-id">BEN {{ item.text_id }}</span>
+              </span>
+              <div class="text-grid-labels" *ngIf="item.labels?.length > 0">
+                <span class="label-mini-chip" *ngFor="let l of item.labels"
+                      [style.background]="getLabelColor(l).bg"
+                      [style.color]="getLabelColor(l).color"
+                      [style.border-color]="getLabelColor(l).border">{{ l }}</span>
+              </div>
+              <div class="text-grid-labels" *ngIf="!item.labels?.length && item.label">
+                <span class="label-mini-chip" style="background:#e8eaf6; color:#3949ab; border-color:#9fa8da">{{ item.label }}</span>
+              </div>
+            </div>
+            <div class="text-grid-badges">
+              <mat-icon *ngIf="item.is_curated_kraken || item.is_curated_vlm" class="curated-badge-icon" matTooltip="Curated">check_circle</mat-icon>
+              <span *ngIf="item.lines_count" class="lines-badge">{{ item.lines_count }}L</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LIST / DETAILS VIEW (Explorer style) ===== -->
+        <div class="details-list" *ngIf="textViewMode === 'list' && filteredTexts.length > 0 && !kwicSearchActive && !isSearchingKwic">
+          <div class="details-header">
+            <span class="details-col-icon"></span>
+            <span class="details-col-name sortable" (click)="toggleSort('identifier')" [class.active-sort]="sortColumn === 'identifier'">
+              Identifier
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'identifier'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-part sortable" (click)="toggleSort('part')" [class.active-sort]="sortColumn === 'part'">
+              Part
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'part'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-date sortable" (click)="toggleSort('last_modified')" [class.active-sort]="sortColumn === 'last_modified'">
+              Date
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'last_modified'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-benid sortable" (click)="toggleSort('text_id')" [class.active-sort]="sortColumn === 'text_id'">
+              BEN ID
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'text_id'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-label sortable" (click)="toggleSort('label')" [class.active-sort]="sortColumn === 'label'">
+              Label
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'label'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-curated"
+                  [class.batch-clickable]="selectedTexts.size > 0"
+                  [class.all-curated]="selectedTexts.size > 0 && allSelectedAreCurated()"
+                  (click)="batchCurateFromHeader()"
+                  [matTooltip]="selectedTexts.size > 0 ? 'Click to curate ' + selectedTexts.size + ' selected' : ''">
+              Curated
+            </span>
+            <span class="details-col-lines sortable" (click)="toggleSort('lines_count')" [class.active-sort]="sortColumn === 'lines_count'">
+              Lines
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'lines_count'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
+            <span class="details-col-actions">Actions</span>
+          </div>
+          <div class="details-row" *ngFor="let item of filteredTexts"
+               [class.selected]="isTextSelected(item)"
+               (click)="toggleTextSelection(item, $event)"
+               (dblclick)="openListItem(item)">
+            <div class="details-icon details-col-icon">
+              <mat-icon>description</mat-icon>
+            </div>
+            <span class="details-name details-col-name clickable" (click)="$event.stopPropagation()" (dblclick)="openIdentifierDialog(item, $event)" matTooltip="Double-click to edit identifiers">
+              <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
+            </span>
+            <span class="details-part details-col-part clickable" (click)="$event.stopPropagation()" (dblclick)="openPartDialog(item, $event)" matTooltip="Double-click to edit part">{{ item.part || '—' }}</span>
+            <span class="details-date details-col-date">{{ item.last_modified | date:'d MMM yy, HH:mm' }}</span>
+            <span class="details-benid details-col-benid">{{ item.text_id }}</span>
+            <span class="details-label details-col-label" (click)="openLabelDialog(item, $event)">
+              <ng-container *ngIf="item.labels?.length > 0; else legacyLabel">
+                <span class="label-mini-chip" *ngFor="let l of item.labels"
+                      [style.background]="getLabelColor(l).bg"
+                      [style.color]="getLabelColor(l).color"
+                      [style.border-color]="getLabelColor(l).border">{{ l }}</span>
+              </ng-container>
+              <ng-template #legacyLabel>
+                <span class="label-tag" *ngIf="item.label">{{ item.label }}</span>
+                <span *ngIf="!item.label" class="no-label">—</span>
+              </ng-template>
+            </span>
+            <span class="details-curated details-col-curated clickable"
+                  (click)="toggleSingleTextCuration(item, $event)"
+                  matTooltip="Click to toggle curation">
+              <mat-icon *ngIf="item.is_curated_kraken || item.is_curated_vlm" class="curated-icon">check_circle</mat-icon>
+              <mat-icon *ngIf="!item.is_curated_kraken && !item.is_curated_vlm" class="uncurated-icon">radio_button_unchecked</mat-icon>
+            </span>
+            <span class="details-lines details-col-lines">{{ item.lines_count || '—' }}</span>
+            <div class="details-actions details-col-actions">
+              <button mat-icon-button [matMenuTriggerFor]="rowExport" (click)="$event.stopPropagation()" matTooltip="Download">
+                <mat-icon>download</mat-icon>
+              </button>
+              <mat-menu #rowExport="matMenu">
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'txt')">
+                  <mat-icon>description</mat-icon> TXT
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'atf')">
+                  <mat-icon>code</mat-icon> ATF (eBL)
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'json')">
+                  <mat-icon>data_object</mat-icon> JSON
+                </button>
+                <button mat-menu-item (click)="downloadSingleText(item, $event, 'csv')">
+                  <mat-icon>table_chart</mat-icon> CSV
+                </button>
+                <mat-divider></mat-divider>
+                <button mat-menu-item (click)="exportSingleTextCured(item, $event)">
+                  <mat-icon>dataset</mat-icon> CuReD zip
+                </button>
+              </mat-menu>
+              <button mat-icon-button (click)="moveListItem(item, $event)" matTooltip="Move to dataset">
+                <mat-icon>drive_file_move</mat-icon>
+              </button>
+              <button mat-icon-button color="warn" (click)="deleteListItem(item, $event)" matTooltip="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-list" *ngIf="curedTexts.length > 0 && filteredTexts.length === 0 && !kwicSearchActive && !isSearchingKwic">
+          <p>No items match the search.</p>
+        </div>
+
+        <div class="empty-list" *ngIf="curedTexts.length === 0">
+          <mat-icon>folder_open</mat-icon>
+          <p>Empty dataset</p>
+          <span>Upload an image to get started</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stage 1: PDF Page Selection - Thumbnail View (Paginated) -->
+<div *ngIf="stage == 1" style="padding: 2em;">
+  <!-- Navigation Controls -->
+  <div class="pdf-navigation" style="display: flex; align-items: center; justify-content: center; gap: 1em; margin-bottom: 1em; flex-wrap: wrap;">
+    <button mat-raised-button (click)="prevPageWindow()" [disabled]="visiblePageNumbers[0] <= 1">
+      <mat-icon>chevron_left</mat-icon> Previous
+    </button>
+
+    <div style="display: flex; align-items: center; gap: 0.5em;">
+      <span>Go to page:</span>
+      <input type="number" [(ngModel)]="goToPageInput" min="1" [max]="totalPages"
+             style="width: 70px; padding: 0.5em; border: 1px solid #ccc; border-radius: 4px;"
+             (keyup.enter)="jumpToPage()">
+      <button mat-raised-button color="primary" (click)="jumpToPage()">Go</button>
+    </div>
+
+    <span style="color: #666;">
+      Showing pages {{visiblePageNumbers[0]}} - {{visiblePageNumbers[visiblePageNumbers.length - 1]}} of {{totalPages}}
+    </span>
+
+    <button mat-raised-button (click)="nextPageWindow()" [disabled]="visiblePageNumbers[visiblePageNumbers.length - 1] >= totalPages">
+      Next <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+
+  <!-- Page Thumbnails (only visible pages) -->
+  <div class="pdf-thumbnails">
+    <div *ngFor="let page of visiblePageNumbers; let i = index"
+         class="pdf-thumbnail"
+         [class.selected]="currentpage === page"
+         (click)="selectPageFromThumbnail(page)">
+      <pdf-viewer [src]="pdfSrc"
+                  [page]="page"
+                  [show-all]="false"
+                  [render-text]="false"
+                  [fit-to-page]="true"
+                  style="width: 220px; height: 300px;">
+      </pdf-viewer>
+      <span class="page-number">Page {{page}}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden PDF viewer for page count -->
+<pdf-viewer *ngIf="pdfSrc && totalPages === 0"
+            [src]="pdfSrc"
+            [show-all]="false"
+            [render-text]="false"
+            (after-load-complete)="afterLoadComplete($event)"
+            style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;">
+</pdf-viewer>
+
+<!-- Main Visualizer (stages 2+) -->
+<div class="visualizer-container" *ngIf="stage >= 2">
+
+  <!-- Left Toolbar -->
+  <div class="visualizer-toolbar">
+    <button class="tool-btn" *ngIf="!isLoadedFromServer && !viewOnly"
+            (click)="goBack()" matTooltip="Back">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+    <div class="toolbar-divider" *ngIf="!isLoadedFromServer && !viewOnly"></div>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
+            (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (double-click-hold to draw)">
+      <mat-icon>pan_tool</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Add"
+            (click)="canvas?.changeMode(CanvasMode.Add)" matTooltip="Draw selection box (Alt+A)">
+      <mat-icon>crop_free</mat-icon>
+    </button>
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Delete"
+            (click)="canvas?.changeMode(CanvasMode.Delete)" matTooltip="Delete (Alt+D)">
+      <mat-icon>delete</mat-icon>
+    </button>
+    <button class="tool-btn"
+            (click)="cropToSelectedBox()" matTooltip="Crop image to selection box (Ctrl+Shift+C)">
+      <mat-icon>content_cut</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn"
+            [disabled]="isDetectingLines || stage !== 5 || !lines?.length || boundingBoxes.length === lines?.length"
+            (click)="detectLines()" matTooltip="Detect line boxes">
+      <mat-icon>{{ isDetectingLines ? 'hourglass_empty' : 'auto_fix_high' }}</mat-icon>
+    </button>
+    <button class="tool-btn"
+            [disabled]="stage !== 5 || boundingBoxes.length === 0"
+            (click)="clearAllBoxes()" matTooltip="Clear all boxes">
+      <mat-icon>delete_sweep</mat-icon>
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" (click)="canvas?.zoomIn()" matTooltip="Zoom in">
+      <mat-icon>zoom_in</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.zoomOut()" matTooltip="Zoom out">
+      <mat-icon>zoom_out</mat-icon>
+    </button>
+    <button class="tool-btn" (click)="canvas?.forceZoomOut(1)" matTooltip="Reset zoom">
+      <mat-icon>fit_screen</mat-icon>
+    </button>
+  </div>
+
+  <!-- Split Panels -->
+  <div class="split-container">
+    <!-- Left Panel: PDF Canvas -->
+    <div class="panel panel-left" [style.width.%]="leftPanelWidth">
+      <fabric-canvas #canvas (modeChange)="modeChanged($event)"
+        [canvasType]="canvasType" (selectionChange)="boxSelectionChanged($event)"
+        (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)">
+      </fabric-canvas>
+    </div>
+
+    <!-- Resizer -->
+    <div class="panel-resizer"
+         (mousedown)="startResize($event)"
+         (touchstart)="startResize($event)">
+      <div class="resizer-handle"></div>
+    </div>
+
+    <!-- Right Panel: Preview or Lines -->
+    <div class="panel panel-right" [style.width.%]="100 - leftPanelWidth">
+      <!-- Preview before detection -->
+      <div *ngIf="stage == 2" class="preview-panel">
+        <div class="preview-content model-selection-content" *ngIf="!isLoading">
+          <!-- Workflow steps -->
+          <h3>Workflow</h3>
+          <div class="instructions-steps">
+            <div class="instruction-step" [class.done]="selectedBox">
+              <mat-icon>crop_free</mat-icon>
+              <span>Draw box</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step" [class.done]="selectedOcrModel">
+              <mat-icon>model_training</mat-icon>
+              <span>Model</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step" [class.done]="selectedOcrPrompt">
+              <mat-icon>tune</mat-icon>
+              <span>Mode</span>
+            </div>
+            <mat-icon class="step-arrow">chevron_right</mat-icon>
+            <div class="instruction-step">
+              <mat-icon>auto_awesome</mat-icon>
+              <span>Generate</span>
+            </div>
+          </div>
+
+          <h3>Select OCR Model</h3>
+
+          <!-- Categorized Model Selection -->
+          <div class="model-categories">
+            <div *ngFor="let category of ocrModelCategories" class="model-category" [hidden]="category.models.length === 0">
+              <div class="category-header">{{ category.name }}</div>
+              <div class="category-models">
+                <button *ngFor="let model of category.models"
+                        class="model-btn"
+                        [class.selected]="selectedOcrModel === model.value"
+                        [class.available]="isModelAvailable(model.value)"
+                        [class.unavailable]="!isModelAvailable(model.value)"
+                        (click)="selectOcrModel(model.value)"
+                        [matTooltip]="getModelTooltip(model)">
+                  {{ model.label }}
+                  <mat-icon *ngIf="!isModelAvailable(model.value)" class="download-icon">cloud_download</mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- OCR Mode Selection (for VLM models) -->
+          <div class="ocr-mode-section">
+            <h3>Mode</h3>
+            <div class="mode-buttons">
+              <button *ngFor="let mode of ocrPromptModes"
+                      class="mode-btn"
+                      [class.selected]="selectedOcrPrompt === mode.value"
+                      (click)="selectedOcrPrompt = mode.value"
+                      [matTooltip]="mode.description">
+                {{ mode.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- TEI Encoding Model Selection (visible when TEI Lex-0 mode is selected) -->
+          <div class="tei-model-section" *ngIf="selectedOcrPrompt === 'tei_lex0'">
+            <div class="mode-header">TEI Encoding Model (Stage 2)</div>
+            <div class="tei-model-hint">OCR reads the image, then this model converts text to TEI XML</div>
+            <div class="mode-buttons">
+              <button *ngFor="let teiModel of teiEncodingModels"
+                      class="mode-btn"
+                      [class.selected]="selectedTeiModel === teiModel.value"
+                      (click)="selectedTeiModel = teiModel.value; onTeiModelChange()"
+                      [matTooltip]="teiModel.description">
+                {{ teiModel.label }}
+              </button>
+            </div>
+            <mat-form-field appearance="outline" class="api-key-input" *ngIf="teiModelNeedsApiKey">
+              <mat-label>TEI Model API Key</mat-label>
+              <input matInput [(ngModel)]="teiApiKey" type="password"
+                     placeholder="API key for TEI encoding model">
+              <mat-icon matSuffix>key</mat-icon>
+              <mat-hint>API key for {{ selectedTeiModelInfo?.label }}. Saved locally.</mat-hint>
+            </mat-form-field>
+          </div>
+
+          <!-- Post-OCR Correction Rules -->
+          <div class="ocr-mode-section">
+            <h3>Correction Rules</h3>
+            <div class="mode-buttons">
+              <button *ngFor="let rule of correctionRulesOptions"
+                      class="mode-btn"
+                      [class.selected]="correctionRules === rule.value"
+                      (click)="correctionRules = rule.value"
+                      [matTooltip]="rule.description">
+                {{ rule.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- API Key and Model Selection (for cloud API models) -->
+          <div class="api-key-section" *ngIf="requiresApiKey()">
+            <mat-form-field appearance="outline" class="api-key-input">
+              <mat-label>API Key</mat-label>
+              <input matInput [(ngModel)]="apiKey" type="password"
+                     [placeholder]="getApiKeyPlaceholder()">
+              <mat-icon matSuffix>key</mat-icon>
+              <mat-hint>Required for cloud models. Saved locally per model.</mat-hint>
+            </mat-form-field>
+
+            <!-- Sub-model selection dropdown -->
+            <mat-form-field appearance="outline" class="sub-model-select" *ngIf="hasSubModels()">
+              <mat-label>Model Version</mat-label>
+              <mat-select [(ngModel)]="selectedSubModel" (selectionChange)="onSubModelChange()">
+                <mat-option *ngFor="let subModel of apiSubModels[selectedOcrModel]" [value]="subModel.value">
+                  {{ subModel.label }} - {{ subModel.description }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <button mat-raised-button color="primary" (click)="generateLines()" class="generate-btn"
+                  [disabled]="(requiresApiKey() && !apiKey) || (selectedOcrPrompt === 'tei_lex0' && teiModelNeedsApiKey && !teiApiKey)">
+            <mat-icon>auto_awesome</mat-icon>
+            Generate
+          </button>
+        </div>
+        <div class="preview-content" *ngIf="isLoading" style="display: flex; flex-direction: column; align-items: center;">
+          <mat-spinner diameter="48"></mat-spinner>
+          <h3 style="margin-top: 1em;">Detecting lines...</h3>
+        </div>
+      </div>
+
+      <!-- Batch progress bar -->
+      <div *ngIf="isBatchActive && stage >= 2" class="batch-progress">
+        <mat-icon class="batch-icon">queue</mat-icon>
+        <span class="batch-counter">{{ currentPageIndex + 1 }} / {{ batchTotal }}</span>
+        <button mat-stroked-button class="batch-btn" (click)="skipPage()" *ngIf="hasPendingPages"
+                matTooltip="Skip to next image">
+          Skip <mat-icon>skip_next</mat-icon>
+        </button>
+        <button mat-stroked-button class="batch-btn next-btn" (click)="loadNextPage()" *ngIf="hasPendingPages"
+                matTooltip="Load next image">
+          Next <mat-icon>navigate_next</mat-icon>
+        </button>
+        <button mat-icon-button class="batch-close" (click)="clearBatchQueue()" matTooltip="Clear batch queue">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Status info bar -->
+      <div *ngIf="stage >= 5 && (textId || transliterationId || isTextFixed || hasLinkedTranslation || textListNavActive)" class="results-info">
+        <!-- Text list navigation -->
+        <div *ngIf="textListNavActive && filteredTexts.length > 0" class="text-nav">
+          <button mat-icon-button class="text-nav-btn"
+                  [disabled]="!canNavigatePrev"
+                  (click)="navigateToPrevText()"
+                  matTooltip="Previous text">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <mat-select class="text-nav-dropdown"
+                      [value]="textId"
+                      (selectionChange)="navigateToTextByIndex($event.value)">
+            <mat-option *ngFor="let item of filteredTexts; let i = index"
+                        [value]="item.text_id">
+              {{ getTextNavLabel(item) }}
+            </mat-option>
+          </mat-select>
+          <span class="text-nav-counter">{{ currentTextListIndex + 1 }} / {{ filteredTexts.length }}</span>
+          <button mat-icon-button class="text-nav-btn"
+                  [disabled]="!canNavigateNext"
+                  (click)="navigateToNextText()"
+                  matTooltip="Next text">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+          <div class="text-nav-separator"></div>
+        </div>
+
+        <span class="info-item" *ngIf="textId">BEN: {{textId}}</span>
+        <span class="info-item" *ngIf="transliterationId">Trans: {{transliterationId}}</span>
+        <!-- Action buttons -->
+        <div class="results-actions" *ngIf="!viewOnly">
+          <button mat-stroked-button [color]="hasUnsavedChanges ? 'warn' : 'primary'"
+                  [disabled]="!hasUnsavedChanges"
+                  (click)="save()" matTooltip="Save (Ctrl+S)" class="results-action-btn">
+            <mat-icon>save</mat-icon>
+            {{ hasUnsavedChanges ? 'Save *' : 'Saved' }}
+          </button>
+          <button mat-stroked-button color="primary"
+                  (click)="curate()" [disabled]="textId == null || !canCurate"
+                  matTooltip="Curate for training" class="results-action-btn"
+                  [class.curated]="isCurated">
+            <mat-icon>verified</mat-icon>
+            {{ isCurated ? 'Curated ✓' : 'Curate' }}
+          </button>
+          <button mat-stroked-button color="warn"
+                  *ngIf="isLoadedFromServer && textId != null"
+                  (click)="deleteCurrentEntry()" matTooltip="Delete text entry"
+                  class="results-action-btn">
+            <mat-icon>delete</mat-icon>
+            Delete
+          </button>
+        </div>
+
+        <!-- Translation toggle button -->
+        <button *ngIf="hasLinkedTranslation" mat-stroked-button class="translation-toggle"
+                [class.active]="showTranslationView"
+                (click)="toggleTranslationView()"
+                matTooltip="View linked translation">
+          <mat-icon>translate</mat-icon>
+          <span>Translation</span>
+        </button>
+        <span *ngIf="loadingTranslation" class="loading-indicator">
+          <mat-spinner diameter="16"></mat-spinner>
+        </span>
+      </div>
+
+      <!-- Translation Panel -->
+      <div *ngIf="stage >= 5 && showTranslationView && linkedTranslationLines.length > 0" class="translation-panel">
+        <div class="translation-header">
+          <h4>Linked Translation ({{currentMuseumName}}.{{currentMuseumNumber}})</h4>
+          <div class="translation-actions">
+            <button mat-stroked-button color="primary" (click)="insertTranslation()" matTooltip="Insert translation lines into editor">
+              <mat-icon>merge</mat-icon>
+              Merge
+            </button>
+            <button mat-icon-button (click)="toggleTranslationView()" matTooltip="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+        <div class="translation-lines">
+          <div *ngFor="let line of linkedTranslationLines; let i = index" class="translation-line">
+            <span class="line-num">{{i + 1}}.</span>
+            <span class="line-text">{{line}}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEI Lex-0 Validation Panel -->
+      <div *ngIf="stage >= 5 && showTeiValidation && teiValidationResults" class="tei-validation-panel">
+        <div class="tei-validation-header">
+          <h4>TEI Lex-0 Validation</h4>
+          <div class="tei-validation-summary">
+            <span class="tei-badge valid">{{getTeiValidCount()}} valid</span>
+            <span class="tei-badge error" *ngIf="getTeiErrorCount() > 0">{{getTeiErrorCount()}} errors</span>
+            <span class="tei-badge warning" *ngIf="getTeiWarningCount() > 0">{{getTeiWarningCount()}} warnings</span>
+          </div>
+          <button mat-icon-button (click)="closeTeiValidation()" matTooltip="Close validation panel">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <div class="tei-entries-list">
+          <div *ngFor="let entry of teiValidationResults; let i = index"
+               class="tei-entry-item"
+               [class.valid]="entry.status === 'valid'"
+               [class.error]="entry.status === 'error'"
+               [class.warning]="entry.status === 'warning'"
+               [class.selected]="selectedTeiEntry === entry"
+               (click)="selectTeiEntry(entry)">
+            <div class="tei-entry-header">
+              <span class="tei-entry-index">{{i + 1}}</span>
+              <span class="tei-entry-lemma">{{entry.lemma}}</span>
+              <span class="tei-entry-type">{{entry.entry_type}}</span>
+              <span class="tei-status-icon" [ngClass]="entry.status">
+                <mat-icon *ngIf="entry.status === 'valid'">check_circle</mat-icon>
+                <mat-icon *ngIf="entry.status === 'error'">error</mat-icon>
+                <mat-icon *ngIf="entry.status === 'warning'">warning</mat-icon>
+              </span>
+              <span class="tei-attempts" *ngIf="entry.attempts > 1">{{entry.attempts}} attempts</span>
+              <button *ngIf="entry.status === 'error'" mat-stroked-button class="tei-retry-btn"
+                      [disabled]="entry['retrying']"
+                      (click)="retryTeiEntry(entry); $event.stopPropagation()">
+                <mat-spinner *ngIf="entry['retrying']" diameter="14"></mat-spinner>
+                <span *ngIf="!entry['retrying']">Retry</span>
+              </button>
+            </div>
+            <div *ngIf="selectedTeiEntry === entry && entry.errors.length > 0" class="tei-entry-errors">
+              <div *ngFor="let err of entry.errors" class="tei-error-item" [ngClass]="err.type">
+                <span class="tei-error-type">{{err.type}}</span>
+                <span class="tei-error-line" *ngIf="err.line">L{{err.line}}</span>
+                <span class="tei-error-msg">{{err.message}}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Text editor after detection -->
+      <text-editor #lineEditor *ngIf="stage >= 5" [canEdit]="!viewOnly"
+        (lineHover)="transliterationLineHover($event)"
+        (lineChanged)="onLinesChanged($event)"
+        (regexMatchLines)="onRegexMatchLines($event)"
+        (exportRequested)="exportMenuTrigger.openMenu()"
+        [lines]="lines"
+        [boxAmount]="boundingBoxes.length"
+        class="lines-panel"></text-editor>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden Export Menu (editor stage) -->
+<div style="visibility: hidden; position: fixed" [matMenuTriggerFor]="exportMenu"></div>
+<mat-menu #exportMenu="matMenu">
+  <button mat-menu-item (click)="downloadCurrentText('txt')">
+    <mat-icon>description</mat-icon>
+    <span>TXT</span>
+  </button>
+  <button mat-menu-item (click)="downloadCurrentText('atf')">
+    <mat-icon>code</mat-icon>
+    <span>ATF (eBL)</span>
+  </button>
+  <button mat-menu-item (click)="downloadCurrentText('json')">
+    <mat-icon>data_object</mat-icon>
+    <span>JSON</span>
+  </button>
+  <button mat-menu-item (click)="downloadCurrentText('csv')">
+    <mat-icon>table_chart</mat-icon>
+    <span>CSV</span>
+  </button>
+</mat-menu>
+
+<!-- Context menu for dataset folders -->
+<div class="dataset-context-menu" *ngIf="datasetContextMenuVisible"
+     [style.left.px]="datasetContextMenuX" [style.top.px]="datasetContextMenuY">
+  <div class="context-menu-item" (mousedown)="startDatasetRenameFromMenu()">
+    <mat-icon>edit</mat-icon> Rename
+  </div>
+  <div class="context-menu-item" (mousedown)="exportDatasetCuredFromMenu()">
+    <mat-icon>dataset</mat-icon> Export CuReD zip
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteDatasetFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
+  </div>
+</div>
+
+<!-- Context menu for text cards (grid view) -->
+<div class="text-context-menu" *ngIf="textContextMenuVisible"
+     [style.left.px]="textContextMenuX" [style.top.px]="textContextMenuY">
+  <div class="context-menu-item" (mousedown)="curateFromContextMenu()">
+    <mat-icon>verified</mat-icon> Curate
+  </div>
+  <div class="context-menu-item" (mousedown)="uncurateFromContextMenu()">
+    <mat-icon>remove_circle_outline</mat-icon> Uncurate
+  </div>
+</div>

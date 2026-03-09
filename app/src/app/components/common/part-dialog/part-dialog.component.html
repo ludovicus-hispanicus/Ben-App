@@ -1,0 +1,18 @@
+<h2 mat-dialog-title>
+  <mat-icon>format_list_numbered</mat-icon>
+  Edit Part
+</h2>
+
+<mat-dialog-content>
+  <div class="field-row">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Part</mat-label>
+      <input matInput [formControl]="partControl" placeholder="e.g., 1">
+    </mat-form-field>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" (click)="onSave()">Save</button>
+</mat-dialog-actions>

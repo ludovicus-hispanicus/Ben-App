@@ -1,0 +1,1071 @@
+[
+  {
+    "id": null,
+    "text_id": 7610743,
+    "publication_id": "J/ahw_j_auto-0001-005-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 3586062098,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jaʾalu ↑ ajjalu I; jaʾaru ↑ ajjaru I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 186.0,
+                "width": 2512.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:26:50.441166",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jaʾalu ↑ ajjalu I; jaʾaru ↑ ajjaru I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 190.0,
+                "width": 2516.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:23:15.035058",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7610743_28569519.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772716995,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cdc9c1fac30851506b6b",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 7007909,
+    "publication_id": "J/ahw_j_auto-0001-007-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 5856747872,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jābinu ↑ jānību."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 196.0,
+                "width": 1162.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:26:52.000678",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jābinu ↑ jānību."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 200.0,
+                "width": 1166.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:23:20.138577",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7007909_58231573.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717000,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cdcbc1fac30851506b6c",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 7865235,
+    "publication_id": "J/ahw_j_auto-0001-009-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 6667355731,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "Jābitu ↑ ajjabba; jābu ↑ ajjābu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 206.0,
+                "width": 2282.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:26:53.507685",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "Jābītu ↑ ajjabba; jābu ↑ ajjābu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 210.0,
+                "width": 2286.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:23:36.631936",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "Jābītu ↑ ajjabba; jābu ↑ ajjābu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 210.0,
+                "width": 2286.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:23:39.016092",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7865235_65779621.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717019,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cdccc1fac30851506b6d",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 5274139,
+    "publication_id": "J/ahw_j_auto-0001-014-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7345497231,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jagulû, jaḫenunnāku usw ↑ igulû, iḫenunnāku."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 198.0,
+                "width": 3386.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:26:55.025602",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jagulû, jaḫenunnāku usw ↑ igulû, iḫenunnāku."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 202.0,
+                "width": 3390.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:11:25.775682",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5274139_40191844.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772694687,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cdcec1fac30851506b6e",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 1522918,
+    "publication_id": "J/ahw_j_auto-0001-017-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8541364803,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāka ↑ ajjakam."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 214.0,
+                "width": 1188.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:26:56.543773",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāka ↑ ajjakam."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 218.0,
+                "width": 1192.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:24:09.211655",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1522918_65811369.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717049,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cdcfc1fac30851506b6f",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 5503582,
+    "publication_id": "J/ahw_j_auto-0001-019-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9295754240,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāku ↑ ajjakku; jālu ↑ ajjalu I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 216.0,
+                "width": 2262.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:29:04.009979",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāku ↑ ajjakku; jālu ↑ ajjalu I."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 220.0,
+                "width": 2266.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:24:17.567487",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "5503582_98914132.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717057,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8ce4fc1fac30851506b70",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 3901923,
+    "publication_id": "J/ahw_j_auto-0001-024-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 9724332569,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāmu ↑ kusi jāmi; jamuttu ↑ jamattu; jāna ↑ jānu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 226.0,
+                "width": 3530.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:29:05.567667",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāmu ↑ kusi jāmi; jamuttu ↑ jamattu; jāna ↑ jānu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 230.0,
+                "width": 3534.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:10:50.622839",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāmu ↑ kusi jāmi; jamuttu ↑ jamattu; jāna ↑ jānu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 234.0,
+                "width": 3538.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:24:33.333421",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3901923_30939744.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717073,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8ce50c1fac30851506b71",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 4349683,
+    "publication_id": "J/ahw_j_auto-0002-020-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7693247242,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jaruḫḫu ↑ jaraḫḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 198.0,
+                "width": 1374.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:29:07.191268",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jaruḫḫu ↑ jaraḫḫu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 202.0,
+                "width": 1378.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:24:42.624717",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "4349683_10726782.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717082,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8ce52c1fac30851506b72",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 7804218,
+    "publication_id": "J/ahw_j_auto-0002-025-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7398421277,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jārzibni ↑ zibnu; jasū ↑ asū I 1."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 222.0,
+                "width": 2314.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:29:08.726201",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jārzibni ↑ zibnu; jasû ↑ asû I 1."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 226.0,
+                "width": 2318.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:10:18.363561",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jārzibni ↑ zibnu; jasû ↑ asû I 1."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 226.0,
+                "width": 2318.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:10:20.385894",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "7804218_15609947.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772694621,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8ce53c1fac30851506b73",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 2236660,
+    "publication_id": "J/ahw_j_auto-0003-005-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 1223832768,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jāštu ↑ jārtu; jāšu ↑ jāši; jašubu ↑ jāšibu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 212.0,
+                "width": 2928.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:29:10.336629",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jāštu ↑ jārtu; jāšu ↑ jāši; jašubu ↑ jāšibu."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 216.0,
+                "width": 2932.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:25:10.568674",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "2236660_55829692.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717110,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8ce55c1fac30851506b74",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 3422120,
+    "publication_id": "J/ahw_j_auto-0003-008-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 8438434317,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jattu ↑ jāʾu; játu ↑ játī; jaʾu ↑ ajju, jū."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 194.0,
+                "width": 2824.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:30:31.242973",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jattu ↑ jāʾu; jâtu ↑ jâtī; jaʾu ↑ ajju, jū."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 198.0,
+                "width": 2828.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:09:30.213186",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jattu ↑ jāʾu; jâtu ↑ jâtī; jaʾu ↑ ajju, jū."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 198.0,
+                "width": 2828.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T08:09:33.752234",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          },
+          {
+            "lines": [
+              "jattu ↑ jāʾu; jâtu ↑ jâtī; jaʾu ↑ ajju, jū."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 198.0,
+                "width": 2828.0,
+                "index": null
+              }
+            ],
+            "user_id": "admin",
+            "time": "2026-03-05T14:25:21.800143",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false
+          },
+          {
+            "id": null,
+            "lines": [
+              "jattu ↑ jāʾu; jâtu ↑ jâtī; jaʾu ↑ ajju, jū."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 202.0,
+                "width": 2832.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T14:25:47.804794",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "3422120_29631001.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772717148,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cea6c1fac30851506b75",
+    "dataset_id": 8505599
+  },
+  {
+    "id": null,
+    "text_id": 1649326,
+    "publication_id": "J/ahw_j_auto-0003-016-refEntry.png",
+    "museum_id": null,
+    "p_number": null,
+    "transliterations": [
+      {
+        "_id": null,
+        "transliteration_id": 7770864188,
+        "source": "cured",
+        "edit_history": [
+          {
+            "id": null,
+            "lines": [
+              "jû ↑ jāʾu I; jûkû ↑ jaʾukku."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 202.0,
+                "width": 1940.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T01:30:32.836606",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jû ↑ jāʾu I; jûkû ↑ jaʾʾukku."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 206.0,
+                "width": 1944.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T06:29:05.485476",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": false,
+            "is_curated_vlm": false,
+            "training_targets": null
+          },
+          {
+            "id": null,
+            "lines": [
+              "jû ↑ jāʾu I; jûkû ↑ jaʾʾukku."
+            ],
+            "boxes": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "height": 206.0,
+                "width": 1944.0,
+                "index": null
+              }
+            ],
+            "time": "2026-03-05T06:29:06.055918",
+            "user_id": "admin",
+            "is_fixed": false,
+            "is_curated_kraken": true,
+            "is_curated_vlm": true,
+            "training_targets": null
+          }
+        ],
+        "uploader_id": "admin",
+        "image_name": "1649326_44020953.png",
+        "source_url": ""
+      }
+    ],
+    "metadata": [
+      {
+        "source": "batch_recognition",
+        "job_id": "ed910e7d"
+      }
+    ],
+    "is_in_use": false,
+    "use_start_time": 1772688546,
+    "is_fixed": false,
+    "uploader": "admin",
+    "uploader_id": "admin",
+    "labels": [],
+    "label": "",
+    "part": "",
+    "_id": "69a8cea8c1fac30851506b76",
+    "dataset_id": 8505599
+  }
+]
