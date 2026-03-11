@@ -49,6 +49,39 @@
       </div>
     </div>
 
+    <!-- File Selection (shown when source is selected) -->
+    <div class="config-section" *ngIf="hasSource && allFilenames.length > 0">
+      <label class="config-label">
+        Files
+        <button mat-icon-button class="file-selector-toggle" (click)="toggleFileSelector()"
+                [matTooltip]="showFileSelector ? 'Select all files' : 'Select specific files'">
+          <mat-icon>{{ showFileSelector ? 'deselect' : 'checklist' }}</mat-icon>
+        </button>
+        <span class="optional" *ngIf="showFileSelector">({{ selectedFilenames.size }} / {{ allFilenames.length }} selected)</span>
+        <span class="optional" *ngIf="!showFileSelector">({{ allFilenames.length }} files)</span>
+      </label>
+      <div class="file-selector" *ngIf="showFileSelector">
+        <div class="file-selector-toolbar">
+          <input class="file-filter-input" [(ngModel)]="fileFilter" placeholder="Filter files..." />
+          <button mat-icon-button (click)="selectAllFiles()" matTooltip="Select all">
+            <mat-icon>select_all</mat-icon>
+          </button>
+          <button mat-icon-button (click)="deselectAllFiles()" matTooltip="Deselect all">
+            <mat-icon>deselect</mat-icon>
+          </button>
+        </div>
+        <div class="file-list">
+          <div *ngFor="let f of filteredFilenames"
+               class="file-item"
+               [class.selected]="isFileSelected(f)"
+               (click)="toggleFile(f)">
+            <mat-icon class="file-check">{{ isFileSelected(f) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+            <span class="file-name">{{ f }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Destination (optional) -->
     <div class="config-section">
       <label class="config-label">Destination <span class="optional">(optional)</span></label>

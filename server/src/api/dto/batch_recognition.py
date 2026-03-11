@@ -18,6 +18,7 @@ class BatchRecognitionRequest(BaseModel):
     batch_size: int = 1  # Images per VLM inference call (1 = one at a time)
     correction_rules: Optional[str] = None  # Post-OCR correction rules (e.g. "akkadian")
     image_scale: Optional[float] = None  # Image scale factor (0.33, 0.5, 1.0). None = use global setting.
+    include_filenames: Optional[List[str]] = None  # Only process these filenames (for selective batch)
     exclude_filenames: Optional[List[str]] = None  # Skip these filenames (for resuming truncated batches)
 
 

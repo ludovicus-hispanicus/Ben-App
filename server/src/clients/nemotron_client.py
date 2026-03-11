@@ -35,7 +35,7 @@ class NemotronClient:
             # Use provided api_key or fall back to environment variable
             self.api_key = api_key or os.environ.get("NVIDIA_API_KEY", "")
             if not self.api_key:
-                logging.warning("NVIDIA_API_KEY not set — cloud API calls will fail")
+                logging.debug("NVIDIA_API_KEY not set — Nemotron cloud API calls will require an api_key parameter")
         elif mode == "local":
             self._init_local_model()
         else:

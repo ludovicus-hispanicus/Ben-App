@@ -43,6 +43,7 @@ async def start_batch(request: Request, body: BatchRecognitionRequest):
         user_id=user_id,
         correction_rules=body.correction_rules,
         image_scale=body.image_scale,
+        include_filenames=body.include_filenames,
         exclude_filenames=body.exclude_filenames,
     )
     return result

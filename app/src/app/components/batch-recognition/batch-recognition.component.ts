@@ -45,6 +45,12 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   availableClasses: Array<{ name: string; count: number }> = [];
   selectedClasses: Set<string> = new Set();
 
+  // File selection (selective batch)
+  allFilenames: string[] = [];
+  selectedFilenames: Set<string> = new Set();
+  showFileSelector: boolean = false;
+  fileFilter: string = '';
+
   // Destination mode
   destinationMode: DestinationMode = 'library';
   destinationDatasetId: number | null = null;
@@ -391,6 +397,10 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     this.localFolderImageCount = 0;
     this.availableClasses = [];
     this.selectedClasses = new Set();
+    this.allFilenames = [];
+    this.selectedFilenames = new Set();
+    this.showFileSelector = false;
+    this.fileFilter = '';
   }
 
   get hasSource(): boolean {
@@ -424,6 +434,9 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       .map(([name, count]) => ({ name, count }));
     // Select all by default
     this.selectedClasses = new Set(this.availableClasses.map(c => c.name));
+    // Populate file list for selective batch
+    this.allFilenames = [...filenames].sort();
+    this.selectedFilenames = new Set(this.allFilenames);
   }
 
   private detectClassesFromLibrary(projectId: string): void {
@@ -458,6 +471,44 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     return this.availableClasses
       .filter(c => this.selectedClasses.has(c.name))
       .reduce((sum, c) => sum + c.count, 0);
+  }
+
+  // ============== File Selection ==============
+
+  get filteredFilenames(): string[] {
+    if (!this.fileFilter) return this.allFilenames;
+    const q = this.fileFilter.toLowerCase();
+    return this.allFilenames.filter(f => f.toLowerCase().includes(q));
+  }
+
+  toggleFileSelector(): void {
+    this.showFileSelector = !this.showFileSelector;
+    if (!this.showFileSelector) {
+      // When hiding, reset to all selected
+      this.selectedFilenames = new Set(this.allFilenames);
+      this.fileFilter = '';
+    }
+  }
+
+  toggleFile(filename: string): void {
+    if (this.selectedFilenames.has(filename)) {
+      this.selectedFilenames.delete(filename);
+    } else {
+      this.selectedFilenames.add(filename);
+    }
+    this.selectedFilenames = new Set(this.selectedFilenames);
+  }
+
+  selectAllFiles(): void {
+    this.selectedFilenames = new Set(this.allFilenames);
+  }
+
+  deselectAllFiles(): void {
+    this.selectedFilenames = new Set();
+  }
+
+  isFileSelected(filename: string): boolean {
+    return this.selectedFilenames.has(filename);
   }
 
   // ============== Model Selection ==============
@@ -767,10 +818,16 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       ? Array.from(this.selectedClasses)
       : undefined;
 
+    // Only send include_filenames if user selected specific files (not all)
+    const includeFilenames = this.showFileSelector && this.selectedFilenames.size < this.allFilenames.length
+      ? Array.from(this.selectedFilenames)
+      : undefined;
+
     const request: BatchRecognitionRequest = {
       source_project_id: this.sourceMode === 'library' ? this.sourceProjectId : undefined,
       source_folder_path: this.sourceMode === 'local' ? this.localFolderPath : undefined,
       include_classes: includeClasses,
+      include_filenames: includeFilenames,
       destination_dataset_id: this.destinationMode === 'library' && this.destinationDatasetId ? this.destinationDatasetId : undefined,
       destination_folder_path: this.destinationMode === 'export' && this.destinationFolderPath ? this.destinationFolderPath : undefined,
       export_images: this.destinationMode === 'export' ? this.exportImages : undefined,

@@ -295,6 +295,69 @@
   }
 }
 
+// ============== File Selector ==============
+
+.file-selector-toggle {
+  transform: scale(0.75);
+  margin-left: 4px;
+}
+
+.file-selector {
+  margin-top: 4px;
+
+  .file-selector-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+
+    .file-filter-input {
+      flex: 1;
+      padding: 4px 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      &:focus { border-color: #1976d2; }
+    }
+  }
+
+  .file-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fafafa;
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      border-bottom: 1px solid #f0f0f0;
+
+      &:hover { background: #e3f2fd; }
+      &.selected { color: #1565c0; }
+
+      .file-check {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+        margin-right: 6px;
+        color: #bbb;
+      }
+      &.selected .file-check { color: #1976d2; }
+
+      .file-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
 // ============== Batch Size Input ==============
 
 .batch-size-input {

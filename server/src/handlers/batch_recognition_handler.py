@@ -9,6 +9,7 @@ import logging
 import math
 import os
 import shutil
+import threading
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -259,6 +260,48 @@ class BatchRecognitionHandler:
             return parts[-1]
         return None
 
+    @staticmethod
+    def _detect_already_processed(destination_dataset_id: int, source_name: str) -> Set[str]:
+        """Scan destination dataset for texts whose publication_id matches source filenames.
+        Returns a set of filenames that already have entries in the destination.
+        """
+        try:
+            dest_texts = global_new_text_handler._collection.find_many(
+                find_filter={"dataset_id": int(destination_dataset_id)},
+                limit=10000,
+            )
+            # publication_id format is "{source_name}/{filename}"
+            already_done = set()
+            for t in dest_texts:
+                pub_id = t.get("publication_id", "")
+                if "/" in pub_id:
+                    already_done.add(pub_id.split("/")[-1])
+                elif pub_id:
+                    already_done.add(pub_id)
+            return already_done
+        except Exception as e:
+            logger.warning(f"Could not scan destination dataset {destination_dataset_id}: {e}")
+            return set()
+
+    @staticmethod
+    def _detect_already_exported(destination_folder_path: str) -> Set[str]:
+        """Scan destination folder for .txt files that match source image filenames.
+        Returns a set of stems (without extension) that already have text output.
+        The caller filters source filenames by checking if their stem is in this set.
+        """
+        try:
+            export_dir = Path(destination_folder_path)
+            if not export_dir.exists():
+                return set()
+            # Each exported image produces a {stem}.txt file
+            return {
+                f.stem for f in export_dir.iterdir()
+                if f.is_file() and f.suffix.lower() == ".txt"
+            }
+        except Exception as e:
+            logger.warning(f"Could not scan export folder {destination_folder_path}: {e}")
+            return set()
+
     async def start_batch(
         self,
         source_project_id: Optional[str] = None,
@@ -276,6 +319,7 @@ class BatchRecognitionHandler:
         user_id: str = "admin",
         correction_rules: Optional[str] = None,
         image_scale: Optional[float] = None,
+        include_filenames: Optional[List[str]] = None,
         exclude_filenames: Optional[List[str]] = None,
     ) -> Dict:
         """Start a batch recognition job asynchronously.
@@ -322,9 +366,61 @@ class BatchRecognitionHandler:
             if not image_filenames:
                 return {"success": False, "job_id": None, "message": "No images match the selected classes"}
 
-        # Exclude already-processed filenames (for resuming truncated batches)
+        # Include only specific filenames if provided (selective batch)
+        if include_filenames:
+            include_set = set(include_filenames)
+            image_filenames = [f for f in image_filenames if f in include_set]
+            if not image_filenames:
+                return {"success": False, "job_id": None, "message": "None of the selected files were found in the source"}
+            logger.info(f"Selective batch: {len(image_filenames)} of {len(include_set)} requested files found")
+
+        # Auto-detect already-processed files by scanning the destination dataset/folder.
+        # This works for fresh batches too — not just re-runs with exclude_filenames.
+        auto_skipped = 0
+        if destination_dataset_id:
+            already_in_dest = self._detect_already_processed(destination_dataset_id, source_name)
+            if already_in_dest:
+                before = len(image_filenames)
+                image_filenames = [f for f in image_filenames if f not in already_in_dest]
+                auto_skipped = before - len(image_filenames)
+                if auto_skipped > 0:
+                    logger.info(f"Auto-skipped {auto_skipped} files already in destination dataset {destination_dataset_id}")
+                if not image_filenames:
+                    return {"success": False, "job_id": None, "message": f"All {auto_skipped} images already exist in the destination dataset"}
+
+        if destination_folder_path:
+            already_exported = self._detect_already_exported(destination_folder_path)
+            if already_exported:
+                before = len(image_filenames)
+                image_filenames = [f for f in image_filenames if Path(f).stem not in already_exported]
+                folder_skipped = before - len(image_filenames)
+                auto_skipped += folder_skipped
+                if folder_skipped > 0:
+                    logger.info(f"Auto-skipped {folder_skipped} files already exported to {destination_folder_path}")
+                if not image_filenames:
+                    return {"success": False, "job_id": None, "message": f"All images already exported to destination folder"}
+
+        # Exclude explicitly provided filenames (for resuming truncated batches)
+        # Cross-reference against destination dataset to detect deleted texts
         if exclude_filenames:
             exclude_set = set(exclude_filenames)
+            if destination_dataset_id:
+                try:
+                    dest_texts = global_new_text_handler._collection.find_many(
+                        find_filter={"dataset_id": int(destination_dataset_id)},
+                        limit=10000,
+                    )
+                    existing_pubs = {
+                        t.get("publication_id", "").split("/")[-1]
+                        for t in dest_texts
+                        if t.get("publication_id")
+                    }
+                    deleted = exclude_set - existing_pubs
+                    if deleted:
+                        logger.info(f"Re-including {len(deleted)} files deleted from destination: {sorted(deleted)[:5]}...")
+                        exclude_set -= deleted
+                except Exception as e:
+                    logger.warning(f"Could not verify destination texts: {e}")
             image_filenames = [f for f in image_filenames if f not in exclude_set]
             if not image_filenames:
                 return {"success": False, "job_id": None, "message": "All images have already been processed"}
@@ -425,11 +521,16 @@ class BatchRecognitionHandler:
 
         logger.info(f"Started batch recognition job {job_id}: {source_name} ({total_images} images) with model {effective_model}, batch_size={batch_size}")
 
+        msg = "Batch recognition job started"
+        if auto_skipped > 0:
+            msg = f"Batch recognition job started ({auto_skipped} already-processed files skipped)"
+
         return {
             "success": True,
             "job_id": job_id,
             "total_images": total_images,
-            "message": "Batch recognition job started",
+            "auto_skipped": auto_skipped,
+            "message": msg,
         }
 
     def _run_batch(
@@ -497,6 +598,12 @@ class BatchRecognitionHandler:
                 provider_name=effective_model,
                 api_key=api_key,
             )
+
+            # Set up a cancel event so rate-limit waits can be interrupted
+            cancel_event = threading.Event()
+            self._active_jobs[job_id]["cancel_event"] = cancel_event
+            if hasattr(ocr_client, "set_cancel_event"):
+                ocr_client.set_cancel_event(cancel_event)
 
             processed = 0
             failed = 0
@@ -682,6 +789,12 @@ class BatchRecognitionHandler:
                                     logger.info(f"  Correction did not improve ({new_empty} empty), keeping original")
 
                 except Exception as e:
+                    # If cancelled, break out of the chunk loop immediately
+                    from clients.gemini_client import GeminiCancelledError
+                    from clients.anthropic_client import AnthropicCancelledError
+                    if isinstance(e, (GeminiCancelledError, AnthropicCancelledError)) or job_id in self._cancelled_jobs:
+                        logger.info(f"Batch job {job_id}: cancelled during OCR call")
+                        break
                     logger.error(f"Batch job {job_id}: OCR call failed for chunk starting at {chunk_filenames[0]}: {e}")
                     for fn, fp, _, _, _, _, _ in chunk_images:
                         failed += 1
@@ -760,7 +873,7 @@ class BatchRecognitionHandler:
                             identifiers=identifiers,
                             metadata=[{"source": "batch_recognition", "job_id": job_id}],
                             uploader_id=user_id,
-                            project_id=dest_did,
+                            dataset_id=dest_did,
                         )
 
                         image_name = StorageUtils.generate_cured_train_image_name(
@@ -1013,6 +1126,10 @@ class BatchRecognitionHandler:
         """Cancel a running batch job."""
         if job_id in self._active_jobs:
             self._cancelled_jobs.add(job_id)
+            # Signal the cancel event to interrupt any rate-limit waits
+            cancel_event = self._active_jobs[job_id].get("cancel_event")
+            if cancel_event:
+                cancel_event.set()
             return {"success": True, "message": f"Cancellation requested for job {job_id}"}
 
         # Check if job exists but is already done

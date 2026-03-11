@@ -22,7 +22,7 @@ class User(DbModel):
         return self.role == UserRole.ADMIN.value
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "fullname": "Abdulazeez Abdulazeez Adeshina",
                 "email": "abdulazeez@x.com",

@@ -2,6 +2,7 @@ from google import genai
 from google.genai import types
 import base64
 import logging
+import threading
 import time
 from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
@@ -11,6 +12,11 @@ from common.ocr_prompts import resolve_prompt, wrap_prompt_for_batch, parse_batc
 # Retry config for rate-limit (429) errors
 _MAX_RETRIES = 4
 _INITIAL_BACKOFF = 15  # seconds — Gemini RPM resets quickly, RPD is the real constraint
+
+
+class GeminiCancelledError(Exception):
+    """Raised when an OCR call is cancelled via the cancel event."""
+    pass
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
@@ -25,12 +31,20 @@ class GeminiOcrClient(BaseOcrClient):
         self.client = genai.Client(api_key=api_key)
         # Use provided model or default to gemini-3.1-pro-preview
         self.model_id = model if model else 'gemini-3.1-pro-preview'
+        self._cancel_event: Optional[threading.Event] = None
         logging.info(f"GeminiOcrClient initialized with model: {self.model_id}")
+
+    def set_cancel_event(self, event: threading.Event):
+        """Set an event that, when set, will abort retry waits."""
+        self._cancel_event = event
 
     def _call_with_retry(self, contents, label: str = ""):
         """Call generate_content with exponential backoff on rate-limit errors."""
         backoff = _INITIAL_BACKOFF
         for attempt in range(_MAX_RETRIES + 1):
+            # Check cancellation before each attempt
+            if self._cancel_event and self._cancel_event.is_set():
+                raise GeminiCancelledError("OCR cancelled")
             try:
                 return self.client.models.generate_content(
                     model=self.model_id,
@@ -42,7 +56,11 @@ class GeminiOcrClient(BaseOcrClient):
                         f"Gemini rate-limited{' (' + label + ')' if label else ''}, "
                         f"attempt {attempt+1}/{_MAX_RETRIES+1}, waiting {backoff}s..."
                     )
-                    time.sleep(backoff)
+                    # Sleep in small increments so we can respond to cancellation
+                    for _ in range(int(backoff)):
+                        if self._cancel_event and self._cancel_event.is_set():
+                            raise GeminiCancelledError("OCR cancelled during rate-limit wait")
+                        time.sleep(1)
                     backoff = min(backoff * 2, 120)  # cap at 2 minutes
                     continue
                 raise
@@ -91,6 +109,8 @@ class GeminiOcrClient(BaseOcrClient):
                 result["truncated"] = True
             return result
 
+        except GeminiCancelledError:
+            raise  # let cancellation propagate
         except Exception as e:
             logging.error(f"Gemini OCR extraction failed: {type(e).__name__}: {e}")
             return {"lines": [], "dimensions": []}
@@ -122,6 +142,8 @@ class GeminiOcrClient(BaseOcrClient):
                 logging.warning(f"Gemini batch finish_reason={finish} for {len(images)} images")
 
             return parse_batch_response(response.text, len(images), dims)
+        except GeminiCancelledError:
+            raise  # let cancellation propagate
         except Exception as e:
             logging.error(f"Gemini multi-image OCR failed: {type(e).__name__}: {e}")
             return [{"lines": [], "dimensions": []} for _ in images]
