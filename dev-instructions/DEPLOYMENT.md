@@ -1,6 +1,9 @@
 # CuReD Desktop App — Deployment Guide
 
-This document explains how the CuReD (Cuneiform Recognition Desktop) application works, what it needs, and how to build and distribute it as a standalone Windows `.exe`.
+This document explains how the CuReD (Cuneiform Recognition Desktop) application works, what it needs, and how to run it. There are two ways to deploy:
+
+1. **Dev mode** (recommended for most users) — run the backend and frontend directly from source. No build step needed, just install dependencies and go.
+2. **Desktop installer** — build a standalone Windows `.exe` that bundles everything. For distribution to end users who don't have Python/Node installed.
 
 ## Architecture Overview
 
@@ -158,46 +161,88 @@ The app uses a JSON file-based database (no MongoDB needed):
 | Angular dev server | 4200 | Only used in dev mode |
 | Ollama | 11434 | External service |
 
-## Development Setup
+## Running in Dev Mode (Recommended)
 
-### 1. Install dependencies
+This is the fastest way to get CuReD running. No build step, no installer — just install dependencies and start two processes. Works on Windows, macOS, and Linux.
+
+### 1. Clone and install dependencies
 
 ```bash
+git clone <repo-url>
+cd BEn-app
+
 # Frontend
 cd app
 npm install
 
-# Backend
-cd server
+# Backend (use a virtual environment)
+cd ../server
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+# source venv/bin/activate
 pip install -r requirements.txt
-
-# Electron
-cd electron
-npm install
 ```
 
-### 2. Run in dev mode
+### 2. Start the app (two terminals)
 
-Option A — Run each service separately:
+**Terminal 1 — Python backend:**
 ```bash
-# Terminal 1: Backend
 cd server/src
-python -m uvicorn main:app --host 0.0.0.0 --port 5001
+python -m uvicorn main:app --host 0.0.0.0 --port 5002 --reload
+```
 
-# Terminal 2: Frontend
+**Terminal 2 — Angular frontend:**
+```bash
 cd app
 NODE_OPTIONS=--openssl-legacy-provider npx ng serve
-
-# Terminal 3: Electron (optional — wraps the above)
-cd electron
-npm start
 ```
 
-Option B — Run via Electron (starts both automatically):
+Then open **http://localhost:4200** in your browser.
+
+The Angular dev server (port 4200) talks to the Python backend at `http://localhost:5002/api/v1` (configured in `app/src/environments/environment.ts`).
+
+The `--reload` flag enables hot-reload — the server restarts automatically when you edit Python files. The Angular dev server also hot-reloads on frontend changes.
+
+> **Port note:** The dev environment file (`environment.ts`) expects the backend on port **5002**. The desktop/Electron config uses port **5001**. Always start uvicorn on the port matching your environment file, or edit the file to match.
+
+### 3. (Optional) Run inside Electron shell
+
+If you want the desktop window experience without building an installer:
+
 ```bash
 cd electron
+npm install
 npm start
 ```
+
+This launches Electron, which automatically starts both the Python backend (port 5001) and Angular dev server (port 4200), shows a loading splash screen, and opens the app in a desktop window once both services are ready.
+
+### 4. Verify everything works
+
+| Check | URL | Expected |
+|-------|-----|----------|
+| Backend API docs | `http://localhost:5002/docs` | FastAPI Swagger UI |
+| Frontend | `http://localhost:4200` | CuReD interface |
+
+If images don't load, check that `STORAGE_PATH` points to a valid writable directory (defaults to `server/src/data/`).
+
+### What you need vs. what's optional
+
+| Component | Required for dev mode? | Purpose |
+|-----------|----------------------|---------|
+| **Node.js 18+** | Yes | Runs the Angular frontend |
+| **Python 3.10+** | Yes | Runs the FastAPI backend |
+| **pip packages** (`requirements.txt`) | Yes | Backend dependencies (OCR, ML, etc.) |
+| **Electron** | No | Only for desktop window wrapper |
+| **PyInstaller** | No | Only for building standalone `.exe` |
+| **Ollama / VLM API keys** | No | Only for VLM-based OCR; Kraken OCR works offline out of the box |
+| **GPU / CUDA** | No | Only for local Nemotron VLM or GPU-accelerated model training |
+
+### Stopping the app
+
+Just press `Ctrl+C` in each terminal. There's no persistent process — everything stops immediately.
 
 ## Building the Desktop Installer
 
