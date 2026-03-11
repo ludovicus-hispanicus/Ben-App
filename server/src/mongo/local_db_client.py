@@ -892,7 +892,7 @@ class ShardedCollection:
 
 
 class LocalDBClient:
-    STORAGE_DIR = os.path.join(os.getcwd(), "data", "db")
+    STORAGE_DIR = os.path.join(os.environ.get("STORAGE_PATH", os.path.join(os.getcwd(), "data")), "db")
     
     TEXTS_COLLECTION = "texts"
     NEW_TEXTS_COLLECTION = "new_texts"

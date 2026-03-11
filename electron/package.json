@@ -27,7 +27,11 @@
     "forge": {
       "packagerConfig": {
         "asar": false,
-        "icon": "assets/icon"
+        "icon": "assets/icon",
+        "extraResource": [
+          "../app/dist/uni-app",
+          "../server/dist/cured-server"
+        ]
       },
       "makers": [
         {

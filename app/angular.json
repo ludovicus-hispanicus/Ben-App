@@ -61,6 +61,28 @@
               ],
               "outputHashing": "all"
             },
+            "desktop": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "4mb",
+                  "maximumError": "5mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "60kb",
+                  "maximumError": "80kb"
+                }
+              ],
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.desktop.ts"
+                }
+              ],
+              "outputHashing": "none",
+              "baseHref": "./"
+            },
             "development": {
               "buildOptimizer": false,
               "optimization": false,
