@@ -15,7 +15,7 @@ import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.
 import { LabelDialogComponent } from '../common/label-dialog/label-dialog.component';
 import { IdentifierDialogComponent, IdentifierDialogResult } from '../common/identifier-dialog/identifier-dialog.component';
 import { ImageBrowserDialogComponent } from '../common/image-browser-dialog/image-browser-dialog.component';
-import { MoveTextDialogComponent, MoveTextDialogResult } from '../common/move-text-dialog/move-text-dialog.component';
+import { MoveTextDialogComponent, MoveTextDialogData, MoveTextDialogResult } from '../common/move-text-dialog/move-text-dialog.component';
 import { PartDialogComponent, PartDialogResult } from '../common/part-dialog/part-dialog.component';
 import { SelectedPage } from '../../models/pages';
 import { HttpClient } from '@angular/common/http';
@@ -3059,10 +3059,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     const currentProjectId = this.selectedDataset?.dataset_id === -1 ? null : this.selectedDataset?.dataset_id ?? null;
     const dialogRef = this.dialog.open(MoveTextDialogComponent, {
       data: {
-        projects: this.datasets,
-        currentProjectId,
+        datasets: this.datasets,
+        currentDatasetId: currentProjectId,
         selectedCount: this.selectedTexts.size
-      }
+      } as MoveTextDialogData
     });
 
     dialogRef.afterClosed().subscribe((result: MoveTextDialogResult | undefined) => {

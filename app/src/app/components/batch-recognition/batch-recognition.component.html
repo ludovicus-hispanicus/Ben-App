@@ -182,7 +182,11 @@
 
     <!-- Active Jobs Progress (supports multiple concurrent jobs) -->
     <ng-container *ngFor="let jobId of activeJobIds">
-      <div class="progress-section" *ngIf="jobStatuses.get(jobId) as status">
+      <div class="progress-section" *ngIf="jobStatuses.get(jobId) as status"
+           [class.selected-job]="selectedJobId === jobId"
+           (click)="viewJobReport(jobId)"
+           style="cursor: pointer;"
+           matTooltip="Click to view report">
         <div class="progress-header">
           <span class="progress-label">{{ status.source_project_name || 'Processing...' }} ({{ status.model }})</span>
           <span class="progress-count">{{ status.current_image }} / {{ status.total_images }}</span>
@@ -191,7 +195,7 @@
         <div class="progress-detail" *ngIf="status.current_filename">
           {{ status.status === 'pending' ? status.current_filename : 'Current: ' + status.current_filename }}
         </div>
-        <button mat-stroked-button color="warn" (click)="cancelBatch(jobId)" class="cancel-btn">
+        <button mat-stroked-button color="warn" (click)="cancelBatch(jobId); $event.stopPropagation()" class="cancel-btn">
           <mat-icon>stop</mat-icon> Cancel
         </button>
       </div>
@@ -410,7 +414,7 @@
           <div class="report-section-label">Dynamic Batching</div>
           <table class="report-table report-table-full">
             <thead>
-              <tr><th>Category</th><th>Images</th><th>Batch Size</th><th>Chunks</th></tr>
+              <tr><th>Category</th><th>Images</th><th>Batch Size</th><th>Chunks</th><th>Tiled</th><th>Inferences</th></tr>
             </thead>
             <tbody>
               <tr *ngFor="let cat of reportStatus.dynamic_report">
@@ -418,6 +422,11 @@
                 <td>{{ cat.image_count }}</td>
                 <td>{{ cat.batch_size }}</td>
                 <td>{{ cat.chunks }}</td>
+                <td>
+                  <span *ngIf="cat.tiled_count">{{ cat.tiled_count }} ({{ cat.total_tiles }} parts)</span>
+                  <span *ngIf="!cat.tiled_count" class="report-muted">—</span>
+                </td>
+                <td>{{ cat.inferences || cat.chunks }}</td>
               </tr>
             </tbody>
             <tfoot>
@@ -426,6 +435,12 @@
                 <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'image_count') }}</td>
                 <td></td>
                 <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
+                <td>
+                  <span *ngIf="getDynamicTotal(reportStatus.dynamic_report, 'tiled_count')">
+                    {{ getDynamicTotal(reportStatus.dynamic_report, 'tiled_count') }} ({{ getDynamicTotal(reportStatus.dynamic_report, 'total_tiles') }} parts)
+                  </span>
+                </td>
+                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'inferences') || getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
               </tr>
             </tfoot>
           </table>

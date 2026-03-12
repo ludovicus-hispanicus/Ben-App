@@ -404,6 +404,16 @@
   background: #e3f2fd;
   border-radius: 8px;
   margin-bottom: 16px;
+  transition: outline 0.15s, background 0.15s;
+
+  &:hover {
+    background: #bbdefb;
+  }
+
+  &.selected-job {
+    outline: 2px solid #1976d2;
+    background: #bbdefb;
+  }
 }
 
 .progress-header {
@@ -829,6 +839,10 @@
       border-bottom: none;
     }
   }
+}
+
+.report-muted {
+  color: #bbb;
 }
 
 .category-tag {

@@ -982,6 +982,8 @@ class BatchRecognitionHandler:
 
         # category_name -> list of filenames
         buckets: Dict[str, List[str]] = defaultdict(list)
+        # Track effective heights for tile calculation
+        image_heights: Dict[str, int] = {}
 
         for filename in image_filenames:
             try:
@@ -1004,6 +1006,7 @@ class BatchRecognitionHandler:
                 if effective_scale < 1.0:
                     h = int(h * effective_scale)
 
+                image_heights[filename] = h
                 cat, _ = _classify_image(h)
                 buckets[cat].append(filename)
             except Exception:
@@ -1017,13 +1020,28 @@ class BatchRecognitionHandler:
             if fnames:
                 bs = next((b for n, _, _, b in SIZE_CATEGORIES if n == cat), 1)
                 n_chunks = math.ceil(len(fnames) / bs)
-                category_report.append({
+                # Count tiled images and total tiles for this category
+                tiled_count = 0
+                total_tiles = 0
+                for fn in fnames:
+                    h = image_heights.get(fn, 0)
+                    if h > TILE_TARGET_HEIGHT:
+                        n_tiles = max(2, math.ceil(h / TILE_TARGET_HEIGHT))
+                        tiled_count += 1
+                        total_tiles += n_tiles
+                # Inferences: non-tiled chunks + tile parts
+                inferences = (n_chunks - tiled_count) + total_tiles
+                entry = {
                     "category": cat,
                     "image_count": len(fnames),
                     "batch_size": bs,
                     "chunks": n_chunks,
-                })
-                logger.info(f"Batch job {job_id}: category '{cat}' → {len(fnames)} images, batch_size={bs}, {n_chunks} chunks")
+                    "tiled_count": tiled_count,
+                    "total_tiles": total_tiles,
+                    "inferences": inferences,
+                }
+                category_report.append(entry)
+                logger.info(f"Batch job {job_id}: category '{cat}' → {len(fnames)} images, batch_size={bs}, {n_chunks} chunks, {tiled_count} tiled ({total_tiles} tiles), {inferences} inferences")
 
         # Store report in job status
         self._update_status(job_id, "running", dynamic_report=category_report)

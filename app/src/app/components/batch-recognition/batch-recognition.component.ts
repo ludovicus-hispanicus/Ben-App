@@ -1023,8 +1023,8 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     return `${hours}h ${mins}m`;
   }
 
-  getDynamicTotal(report: Array<{ image_count: number; chunks: number }>, field: 'image_count' | 'chunks'): number {
-    return report.reduce((sum, cat) => sum + cat[field], 0);
+  getDynamicTotal(report: Array<any>, field: string): number {
+    return report.reduce((sum: number, cat: any) => sum + (cat[field] || 0), 0);
   }
 
   getCuredLink(r: { text_id: number; transliteration_id: number }): string {
