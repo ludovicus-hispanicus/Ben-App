@@ -198,7 +198,10 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   batchSize: number = 0;
 
   // Right panel tab
-  rightTab: 'settings' | 'report' = 'settings';
+  rightTab: 'settings' | 'report' | 'usage' = 'settings';
+
+  // Usage stats
+  usageData: Array<{ date: string; models: { [model: string]: { inferences: number; input_tokens: number; output_tokens: number; data_bytes: number } } }> = [];
 
   // Job tracking (supports multiple concurrent jobs)
   activeJobIds: Set<string> = new Set();
@@ -227,6 +230,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     this.loadVllmModels();
     this.loadPrompts();
     this.loadCuredDatasets();
+    this.loadUsage();
   }
 
   ngOnDestroy(): void {
@@ -898,6 +902,16 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
             `Batch complete: ${status.processed_images} pages processed, ${status.failed_images} failed`
           );
           this.loadRecentJobs();
+        } else if (status.status === 'rate_limited') {
+          this.stopPoll(jobId);
+          this.activeJobIds.delete(jobId);
+          const resetMsg = status.rate_limit_reset
+            ? ` Try again after ${new Date(status.rate_limit_reset).toLocaleTimeString()}.`
+            : '';
+          this.notificationService.showError(
+            `Batch stopped: API rate limit reached (${status.processed_images} pages processed).${resetMsg}`
+          );
+          this.loadRecentJobs();
         } else if (status.status === 'failed') {
           this.stopPoll(jobId);
           this.activeJobIds.delete(jobId);
@@ -981,6 +995,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'completed': return 'check_circle';
       case 'failed': return 'error';
+      case 'rate_limited': return 'speed';
       case 'cancelled': return 'cancel';
       case 'running': return 'hourglass_empty';
       case 'pending': return 'schedule';
@@ -997,6 +1012,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'completed': return '#4caf50';
       case 'failed': return '#f44336';
+      case 'rate_limited': return '#ff5722';
       case 'cancelled': return '#ff9800';
       case 'running': return '#2196f3';
       default: return '#9e9e9e';
@@ -1029,6 +1045,40 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
 
   getCuredLink(r: { text_id: number; transliteration_id: number }): string {
     return `/cured?textId=${r.text_id}&transId=${r.transliteration_id}`;
+  }
+
+  // ============== Usage Tab ==============
+
+  loadUsage(): void {
+    this.batchService.getUsage(14).subscribe({
+      next: (data) => { this.usageData = data; },
+      error: () => {}
+    });
+  }
+
+  getUsageModels(entry: any): string[] {
+    return Object.keys(entry.models || {});
+  }
+
+  formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  formatTokens(tokens: number): string {
+    if (tokens < 1000) return tokens.toString();
+    if (tokens < 1000000) return (tokens / 1000).toFixed(1) + 'K';
+    return (tokens / 1000000).toFixed(2) + 'M';
+  }
+
+  getTodayInferences(): number {
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = this.usageData.find(d => d.date === today);
+    if (!entry) return 0;
+    return Object.values(entry.models).reduce((sum, m) => sum + m.inferences, 0);
   }
 
   // ============== Tile Marker Cleanup ==============

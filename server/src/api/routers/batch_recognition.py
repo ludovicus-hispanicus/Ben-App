@@ -67,6 +67,13 @@ async def cancel_batch(job_id: str):
     return batch_recognition_handler.cancel_batch(job_id)
 
 
+@router.get("/usage")
+async def get_usage(days: int = 7):
+    """Get API usage stats for the last N days."""
+    from services import usage_tracker
+    return usage_tracker.get_usage(days=days)
+
+
 @router.get("/vllm-status")
 async def get_vllm_status():
     """Check if a vLLM server is reachable and list available models/adapters."""

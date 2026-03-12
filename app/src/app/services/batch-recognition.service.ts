@@ -44,6 +44,13 @@ export class BatchRecognitionService {
     );
   }
 
+  getUsage(days: number = 7): Observable<any[]> {
+    return this.http.get<any[]>(
+      `${environment.apiUrl}${this.baseUrl}/usage`,
+      { params: { days: days.toString() } }
+    );
+  }
+
   getVllmStatus(): Observable<VllmStatus> {
     return this.http.get<VllmStatus>(
       `${environment.apiUrl}${this.baseUrl}/vllm-status`

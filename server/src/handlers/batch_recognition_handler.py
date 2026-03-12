@@ -37,7 +37,7 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 # (name, min_height, max_height, batch_size)
 # max_height=None means unbounded
 SIZE_CATEGORIES = [
-    ("xs",   0,    200,  5),
+    ("xs",   0,    200,  10),
     ("s",    200,  500,  5),
     ("m",    500,  1000, 3),
     ("l",    1000, 2000, 2),
@@ -763,23 +763,29 @@ class BatchRecognitionHandler:
                                         "dimensions": _estimate_dimensions(line, ci_w, ci_h),
                                     })
                             else:
-                                # Line count doesn't match — fall back to individual re-OCR
+                                # Line count doesn't match — retry in smaller sub-batches
+                                sub_batch_size = max(1, n_chunk // 2)
                                 logger.info(
                                     f"Batch job {job_id}: merge failure in chunk {chunk_filenames[0]} "
-                                    f"({len(merged_lines)} lines vs {n_chunk} images), re-processing individually"
+                                    f"({len(merged_lines)} lines vs {n_chunk} images), retrying in sub-batches of {sub_batch_size}"
                                 )
                                 self._update_status(
                                     job_id, "running",
-                                    current_filename=f"Re-processing {chunk_filenames[0]}...",
+                                    current_filename=f"Re-processing {chunk_filenames[0]} in sub-batches...",
                                 )
                                 retry_results = []
-                                for r_fn, r_fp, r_b64, r_w, r_h, _, _ in chunk_images:
+                                for sb_start in range(0, n_chunk, sub_batch_size):
+                                    sb_images = chunk_images[sb_start:sb_start + sub_batch_size]
                                     try:
-                                        single = ocr_client.ocr_image(r_b64, r_w, r_h, prompt)
-                                        retry_results.append(single)
+                                        if len(sb_images) == 1:
+                                            r_fn, r_fp, r_b64, r_w, r_h, _, _ = sb_images[0]
+                                            retry_results.append(ocr_client.ocr_image(r_b64, r_w, r_h, prompt))
+                                        else:
+                                            sb_tuples = [(b64, w, h) for _, _, b64, w, h, _, _ in sb_images]
+                                            retry_results.extend(ocr_client.ocr_images(sb_tuples, prompt))
                                     except Exception as re_err:
-                                        logger.warning(f"  Re-processing {r_fn} failed: {re_err}")
-                                        retry_results.append({"lines": [], "dimensions": []})
+                                        logger.warning(f"  Sub-batch starting at {sb_images[0][0]} failed: {re_err}")
+                                        retry_results.extend([{"lines": [], "dimensions": []} for _ in sb_images])
 
                                 new_empty = sum(1 for r in retry_results if not r.get("lines"))
                                 if new_empty < empty_count:
@@ -790,11 +796,35 @@ class BatchRecognitionHandler:
 
                 except Exception as e:
                     # If cancelled, break out of the chunk loop immediately
-                    from clients.gemini_client import GeminiCancelledError
+                    from clients.gemini_client import GeminiCancelledError, GeminiRateLimitError
                     from clients.anthropic_client import AnthropicCancelledError
                     if isinstance(e, (GeminiCancelledError, AnthropicCancelledError)) or job_id in self._cancelled_jobs:
                         logger.info(f"Batch job {job_id}: cancelled during OCR call")
                         break
+
+                    # Rate limit exhausted — stop the batch and report reset time
+                    if isinstance(e, GeminiRateLimitError):
+                        logger.warning(f"Batch job {job_id}: rate limit reached, stopping batch")
+                        # Gemini daily limits reset at midnight Pacific Time (UTC-7/UTC-8)
+                        from datetime import timezone, timedelta
+                        now_utc = datetime.utcnow()
+                        pacific = timezone(timedelta(hours=-7))
+                        now_pacific = now_utc.replace(tzinfo=timezone.utc).astimezone(pacific)
+                        midnight_pacific = (now_pacific + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                        reset_utc = midnight_pacific.astimezone(timezone.utc)
+                        self._update_status(
+                            job_id, "rate_limited",
+                            error=str(e),
+                            rate_limit_reached=True,
+                            rate_limit_reset=reset_utc.isoformat(),
+                            completed_at=datetime.utcnow().isoformat(),
+                            processed_images=processed,
+                            failed_images=failed,
+                            results=results,
+                            failed_results=failed_results,
+                        )
+                        return  # Exit the entire batch processing
+
                     logger.error(f"Batch job {job_id}: OCR call failed for chunk starting at {chunk_filenames[0]}: {e}")
                     for fn, fp, _, _, _, _, _ in chunk_images:
                         failed += 1
@@ -1115,6 +1145,8 @@ class BatchRecognitionHandler:
             "export_images": job.get("export_images", False),
             "correction_rules": job.get("correction_rules"),
             "effective_model": job.get("effective_model"),
+            "rate_limit_reached": job.get("rate_limit_reached", False),
+            "rate_limit_reset": job.get("rate_limit_reset"),
         }
 
     def list_batch_jobs(self, limit: int = 20) -> List[Dict]:

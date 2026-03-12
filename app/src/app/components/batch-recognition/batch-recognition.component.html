@@ -251,6 +251,10 @@
       <button class="tab-btn" [class.active]="rightTab === 'report'" (click)="rightTab = 'report'">
         <mat-icon>assessment</mat-icon> Report
       </button>
+      <button class="tab-btn" [class.active]="rightTab === 'usage'" (click)="rightTab = 'usage'; loadUsage()">
+        <mat-icon>data_usage</mat-icon> Usage
+        <span class="usage-badge" *ngIf="getTodayInferences() > 0">{{ getTodayInferences() }}</span>
+      </button>
     </div>
 
     <!-- ====== SETTINGS TAB ====== -->
@@ -409,6 +413,19 @@
           </table>
         </div>
 
+        <!-- Rate limit warning -->
+        <div class="report-section rate-limit-banner" *ngIf="reportStatus.rate_limit_reached">
+          <mat-icon style="color: #ff5722;">speed</mat-icon>
+          <div>
+            <strong>API rate limit reached</strong>
+            <div>The batch was automatically stopped after {{ reportStatus.processed_images }} pages to avoid wasting retries.</div>
+            <div *ngIf="reportStatus.rate_limit_reset">
+              Limit resets at <strong>{{ reportStatus.rate_limit_reset | date:'shortTime' }}</strong>.
+              Use "Continue" to process the remaining {{ reportStatus.total_images - reportStatus.processed_images }} pages after the reset.
+            </div>
+          </div>
+        </div>
+
         <!-- Dynamic batching report -->
         <div class="report-section" *ngIf="reportStatus.dynamic_report && reportStatus.dynamic_report.length > 0">
           <div class="report-section-label">Dynamic Batching</div>
@@ -481,6 +498,40 @@
         </div>
       </ng-container>
     </div><!-- /report tab -->
+
+    <!-- ====== USAGE TAB ====== -->
+    <div *ngIf="rightTab === 'usage'" class="usage-tab">
+
+      <div class="usage-header">
+        <span class="usage-title">API Usage (last 14 days)</span>
+        <button mat-icon-button (click)="loadUsage()" matTooltip="Refresh">
+          <mat-icon>refresh</mat-icon>
+        </button>
+      </div>
+
+      <div class="usage-empty" *ngIf="usageData.length === 0">
+        <mat-icon>info_outline</mat-icon>
+        <span>No API usage recorded yet. Run a batch with an API model to start tracking.</span>
+      </div>
+
+      <div class="usage-day" *ngFor="let day of usageData">
+        <div class="usage-day-header">{{ day.date }}</div>
+        <table class="report-table report-table-full">
+          <thead>
+            <tr><th>Model</th><th>Inferences</th><th>Input Tokens</th><th>Output Tokens</th><th>Data Sent</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let model of getUsageModels(day)">
+              <td class="usage-model-name">{{ model }}</td>
+              <td>{{ day.models[model].inferences }}</td>
+              <td>{{ formatTokens(day.models[model].input_tokens) }}</td>
+              <td>{{ formatTokens(day.models[model].output_tokens) }}</td>
+              <td>{{ formatBytes(day.models[model].data_bytes) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /usage tab -->
 
   </div>
 

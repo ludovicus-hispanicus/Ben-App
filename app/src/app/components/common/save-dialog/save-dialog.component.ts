@@ -1,8 +1,9 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnInit, OnDestroy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { FormControl } from '@angular/forms';
-import { Observable } from 'rxjs';
-import { map, startWith } from 'rxjs/operators';
+import { Observable, Subject, merge } from 'rxjs';
+import { map, startWith, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
+import { TextService } from '../../../services/text.service';
 
 export interface SaveDialogData {
   textId: number | null;
@@ -28,17 +29,19 @@ export interface SaveDialogResult {
   templateUrl: './save-dialog.component.html',
   styleUrls: ['./save-dialog.component.scss']
 })
-export class SaveDialogComponent implements OnInit {
+export class SaveDialogComponent implements OnInit, OnDestroy {
   museumNumberControl = new FormControl('');
   pNumberControl = new FormControl('');
   publicationNumberControl = new FormControl('');
   labelControl = new FormControl('');
   partInput: number | null = null;
   filteredLabels: Observable<string[]>;
+  private destroy$ = new Subject<void>();
 
   constructor(
     public dialogRef: MatDialogRef<SaveDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: SaveDialogData
+    @Inject(MAT_DIALOG_DATA) public data: SaveDialogData,
+    private textService: TextService
   ) {
     // Set current part — extract number from any format ("Part-1", "3", etc.)
     if (data.currentPart) {
@@ -59,6 +62,46 @@ export class SaveDialogComponent implements OnInit {
       startWith(this.data.currentLabel || ''),
       map(value => this._filterLabels(value || ''))
     );
+
+    // Debounce identifier changes and look up existing parts
+    merge(
+      this.museumNumberControl.valueChanges,
+      this.pNumberControl.valueChanges,
+      this.publicationNumberControl.valueChanges
+    ).pipe(
+      debounceTime(300),
+      map(() => this._getFirstNonEmptyIdentifier()),
+      distinctUntilChanged(),
+      switchMap(identifier => {
+        if (!identifier) {
+          return [[]];
+        }
+        return this.textService.getPartsByIdentifier(identifier);
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe(parts => {
+      this.data.existingParts = parts;
+    });
+
+    // Also trigger an initial lookup if identifiers are pre-filled
+    const initial = this._getFirstNonEmptyIdentifier();
+    if (initial) {
+      this.textService.getPartsByIdentifier(initial).subscribe(parts => {
+        this.data.existingParts = parts;
+      });
+    }
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private _getFirstNonEmptyIdentifier(): string {
+    const museum = String(this.museumNumberControl.value || '').trim();
+    const pNum = String(this.pNumberControl.value || '').trim();
+    const pub = String(this.publicationNumberControl.value || '').trim();
+    return museum || pNum || pub;
   }
 
   private _filterLabels(value: string): string[] {

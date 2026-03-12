@@ -7,7 +7,7 @@
   <span class="ben-id new" *ngIf="!data.textId">New Text</span>
 </h2>
 
-<mat-dialog-content>
+<mat-dialog-content (keydown.enter)="onSave()">
   <div class="section-label">Identifiers</div>
 
   <div class="field-row">

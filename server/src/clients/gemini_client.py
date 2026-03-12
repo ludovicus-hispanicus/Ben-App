@@ -8,6 +8,7 @@ from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
 from typing import List, Dict, Any, Tuple, Optional
 from common.ocr_prompts import resolve_prompt, wrap_prompt_for_batch, parse_batch_response
+from services import usage_tracker
 
 # Retry config for rate-limit (429) errors
 _MAX_RETRIES = 4
@@ -16,6 +17,11 @@ _INITIAL_BACKOFF = 15  # seconds — Gemini RPM resets quickly, RPD is the real 
 
 class GeminiCancelledError(Exception):
     """Raised when an OCR call is cancelled via the cancel event."""
+    pass
+
+
+class GeminiRateLimitError(Exception):
+    """Raised when rate-limit retries are exhausted."""
     pass
 
 
@@ -38,7 +44,7 @@ class GeminiOcrClient(BaseOcrClient):
         """Set an event that, when set, will abort retry waits."""
         self._cancel_event = event
 
-    def _call_with_retry(self, contents, label: str = ""):
+    def _call_with_retry(self, contents, label: str = "", data_bytes: int = 0):
         """Call generate_content with exponential backoff on rate-limit errors."""
         backoff = _INITIAL_BACKOFF
         for attempt in range(_MAX_RETRIES + 1):
@@ -46,23 +52,41 @@ class GeminiOcrClient(BaseOcrClient):
             if self._cancel_event and self._cancel_event.is_set():
                 raise GeminiCancelledError("OCR cancelled")
             try:
-                return self.client.models.generate_content(
+                response = self.client.models.generate_content(
                     model=self.model_id,
                     contents=contents,
                 )
-            except Exception as e:
-                if _is_rate_limit_error(e) and attempt < _MAX_RETRIES:
-                    logging.warning(
-                        f"Gemini rate-limited{' (' + label + ')' if label else ''}, "
-                        f"attempt {attempt+1}/{_MAX_RETRIES+1}, waiting {backoff}s..."
+                # Track usage
+                try:
+                    meta = getattr(response, 'usage_metadata', None)
+                    input_tokens = getattr(meta, 'prompt_token_count', 0) or 0 if meta else 0
+                    output_tokens = getattr(meta, 'candidates_token_count', 0) or 0 if meta else 0
+                    usage_tracker.record(
+                        model=self.model_id,
+                        inferences=1,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        data_bytes=data_bytes,
                     )
-                    # Sleep in small increments so we can respond to cancellation
-                    for _ in range(int(backoff)):
-                        if self._cancel_event and self._cancel_event.is_set():
-                            raise GeminiCancelledError("OCR cancelled during rate-limit wait")
-                        time.sleep(1)
-                    backoff = min(backoff * 2, 120)  # cap at 2 minutes
-                    continue
+                except Exception:
+                    pass  # never let tracking break OCR
+                return response
+            except Exception as e:
+                if _is_rate_limit_error(e):
+                    if attempt < _MAX_RETRIES:
+                        logging.warning(
+                            f"Gemini rate-limited{' (' + label + ')' if label else ''}, "
+                            f"attempt {attempt+1}/{_MAX_RETRIES+1}, waiting {backoff}s..."
+                        )
+                        # Sleep in small increments so we can respond to cancellation
+                        for _ in range(int(backoff)):
+                            if self._cancel_event and self._cancel_event.is_set():
+                                raise GeminiCancelledError("OCR cancelled during rate-limit wait")
+                            time.sleep(1)
+                        backoff = min(backoff * 2, 120)  # cap at 2 minutes
+                        continue
+                    # Retries exhausted — raise specific error so batch handler can stop
+                    raise GeminiRateLimitError(f"Rate limit exceeded after {_MAX_RETRIES} retries: {e}") from e
                 raise
 
     def ocr_image(self, image_base64: str, image_width: int, image_height: int, prompt: str = None) -> dict:
@@ -81,6 +105,7 @@ class GeminiOcrClient(BaseOcrClient):
                     )
                 ],
                 label=f"{image_width}x{image_height}",
+                data_bytes=len(image_bytes),
             )
 
             # Check for blocked/empty responses
@@ -109,8 +134,8 @@ class GeminiOcrClient(BaseOcrClient):
                 result["truncated"] = True
             return result
 
-        except GeminiCancelledError:
-            raise  # let cancellation propagate
+        except (GeminiCancelledError, GeminiRateLimitError):
+            raise  # let cancellation and rate-limit propagate
         except Exception as e:
             logging.error(f"Gemini OCR extraction failed: {type(e).__name__}: {e}")
             return {"lines": [], "dimensions": []}
@@ -125,10 +150,14 @@ class GeminiOcrClient(BaseOcrClient):
             contents.append(types.Part.from_bytes(data=base64.b64decode(img_b64), mime_type="image/png"))
             dims.append((w, h))
 
+        # Estimate total data size from base64 length (avoids re-decoding)
+        total_data_bytes = sum(len(img_b64) * 3 // 4 for img_b64, _, _ in images)
+
         try:
             response = self._call_with_retry(
                 contents=contents,
                 label=f"batch({len(images)} images)",
+                data_bytes=total_data_bytes,
             )
 
             if not response.candidates:
@@ -142,8 +171,8 @@ class GeminiOcrClient(BaseOcrClient):
                 logging.warning(f"Gemini batch finish_reason={finish} for {len(images)} images")
 
             return parse_batch_response(response.text, len(images), dims)
-        except GeminiCancelledError:
-            raise  # let cancellation propagate
+        except (GeminiCancelledError, GeminiRateLimitError):
+            raise  # let cancellation and rate-limit propagate
         except Exception as e:
             logging.error(f"Gemini multi-image OCR failed: {type(e).__name__}: {e}")
             return [{"lines": [], "dimensions": []} for _ in images]

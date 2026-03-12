@@ -1639,10 +1639,15 @@ async def get_image(text_id: int, transliteration_id: int):
     if type(text_id) is not int or type(transliteration_id) is not int:
         raise HTTPException(status_code=500, detail="invalid BEN / transliteration id")
 
-    transliterations = global_new_text_handler.get_text_cured_transliterations(text_id=text_id)
-    trans = next((t for t in transliterations if t.transliteration_id == transliteration_id), None)
+    text = global_new_text_handler.get_by_text_id(text_id=text_id)
+    if not text:
+        raise HTTPException(status_code=404, detail=f"Text {text_id} not found")
+
+    trans = next((t for t in text.transliterations
+                  if t.transliteration_id == transliteration_id
+                  and t.source == TransliterationSource.CURED.value), None)
     if not trans:
-        raise HTTPException(status_code=500, detail="Transliteration doesn't exist")
+        raise HTTPException(status_code=404, detail="Transliteration doesn't exist")
 
     image_name = trans.image_name
     image_path = None
@@ -1651,7 +1656,10 @@ async def get_image(text_id: int, transliteration_id: int):
     if image_name:
         image_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
         if not os.path.isfile(image_path):
-            image_path = None
+            # Fallback to preview directory
+            image_path = StorageUtils.build_preview_image_path(image_name=image_name)
+            if not os.path.isfile(image_path):
+                image_path = None
 
     # Fallback: find any image file matching this text_id
     if not image_path:

@@ -45,6 +45,11 @@ async def get_labels() -> List[str]:
     return global_new_text_handler.get_all_labels()
 
 
+@router.get("/parts-by-identifier")
+async def get_parts_by_identifier(identifier: str = "") -> List[int]:
+    return global_new_text_handler.get_parts_by_identifier(identifier)
+
+
 @router.get("/museums")
 async def get_identifiers_collections():
     # return IdentifiersCollections(museums=global_new_text_handler.museums,
@@ -105,7 +110,7 @@ async def create(request: Request, dto: CreateTextDto) -> int:
         identifiers=dto.text_identifiers,
         metadata=dto.metadata,
         uploader_id=user_id,
-        project_id=dto.project_id
+        dataset_id=dto.dataset_id
     )
 
     return text_id

@@ -297,6 +297,29 @@ class NewTextsHandler:
 
         return previews
 
+    def get_parts_by_identifier(self, identifier: str) -> List[int]:
+        """Find all used part numbers for texts matching the given identifier
+        across museum_id, p_number, and publication_id fields."""
+        if not identifier or not identifier.strip():
+            return []
+        identifier = identifier.strip()
+        all_docs = self._collection.find_many(find_filter={}, limit=0)
+        parts = set()
+        for doc in all_docs:
+            match = (
+                doc.get("museum_id") == identifier or
+                doc.get("p_number") == identifier or
+                doc.get("publication_id") == identifier
+            )
+            if match:
+                part = doc.get("part", "")
+                if part:
+                    try:
+                        parts.add(int(part))
+                    except (ValueError, TypeError):
+                        pass
+        return sorted(parts)
+
     def get_stats_per_dataset(self) -> dict:
         """Fast per-dataset stats without loading/parsing all texts.
         Returns {dataset_id_int: {"count": N, "curated_count": N, "curated_lines": N}}

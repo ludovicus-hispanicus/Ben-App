@@ -63,6 +63,12 @@ export class TextService {
         return this.http.get<string[]>(`${environment.apiUrl}${this.baseUrl}/labels`);
     }
 
+    getPartsByIdentifier(identifier: string) {
+        return this.http.get<number[]>(`${environment.apiUrl}${this.baseUrl}/parts-by-identifier`, {
+            params: { identifier }
+        });
+    }
+
     updateLabel(textId: number, label: string) {
         return this.http.patch<{updated: boolean}>(`${environment.apiUrl}${this.baseUrl}/${textId}/label`, { label });
     }
