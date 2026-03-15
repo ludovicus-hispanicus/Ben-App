@@ -278,5 +278,7 @@ async def list_unassigned_texts() -> List[NewTextPreviewDto]:
 
 
 @router.get("/{dataset_id}/texts")
-async def list_dataset_texts(dataset_id: int) -> List[NewTextPreviewDto]:
-    return global_new_text_handler.list_texts_by_dataset(dataset_id=dataset_id)
+async def list_dataset_texts(dataset_id: int, skip: int = 0, limit: int = 500):
+    texts = global_new_text_handler.list_texts_by_dataset(dataset_id=dataset_id, skip=skip, limit=limit)
+    total = global_new_text_handler.get_dataset_text_count(dataset_id=dataset_id)
+    return {"items": texts, "total": total, "skip": skip, "limit": limit}

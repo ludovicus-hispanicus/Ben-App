@@ -69,8 +69,8 @@ async def get_grouped_training_data():
     """
     from api.dto.text import NewTextPreviewDto
 
-    # Get all texts from training data
-    texts = global_new_text_handler.list_texts()
+    # Get all texts from training data (no limit — production needs the full catalog)
+    texts = global_new_text_handler.list_texts(limit=0)
 
     # Group by museum_id, p_number, and publication_id
     grouped = {}
@@ -112,7 +112,7 @@ async def get_grouped_training_data():
             "last_modified": text.last_modified,
             "labels": text.labels if hasattr(text, 'labels') and text.labels else ([text.label] if text.label else []),
             "label": text.label or "",
-            "project_id": text.project_id
+            "dataset_id": text.dataset_id
         })
 
     # Check which groups have production texts (single bulk load instead of per-group queries)
@@ -177,7 +177,7 @@ async def get_production_sources(production_id: int):
     current_text_ids = {ref.text_id for ref in prod_text.source_texts}
 
     # Auto-sync: Find all texts with the same identifier (including translations)
-    all_texts = global_new_text_handler.list_texts()
+    all_texts = global_new_text_handler.list_texts(limit=0)
     identifier = prod_text.identifier
 
     # Find all matching texts (translations and any new parts)
@@ -208,40 +208,59 @@ async def get_production_sources(production_id: int):
         if not full_text or not full_text.transliterations:
             continue
 
-        # Get the latest CuReD transliteration
-        cured_trans = [t for t in full_text.transliterations if t.source == "cured"]
-        if not cured_trans:
-            continue
-
-        trans = cured_trans[-1]
-        if not trans.edit_history:
-            continue
-
-        latest_edit = trans.edit_history[-1]
         label = getattr(full_text, 'label', '') or ''
         part = getattr(full_text, 'part', '') or ''
 
         if label == 'translation':
-            # Translation: include text only (no image)
-            translations.append({
-                "text_id": text.text_id,
-                "transliteration_id": trans.transliteration_id,
-                "part": part,
-                "lines": latest_edit.lines,
-                "label": label
-            })
-            logging.info(f"  Translation {text.text_id}: part='{part}', {len(latest_edit.lines)} lines")
+            # Translation: text goes to translations list
+            cured_trans = [t for t in full_text.transliterations if t.source == "cured"]
+            trans = cured_trans[-1] if cured_trans else full_text.transliterations[-1]
+            if trans.edit_history:
+                latest_edit = trans.edit_history[-1]
+                translations.append({
+                    "text_id": text.text_id,
+                    "transliteration_id": trans.transliteration_id,
+                    "part": part,
+                    "lines": latest_edit.lines,
+                    "label": label
+                })
+                logging.info(f"  Translation {text.text_id}: part='{part}', {len(latest_edit.lines)} lines")
+
+            # Also add translation images to sources for canvas display
+            for trans in full_text.transliterations:
+                if not trans.image_name:
+                    continue
+                sources.append({
+                    "text_id": text.text_id,
+                    "transliteration_id": trans.transliteration_id,
+                    "part": part,
+                    "lines": [],  # text is in translations, not here
+                    "image_name": trans.image_name,
+                    "label": "translation",
+                    "source": trans.source or ""
+                })
+                logging.info(f"  Translation image {text.text_id}: part='{part}', source='{trans.source}'")
         else:
-            # Regular transliteration: include with image
-            sources.append({
-                "text_id": text.text_id,
-                "transliteration_id": trans.transliteration_id,
-                "part": part,
-                "lines": latest_edit.lines,
-                "image_name": trans.image_name,
-                "label": label
-            })
-            logging.info(f"  Source {text.text_id}: part='{part}', {len(latest_edit.lines)} lines")
+            # Regular transliteration: include ALL transliterations with images
+            for trans in full_text.transliterations:
+                if not trans.image_name:
+                    continue  # Skip transliterations without images
+                if not trans.edit_history:
+                    continue
+
+                latest_edit = trans.edit_history[-1]
+                # Use source type + label for display
+                trans_label = label or trans.source or ""
+                sources.append({
+                    "text_id": text.text_id,
+                    "transliteration_id": trans.transliteration_id,
+                    "part": part,
+                    "lines": latest_edit.lines,
+                    "image_name": trans.image_name,
+                    "label": trans_label,
+                    "source": trans.source or ""
+                })
+                logging.info(f"  Source {text.text_id}: part='{part}', source='{trans.source}', {len(latest_edit.lines)} lines")
 
     # Sort sources by part
     sources.sort(key=lambda x: x.get("part", ""))
@@ -393,7 +412,7 @@ async def sync_production_sources(production_id: int):
         raise HTTPException(status_code=404, detail="Production text not found")
 
     # Get all texts from training data with the same identifier
-    texts = global_new_text_handler.list_texts()
+    texts = global_new_text_handler.list_texts(limit=0)
     identifier = prod_text.identifier
     logging.info(f"Sync sources: Looking for identifier '{identifier}' (type: {prod_text.identifier_type})")
 
@@ -459,6 +478,28 @@ async def sync_production_sources(production_id: int):
     }
 
 
+@router.delete("/text/{production_id}/source/{text_id}/{transliteration_id}")
+async def remove_production_source(production_id: int, text_id: int, transliteration_id: int):
+    """Remove a source text reference from a production text."""
+    prod_text = production_texts_handler.get_by_id(production_id)
+    if not prod_text:
+        raise HTTPException(status_code=404, detail="Production text not found")
+
+    # Filter out the matching source reference
+    updated_sources = [
+        s for s in prod_text.source_texts
+        if not (s.text_id == text_id and s.transliteration_id == transliteration_id)
+    ]
+
+    if len(updated_sources) == len(prod_text.source_texts):
+        # No match found — might be an auto-discovered source, just return success
+        pass
+    else:
+        production_texts_handler.update_source_texts(production_id, updated_sources)
+
+    return {"deleted": True}
+
+
 @router.delete("/text/{production_id}")
 async def delete_production_text(production_id: int):
     """Delete a production text."""
@@ -488,10 +529,12 @@ async def get_sources_by_identifier(identifier: str):
     """
     Get all training data parts for a given identifier with their content.
     Used when creating a new production text.
+    Returns sources (transliterations) and translations separately.
     """
-    texts = global_new_text_handler.list_texts()
+    texts = global_new_text_handler.list_texts(limit=0)
 
-    matching_parts = []
+    sources = []
+    translations = []
     for text in texts:
         identifiers = text.text_identifiers
 
@@ -505,32 +548,57 @@ async def get_sources_by_identifier(identifier: str):
         if matches:
             # Get the full text to access transliterations (list_texts returns preview DTOs)
             full_text = global_new_text_handler.get_by_text_id(text.text_id)
+            label = text.label or ""
+            part = text.part or ""
 
-            lines = []
-            image_name = ""
-            if full_text and full_text.transliterations:
-                latest_trans = full_text.transliterations[-1]
-                if latest_trans.edit_history:
-                    lines = latest_trans.edit_history[-1].lines
-                image_name = latest_trans.image_name or ""
-
-            matching_parts.append({
-                "text_id": text.text_id,
-                "part": text.part or "",
-                "transliteration_id": text.latest_transliteration_id,
-                "lines": lines,
-                "image_name": image_name,
-                "is_curated": text.is_curated,
-                "lines_count": text.lines_count,
-                "last_modified": text.last_modified,
-                "labels": text.labels if hasattr(text, 'labels') and text.labels else ([text.label] if text.label else []),
-                "label": text.label or ""
-            })
+            if label == "translation":
+                # Translation: text goes to translations list
+                if full_text and full_text.transliterations:
+                    cured_trans = [t for t in full_text.transliterations if t.source == "cured"]
+                    latest_trans = cured_trans[-1] if cured_trans else full_text.transliterations[-1]
+                    lines = latest_trans.edit_history[-1].lines if latest_trans.edit_history else []
+                    translations.append({
+                        "text_id": text.text_id,
+                        "part": part,
+                        "transliteration_id": latest_trans.transliteration_id or text.latest_transliteration_id,
+                        "lines": lines,
+                        "label": label
+                    })
+                    # Also add translation images to sources for canvas display
+                    for trans in full_text.transliterations:
+                        if not trans.image_name:
+                            continue
+                        sources.append({
+                            "text_id": text.text_id,
+                            "part": part,
+                            "transliteration_id": trans.transliteration_id or text.latest_transliteration_id,
+                            "lines": [],
+                            "image_name": trans.image_name or "",
+                            "label": "translation",
+                            "source": trans.source or ""
+                        })
+            else:
+                # Regular: include ALL transliterations with images
+                if full_text and full_text.transliterations:
+                    for trans in full_text.transliterations:
+                        if not trans.image_name:
+                            continue
+                        lines = trans.edit_history[-1].lines if trans.edit_history else []
+                        sources.append({
+                            "text_id": text.text_id,
+                            "part": part,
+                            "transliteration_id": trans.transliteration_id or text.latest_transliteration_id,
+                            "lines": lines,
+                            "image_name": trans.image_name or "",
+                            "label": label,
+                            "source": trans.source or ""
+                        })
 
     # Sort by part
-    matching_parts.sort(key=lambda x: x.get("part", ""))
+    sources.sort(key=lambda x: x.get("part", ""))
+    translations.sort(key=lambda x: x.get("part", ""))
 
-    return matching_parts
+    return {"sources": sources, "translations": translations}
 
 
 # ==========================================

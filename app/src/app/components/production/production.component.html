@@ -281,7 +281,10 @@
                             class="source-tab"
                             [class.active]="selectedSourceIndex === i"
                             (click)="selectSource(i)">
-                        Part {{ source.part || (i + 1) }}
+                        {{ getSourceTabLabel(source, i) }}
+                        <mat-icon class="tab-delete-icon"
+                                  (click)="deleteSource(i, $event)"
+                                  matTooltip="Remove">close</mat-icon>
                     </button>
                 </div>
                 <div class="source-canvas-wrapper">
@@ -338,26 +341,6 @@
 
             <!-- Text editor on the right -->
             <div class="text-panel" [style.width.%]="100 - leftPanelWidth">
-                <!-- Action Tabs -->
-                <div class="text-panel-actions">
-                    <button class="action-tab" (click)="regenerateContent()" matTooltip="Regenerate from sources">
-                        <mat-icon>refresh</mat-icon> Regenerate
-                    </button>
-                    <button class="action-tab" (click)="exportContent()" matTooltip="Export content">
-                        <mat-icon>download</mat-icon> Export
-                    </button>
-                    <button class="action-tab" (click)="imageFileInput.click()" matTooltip="Add image (copy/photo)">
-                        <mat-icon>add_photo_alternate</mat-icon> Add Image
-                    </button>
-                    <button class="action-tab" (click)="browseServerImages()" matTooltip="Browse server images">
-                        <mat-icon>folder_open</mat-icon> Browse Server
-                    </button>
-                    <button class="action-tab" *ngIf="hasTranslations()" (click)="insertTranslation()"
-                            matTooltip="Insert translation lines into transliteration">
-                        <mat-icon>merge_type</mat-icon> Insert Translation
-                    </button>
-                </div>
-
                 <!-- Editor Mode Toggle -->
                 <div class="editor-mode-toggle" *ngIf="hasTranslations()">
                     <button class="mode-btn"
@@ -374,6 +357,16 @@
                         <span>Translation</span>
                         <span class="line-count">{{ getTranslationLineCount() }}</span>
                     </button>
+                    <span class="validation-status-inline" *ngIf="validationResult && editorMode === 'transliteration'">
+                        <mat-icon *ngIf="isValidating" class="btn-icon spinning">sync</mat-icon>
+                        <mat-icon *ngIf="!isValidating && validationResult?.valid" class="btn-icon valid-icon">check_circle</mat-icon>
+                        <mat-icon *ngIf="!isValidating && !validationResult?.valid" class="btn-icon invalid-icon">error</mat-icon>
+                        <span class="validation-info">
+                            {{ validationResult?.parsed_lines }} lines
+                            <span *ngIf="validationResult?.errors?.length > 0" class="error-count">| {{ validationResult.errors.length }} error(s)</span>
+                        </span>
+                        <span class="validation-source" *ngIf="getValidationSourceLabel()">{{ getValidationSourceLabel() }}</span>
+                    </span>
                 </div>
 
                 <!-- Transliteration Editor -->
@@ -383,6 +376,8 @@
                     [plainTextMode]="true"
                     [initialText]="editorContent"
                     [canEdit]="true"
+                    [disableNormalization]="!!currentProductionText"
+                    [hideValidationHeader]="hasTranslations()"
                     [validationErrors]="validationResult?.errors || []"
                     [isValidating]="isValidating"
                     [validationValid]="validationResult?.valid ?? null"
@@ -391,6 +386,25 @@
                     [validationWarningCount]="validationResult?.warnings?.length || 0"
                     [validationSourceLabel]="getValidationSourceLabel()"
                     (textContentChanged)="onEditorContentChange($event)">
+                    <div toolbar-actions>
+                        <div class="rt-divider"></div>
+                        <button class="rt-btn" (click)="regenerateContent()" matTooltip="Regenerate from sources">
+                            <mat-icon>refresh</mat-icon>
+                        </button>
+                        <button class="rt-btn" (click)="exportContent()" matTooltip="Export">
+                            <mat-icon>download</mat-icon>
+                        </button>
+                        <button class="rt-btn" (click)="imageFileInput.click()" matTooltip="Add image">
+                            <mat-icon>add_photo_alternate</mat-icon>
+                        </button>
+                        <button class="rt-btn" (click)="browseServerImages()" matTooltip="Browse server images">
+                            <mat-icon>folder_open</mat-icon>
+                        </button>
+                        <button class="rt-btn" *ngIf="hasTranslations()" (click)="insertTranslation()"
+                                matTooltip="Insert translation">
+                            <mat-icon>merge_type</mat-icon>
+                        </button>
+                    </div>
                 </text-editor>
 
                 <!-- Translation Editor -->
@@ -474,25 +488,28 @@
 
                 <!-- Not Connected State -->
                 <div *ngIf="!eblConnected && !isOAuthPending">
-                    <div class="token-instructions">
-                        <h4>How to get your eBL access token:</h4>
-                        <ol>
-                            <li>Go to <a href="https://www.ebl.lmu.de" target="_blank">ebl.lmu.de</a> and log in</li>
-                            <li>Press F12 to open DevTools</li>
-                            <li>Go to <strong>Application</strong> tab (or Storage in Firefox)</li>
-                            <li>Expand <strong>Local Storage</strong> &rarr; click on <strong>https://www.ebl.lmu.de</strong></li>
-                            <li>Find the key containing <code>access_token</code> and copy its value</li>
-                        </ol>
+                    <!-- Manual Token (primary method) -->
+                    <div class="ebl-login-section">
+                        <h4>Connect with Token</h4>
+                        <div class="token-instructions">
+                            <ol>
+                                <li>Go to <a href="https://www.ebl.lmu.de" target="_blank">ebl.lmu.de</a> and log in</li>
+                                <li>Press <strong>F12</strong> to open DevTools</li>
+                                <li>Go to <strong>Application</strong> tab &rarr; <strong>Local Storage</strong> &rarr; <strong>https://www.ebl.lmu.de</strong></li>
+                                <li>Find the key starting with <code>@@auth0spajs@@::X_GcKmRe...</code> that ends with scopes (<code>openid profile...</code>), <strong>not</strong> the ones with <code>@@user@@</code></li>
+                                <li>Click on it, then copy the <strong>value</strong> from the right-hand panel (it starts with <code>&#123;"body":&#123;"access_token":"eyJ...</code>) and paste it below</li>
+                            </ol>
+                        </div>
+                        <mat-form-field appearance="outline" class="full-width">
+                            <mat-label>Access Token</mat-label>
+                            <textarea matInput
+                                      [(ngModel)]="eblConfig.access_token"
+                                      (ngModelChange)="extractTokenFromJson($event)"
+                                      placeholder="Paste the access_token or the full JSON value..."
+                                      rows="3"></textarea>
+                            <mat-hint>You can paste the raw token or the full JSON — the access_token will be extracted automatically</mat-hint>
+                        </mat-form-field>
                     </div>
-
-                    <mat-form-field appearance="outline" class="full-width">
-                        <mat-label>Access Token</mat-label>
-                        <textarea matInput
-                                  [(ngModel)]="eblConfig.access_token"
-                                  placeholder="Paste your access token here..."
-                                  rows="4"></textarea>
-                        <mat-hint>Token expires after some time — you may need to refresh it</mat-hint>
-                    </mat-form-field>
 
                     <div class="advanced-toggle">
                         <button mat-button (click)="showAdvancedEblSettings = !showAdvancedEblSettings">

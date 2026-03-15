@@ -1,6 +1,6 @@
 <div class="text-editor-container" [class.dark-mode]="darkMode" (keydown)="onKeydown($event)">
   <!-- Editor header (only shown in plain text mode with validation data) -->
-  <div class="editor-header" *ngIf="plainTextMode && validationValid !== null">
+  <div class="editor-header" *ngIf="plainTextMode && validationValid !== null && !hideValidationHeader">
     <span class="spacer"></span>
     <span class="validation-status-inline">
       <mat-icon *ngIf="isValidating" class="btn-icon spinning">sync</mat-icon>
@@ -95,32 +95,34 @@
       </div>
     </div>
 
-    <!-- Right toolbar (always visible, except in plain text mode) -->
-    <div class="right-toolbar" *ngIf="!plainTextMode">
+    <!-- Right toolbar -->
+    <div class="right-toolbar">
 
-      <!-- Section: Info -->
-      <span class="rt-info" matTooltip="Bounding boxes">
-        <mat-icon>image</mat-icon>
-        <span class="rt-info-count">{{ boxAmount ?? 0 }}</span>
-      </span>
-      <span class="rt-info" matTooltip="Text lines">
-        <mat-icon>notes</mat-icon>
-        <span class="rt-info-count">{{ lineCount }}</span>
-      </span>
+      <!-- Section: Info (CuReD mode only) -->
+      <ng-container *ngIf="!plainTextMode">
+        <span class="rt-info" matTooltip="Bounding boxes">
+          <mat-icon>image</mat-icon>
+          <span class="rt-info-count">{{ boxAmount ?? 0 }}</span>
+        </span>
+        <span class="rt-info" matTooltip="Text lines">
+          <mat-icon>notes</mat-icon>
+          <span class="rt-info-count">{{ lineCount }}</span>
+        </span>
 
-      <div class="rt-divider"></div>
+        <div class="rt-divider"></div>
 
-      <!-- Section: Panels -->
-      <button class="rt-btn" [class.active]="activeRightPanel === 'normalized'"
-        (click)="toggleRightPanel('normalized')" matTooltip="Normalized Preview">
-        <mat-icon>visibility</mat-icon>
-      </button>
-      <button class="rt-btn" [class.active]="activeRightPanel === 'replacement'"
-        (click)="toggleRightPanel('replacement')" matTooltip="Replacement Chart">
-        <mat-icon>swap_horiz</mat-icon>
-      </button>
+        <!-- Section: Panels -->
+        <button class="rt-btn" [class.active]="activeRightPanel === 'normalized'"
+          (click)="toggleRightPanel('normalized')" matTooltip="Normalized Preview">
+          <mat-icon>visibility</mat-icon>
+        </button>
+        <button class="rt-btn" [class.active]="activeRightPanel === 'replacement'"
+          (click)="toggleRightPanel('replacement')" matTooltip="Replacement Chart">
+          <mat-icon>swap_horiz</mat-icon>
+        </button>
 
-      <div class="rt-divider"></div>
+        <div class="rt-divider"></div>
+      </ng-container>
 
       <!-- Section: Editor Tools -->
       <button class="rt-btn" (click)="openAceSearch()" matTooltip="Find & Replace (Ctrl+H)">
@@ -157,24 +159,34 @@
         <mat-icon>format_list_numbered</mat-icon>
       </button>
       <button class="rt-btn rt-text-btn" (click)="toggleNumberStyle()"
-        [matTooltip]="numberStyle === 'plain' ? 'Style: 1, 2, 3' : 'Style: 1′, 2′, 3′'">
+        [matTooltip]="numberStyle === 'plain' ? 'Style: 1, 2, 3' : numberStyle === 'prime' ? 'Style: 1′, 2′, 3′' : numberStyle === 'alternate' ? 'Alternating: 1, 2 / 1′, 2′' : 'Alternating: 1′, 2′ / 1, 2'">
         <span class="rt-text">{{ numberStyleLabel }}</span>
       </button>
-
-      <div class="rt-divider"></div>
-
-      <!-- Section: Format -->
-      <button class="rt-btn rt-text-btn" (click)="setViewMode(viewMode === 'atf' ? 'raw' : 'atf')"
-        [matTooltip]="viewMode === 'atf' ? 'Switch to Raw format' : 'Switch to eBL-ATF format'">
-        <span class="rt-text">{{ viewMode === 'atf' ? 'RAW' : 'eBL' }}</span>
+      <button class="rt-btn rt-text-btn" (click)="toggleSectionNumbering()"
+        [matTooltip]="sectionNumbering === 'continuous' ? 'Continuous: 1→n' : 'Per-section: reset at @reverse'">
+        <span class="rt-text">{{ sectionNumbering === 'continuous' ? '1→n' : '1|1' }}</span>
       </button>
 
-      <div class="rt-divider"></div>
+      <!-- Extra toolbar buttons projected from parent -->
+      <ng-content select="[toolbar-actions]"></ng-content>
 
-      <!-- Section: Export -->
-      <button class="rt-btn" (click)="exportRequested.emit()" matTooltip="Export">
-        <mat-icon>download</mat-icon>
-      </button>
+      <!-- CuReD-only: Format toggle & Export -->
+      <ng-container *ngIf="!plainTextMode">
+        <div class="rt-divider"></div>
+
+        <!-- Section: Format -->
+        <button class="rt-btn rt-text-btn" (click)="setViewMode(viewMode === 'atf' ? 'raw' : 'atf')"
+          [matTooltip]="viewMode === 'atf' ? 'Switch to Raw format' : 'Switch to eBL-ATF format'">
+          <span class="rt-text">{{ viewMode === 'atf' ? 'RAW' : 'eBL' }}</span>
+        </button>
+
+        <div class="rt-divider"></div>
+
+        <!-- Section: Export -->
+        <button class="rt-btn" (click)="exportRequested.emit()" matTooltip="Export">
+          <mat-icon>download</mat-icon>
+        </button>
+      </ng-container>
     </div>
   </div>
 </div>

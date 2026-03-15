@@ -308,9 +308,9 @@ export class CureComponent implements OnInit, AfterViewInit, OnDestroy {
     this.datasetTexts = [];
     this.clearDatasetSelection();
     this.clearTextSelection();
-    this.datasetService.getTexts(dataset.dataset_id).subscribe(
+    this.datasetService.getTexts(dataset.dataset_id, 0, 500).subscribe(
       data => {
-        this.datasetTexts = data;
+        this.datasetTexts = data.items;
         this.isLoadingTexts = false;
         this.loadTransliterationIds();
       },

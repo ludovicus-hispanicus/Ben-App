@@ -1907,6 +1907,7 @@ p {
         }
 
         // Column widths (shared by header + rows)
+        .details-col-num { width: 36px; flex-shrink: 0; text-align: right; padding: 0 4px; color: #999; font-size: 11px; }
         .details-col-icon { width: 28px; flex-shrink: 0; padding: 0 6px; }
         .details-col-name { width: 200px; flex-shrink: 0; overflow: hidden; padding: 0 10px; }
         .details-col-part { width: 60px; flex-shrink: 0; text-align: center; justify-content: center; padding: 0 10px; }
@@ -1926,6 +1927,7 @@ p {
             }
         }
         .details-col-lines { width: 55px; flex-shrink: 0; text-align: center; justify-content: center; padding: 0 10px; }
+        .details-col-size { width: 65px; flex-shrink: 0; text-align: right; justify-content: flex-end; padding: 0 10px; color: #888; font-size: 11px; }
         .details-col-actions { width: 110px; flex-shrink: 0; text-align: center; justify-content: center; padding: 0 6px; }
 
     .details-row {
@@ -2063,6 +2065,26 @@ p {
             }
         }
     }
+    }
+
+    .texts-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px 0;
+        font-size: 13px;
+        color: #666;
+
+        .pagination-info {
+            min-width: 140px;
+            text-align: center;
+        }
+
+        .pagination-range {
+            color: #999;
+            font-size: 12px;
+        }
     }
 
     .empty-list {

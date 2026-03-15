@@ -25,7 +25,7 @@
 
   <!-- ====== DATASETS VIEW ====== -->
   <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Datasets">
-    <cured (stageChange)="curedStage = $event"></cured>
+    <cured (stageChange)="onCuredStageChange($event)"></cured>
   </div>
 
   <!-- ====== MODELS VIEW ====== -->

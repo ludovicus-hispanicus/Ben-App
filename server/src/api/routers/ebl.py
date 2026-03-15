@@ -9,7 +9,7 @@ Provides endpoints to:
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -58,6 +58,11 @@ class ExportToEblResponse(BaseModel):
     success: bool
     message: str
     fragment_url: Optional[str] = None
+    error_code: Optional[str] = None
+    status_code: Optional[int] = None
+    help: Optional[str] = None
+    validation_errors: Optional[List[str]] = None
+    validation_details: Optional[List[dict]] = None
 
 
 class EblConfigRequest(BaseModel):

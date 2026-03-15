@@ -369,6 +369,7 @@ class EblHandler:
         self.access_token = access_token
         self.auth_method = "manual"
         self.refresh_token = None
+        logging.info(f"[eBL CONFIG] Token length: {len(access_token)}, starts with: {access_token[:30]}..., dots: {access_token.count('.')}")
 
         # Test the token by making a simple request
         await self._test_connection()
@@ -634,6 +635,42 @@ class EblHandler:
             logging.warning(f"eBL API request failed: {e}")
             return None
 
+    def _detect_error_column(self, line: str, error_desc: str) -> Optional[int]:
+        """Detect the column position of an error in a line. Returns 1-based column or None."""
+        desc_lower = error_desc.lower()
+
+        if "bracket" in desc_lower:
+            # Find mismatched brackets - use separate stacks per bracket type
+            # because ATF allows interleaving (e.g., [text {det]text} is valid)
+            bracket_pairs = {'(': ')', '[': ']', '<': '>', '{': '}'}
+            stacks = {op: [] for op in bracket_pairs}  # separate stack per type
+            closing = {v: k for k, v in bracket_pairs.items()}
+            for i, ch in enumerate(line):
+                if ch in bracket_pairs:
+                    stacks[ch].append(i)
+                elif ch in closing:
+                    opener = closing[ch]
+                    if stacks[opener]:
+                        stacks[opener].pop()
+                    else:
+                        return i + 1  # Unmatched closing bracket
+            # Check for any unclosed openers
+            for op, positions in stacks.items():
+                if positions:
+                    return positions[-1] + 1  # Unmatched opening bracket
+
+        elif "unknown sign" in desc_lower or "invalid sign" in desc_lower:
+            # Try to find the sign name mentioned in the error
+            import re
+            sign_match = re.search(r"['\"]([A-ZŠŦa-zšṭ0-9₂₃]+)['\"]", error_desc)
+            if sign_match:
+                sign = sign_match.group(1)
+                idx = line.find(sign)
+                if idx >= 0:
+                    return idx + 1
+
+        return None
+
     def _parse_ebl_validation_errors(self, error_msg) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Parse eBL validation error message into structured errors.
@@ -827,6 +864,24 @@ class EblHandler:
         if not self.is_configured:
             raise ValueError("eBL API is not configured")
 
+        # Log token debug info
+        token_info = self.get_token_info()
+        logging.info(f"[eBL EXPORT] Token exp: {token_info.get('exp')}, scopes: {token_info.get('scope', 'N/A')}, auth_method: {self.auth_method}")
+        logging.info(f"[eBL EXPORT] Token expired: {self.is_token_expired()}, token length: {len(self.access_token or '')}")
+
+        # Refresh token if expired
+        if self.is_token_expired():
+            logging.info("[eBL EXPORT] Access token expired, attempting refresh...")
+            refreshed = await self.refresh_access_token()
+            if not refreshed:
+                return {
+                    "success": False,
+                    "message": "eBL access token expired and refresh failed. Please log in again.",
+                    "fragment_url": None,
+                    "error_code": "TOKEN_EXPIRED"
+                }
+            logging.info("[eBL EXPORT] Token refreshed successfully")
+
         # First validate the ATF
         validation = await self.validate_atf(atf_text, fragment_number)
         if not validation["valid"]:
@@ -885,22 +940,50 @@ class EblHandler:
 
                 elif response.status_code == 422:
                     # Validation error from eBL - this includes sign database errors
+                    logging.info(f"[eBL EXPORT] 422 response body: {response.text[:2000]}")
                     try:
                         error_data = response.json()
-                        error_msg = error_data.get("description", str(error_data))
-                        errors, error_strings = self._parse_ebl_validation_errors(error_msg)
+                        error_list = error_data.get("errors", [])
+                        # Get ATF lines for column detection
+                        atf_lines = atf_text.splitlines()
+                        # Build structured errors with line numbers and detected columns
+                        validation_errors = []
+                        for err in error_list:
+                            line_num = err.get("lineNumber", 0)
+                            desc = err.get("description", str(err))
+                            col = None
+                            # Try to detect exact column for bracket errors
+                            if line_num > 0 and line_num <= len(atf_lines):
+                                col = self._detect_error_column(atf_lines[line_num - 1], desc)
+                            validation_errors.append({
+                                "line": line_num,
+                                "column": col,
+                                "message": desc
+                            })
+                        # Also build string list for display
+                        error_strings = []
+                        for e in validation_errors:
+                            if e['line'] and e.get('column'):
+                                error_strings.append(f"Line {e['line']}, col {e['column']}: {e['message']}")
+                            elif e['line']:
+                                error_strings.append(f"Line {e['line']}: {e['message']}")
+                            else:
+                                error_strings.append(e['message'])
+                        logging.info(f"[eBL EXPORT] 422 errors: {error_strings}")
                         return {
                             "success": False,
-                            "message": "eBL validation failed (sign database check)",
+                            "message": error_data.get("description", "eBL validation failed"),
                             "validation_errors": error_strings,
+                            "validation_details": validation_errors,
                             "fragment_url": None,
                             "error_code": "VALIDATION_ERROR",
                             "status_code": 422
                         }
-                    except Exception:
+                    except Exception as e:
+                        logging.error(f"[eBL EXPORT] 422 parse error: {e}")
                         return {
                             "success": False,
-                            "message": f"eBL validation failed: {response.text}",
+                            "message": f"eBL validation failed: {response.text[:500]}",
                             "fragment_url": None,
                             "error_code": "VALIDATION_ERROR",
                             "status_code": 422

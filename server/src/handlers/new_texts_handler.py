@@ -276,10 +276,10 @@ class NewTextsHandler:
         ])
 
     def get_by_text_id(self, text_id) -> NewText:
-        return self.get_text_by_aggregation(aggregation=[
-            {"$match": {"text_id": int(text_id)}},
-            {"$sample": {"size": 1}}
-        ])
+        result = self._collection.find_one({"text_id": int(text_id)})
+        if not result:
+            return None
+        return NewText.parse_obj(result)
 
     def get_text_cured_transliterations(self, text_id) -> List[TransliterationSubmission]:
         text: NewText = self.get_by_text_id(text_id=text_id)
@@ -333,10 +333,16 @@ class NewTextsHandler:
         texts = self._parse_texts(results)
         return [NewTextPreviewDto.from_new_text(new_text=t) for t in texts]
 
-    def list_texts_by_dataset(self, dataset_id: int) -> List[NewTextPreviewDto]:
+    def get_dataset_text_count(self, dataset_id: int) -> int:
+        stats = self.get_stats_per_dataset()
+        ds_stats = stats.get(int(dataset_id), {})
+        return ds_stats.get("count", 0)
+
+    def list_texts_by_dataset(self, dataset_id: int, skip: int = 0, limit: int = 500) -> List[NewTextPreviewDto]:
         results = self._collection.find_many(
             find_filter={"dataset_id": int(dataset_id)},
-            limit=1000,
+            limit=limit,
+            skip=skip,
             sort=[("use_start_time", pymongo.DESCENDING)]
         )
         texts = self._parse_texts(results)

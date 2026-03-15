@@ -147,7 +147,7 @@ class LocalCollection:
         # Simple equality
         return item.get(filter_key) == filter_value
 
-    def find_many(self, find_filter: Dict = {}, limit: int = 0, sort: List = None, **kwargs) -> List[Dict]:
+    def find_many(self, find_filter: Dict = {}, limit: int = 0, sort: List = None, skip: int = 0, **kwargs) -> List[Dict]:
         data = self._read()
         results = []
         for item in data:
@@ -171,6 +171,8 @@ class LocalCollection:
                     return (2, str(v))
                 results.sort(key=_sort_key, reverse=(direction == -1))
 
+        if skip > 0:
+            results = results[skip:]
         if limit > 0:
             return results[:limit]
         return results

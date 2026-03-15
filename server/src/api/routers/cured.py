@@ -1643,11 +1643,15 @@ async def get_image(text_id: int, transliteration_id: int):
     if not text:
         raise HTTPException(status_code=404, detail=f"Text {text_id} not found")
 
+    # First try to find the specific transliteration (any source that has an image)
     trans = next((t for t in text.transliterations
-                  if t.transliteration_id == transliteration_id
-                  and t.source == TransliterationSource.CURED.value), None)
+                  if t.transliteration_id == transliteration_id), None)
     if not trans:
         raise HTTPException(status_code=404, detail="Transliteration doesn't exist")
+
+    # Non-CURED sources (e.g. URL) don't have local image files
+    if trans.source != TransliterationSource.CURED.value:
+        raise HTTPException(status_code=404, detail="No local image for this source type")
 
     image_name = trans.image_name
     image_path = None
@@ -1656,6 +1660,10 @@ async def get_image(text_id: int, transliteration_id: int):
     if image_name:
         image_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
         if not os.path.isfile(image_path):
+            logging.warning(
+                f"Image file missing: text_id={text_id}, image_name={image_name}, "
+                f"expected_path={image_path}, BASE_PATH={StorageUtils.BASE_PATH}"
+            )
             # Fallback to preview directory
             image_path = StorageUtils.build_preview_image_path(image_name=image_name)
             if not os.path.isfile(image_path):
@@ -1671,6 +1679,11 @@ async def get_image(text_id: int, transliteration_id: int):
             found_name = os.path.basename(image_path)
             logging.info(f"Image fallback: updating image_name from '{image_name}' to '{found_name}' for text {text_id}")
             global_new_text_handler.update_transliteration_image(text_id, transliteration_id, found_name)
+        else:
+            logging.warning(
+                f"Image not found anywhere: text_id={text_id}, image_name={image_name}, "
+                f"train_dir={train_dir}, dir_exists={os.path.isdir(train_dir)}"
+            )
 
     if not image_path:
         raise HTTPException(status_code=404, detail="No image found for this transliteration")

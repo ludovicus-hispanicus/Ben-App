@@ -45,6 +45,7 @@ async def start_batch(request: Request, body: BatchRecognitionRequest):
         image_scale=body.image_scale,
         include_filenames=body.include_filenames,
         exclude_filenames=body.exclude_filenames,
+        box_mode=body.box_mode,
     )
     return result
 

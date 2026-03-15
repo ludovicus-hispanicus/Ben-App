@@ -420,6 +420,17 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.canvas.renderAll();
   }
 
+  getViewportTransform(): number[] | null {
+    return this.canvas?.viewportTransform ? [...this.canvas.viewportTransform] : null;
+  }
+
+  restoreViewportTransform(vpt: number[]): void {
+    if (this.canvas && vpt) {
+      this.canvas.setViewportTransform(vpt);
+      this.canvas.renderAll();
+    }
+  }
+
   zoomIn() {
     let zoom = this.canvas.getZoom() * 1.3;
     if (zoom > this.props.maxZoom) zoom = this.props.maxZoom;

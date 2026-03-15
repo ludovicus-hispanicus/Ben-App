@@ -68,6 +68,7 @@ export interface ExportResult {
     status_code?: number;
     help?: string;
     validation_errors?: string[];
+    validation_details?: { line: number; message: string }[];
 }
 
 export interface OAuthStatus {

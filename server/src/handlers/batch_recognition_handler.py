@@ -321,6 +321,7 @@ class BatchRecognitionHandler:
         image_scale: Optional[float] = None,
         include_filenames: Optional[List[str]] = None,
         exclude_filenames: Optional[List[str]] = None,
+        box_mode: Optional[str] = None,
     ) -> Dict:
         """Start a batch recognition job asynchronously.
         Source can be a Library project (source_project_id) or a local folder (source_folder_path).
@@ -490,6 +491,7 @@ class BatchRecognitionHandler:
             "completed_at": None,
             "image_scale": image_scale,
             "correction_rules": correction_rules,
+            "box_mode": box_mode or "estimate",
         }
 
         self._db[self.BATCH_JOBS_COLLECTION].insert_one(job_record)
@@ -517,6 +519,7 @@ class BatchRecognitionHandler:
             uses_gpu,
             image_scale,
             batch_size,
+            box_mode or "estimate",
         )
 
         logger.info(f"Started batch recognition job {job_id}: {source_name} ({total_images} images) with model {effective_model}, batch_size={batch_size}")
@@ -552,6 +555,7 @@ class BatchRecognitionHandler:
         uses_gpu: bool = True,
         image_scale: Optional[float] = None,
         batch_size: int = 1,
+        box_mode: str = "estimate",
     ):
         """Run batch recognition in a background thread.
         Supports both Library projects (source_project_id) and local folders (local_folder).
@@ -869,6 +873,25 @@ class BatchRecognitionHandler:
                                 for b in boxes
                             ]
 
+                        # Box mode: "none" = no boxes, "predict" = Kraken segmentation
+                        if box_mode == "none":
+                            boxes = []
+                        elif box_mode == "predict" and text_lines:
+                            try:
+                                from clients.kraken_client import KrakenOcrClient
+                                with open(file_path, "rb") as img_f:
+                                    img_bytes = img_f.read()
+                                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                                seg_result = KrakenOcrClient.segment_image(img_b64)
+                                kraken_boxes = seg_result.get("dimensions", [])
+                                if kraken_boxes:
+                                    boxes = kraken_boxes
+                                    logger.info(f"Batch job {job_id}: Kraken predicted {len(boxes)} boxes for {filename}")
+                                else:
+                                    logger.warning(f"Batch job {job_id}: Kraken returned no boxes for {filename}, keeping estimated")
+                            except Exception as seg_err:
+                                logger.warning(f"Batch job {job_id}: Kraken segmentation failed for {filename}: {seg_err}, keeping estimated")
+
                         if not text_lines:
                             # Last resort: retry at full resolution if we were using a scale
                             if effective_scale < 1.0:
@@ -912,6 +935,14 @@ class BatchRecognitionHandler:
                         dest_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
                         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                         shutil.copy2(file_path, dest_path)
+
+                        # Verify the copy succeeded
+                        if not os.path.isfile(dest_path):
+                            logger.error(
+                                f"Batch job {job_id}: image copy FAILED for {filename} → {dest_path} "
+                                f"(source exists: {os.path.isfile(file_path)}, "
+                                f"BASE_PATH: {StorageUtils.BASE_PATH})"
+                            )
 
                         # Draw tile boundary lines on the saved image
                         if filename in tiled_boundaries:

@@ -7,7 +7,7 @@
   <span class="ben-id new" *ngIf="!data.textId">New Text</span>
 </h2>
 
-<mat-dialog-content (keydown.enter)="onSave()">
+<mat-dialog-content (keydown.enter)="onEnter($event)">
   <div class="section-label">Identifiers</div>
 
   <div class="field-row">
@@ -42,7 +42,9 @@
              [formControl]="labelControl"
              [matAutocomplete]="autoLabel"
              placeholder="Type or select existing label">
-      <mat-autocomplete #autoLabel="matAutocomplete">
+      <mat-autocomplete #autoLabel="matAutocomplete"
+                        (opened)="autocompleteOpen = true"
+                        (closed)="onAutocompleteClosed()">
         <mat-option *ngFor="let label of filteredLabels | async" [value]="label">
           {{ label }}
         </mat-option>

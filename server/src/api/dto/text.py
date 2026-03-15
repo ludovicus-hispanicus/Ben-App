@@ -65,6 +65,7 @@ class NewTextPreviewDto(BaseModel):
     is_curated_vlm: bool = False
     lines_count: int = 0
     dataset_id: Optional[int] = None
+    image_size: Optional[int] = None  # file size in bytes
 
     @staticmethod
     def from_new_text(new_text: NewText):
@@ -99,6 +100,21 @@ class NewTextPreviewDto(BaseModel):
 
         is_curated = is_curated_kraken or is_curated_vlm
 
+        # Get image file size from the latest transliteration's image
+        image_size = None
+        try:
+            image_name = None
+            if new_text.transliterations:
+                image_name = new_text.transliterations[-1].image_name
+            if image_name:
+                img_path = StorageUtils.build_cured_train_image_path(image_name)
+                if not os.path.isfile(img_path):
+                    img_path = StorageUtils.build_preview_image_path(image_name)
+                if os.path.isfile(img_path):
+                    image_size = os.path.getsize(img_path)
+        except Exception:
+            pass
+
         return NewTextPreviewDto(
             text_id=new_text.text_id,
             text_identifiers=TextIdentifiersDto.from_values(
@@ -118,5 +134,6 @@ class NewTextPreviewDto(BaseModel):
             is_curated_kraken=is_curated_kraken,
             is_curated_vlm=is_curated_vlm,
             lines_count=lines_count,
-            dataset_id=getattr(new_text, 'dataset_id', None)
+            dataset_id=getattr(new_text, 'dataset_id', None),
+            image_size=image_size,
         )

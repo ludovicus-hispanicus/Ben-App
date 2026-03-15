@@ -30,6 +30,8 @@ export interface SaveDialogResult {
   styleUrls: ['./save-dialog.component.scss']
 })
 export class SaveDialogComponent implements OnInit, OnDestroy {
+  autocompleteOpen = false;
+  private autoClosedAt = 0;
   museumNumberControl = new FormControl('');
   pNumberControl = new FormControl('');
   publicationNumberControl = new FormControl('');
@@ -113,6 +115,19 @@ export class SaveDialogComponent implements OnInit, OnDestroy {
 
   onCancel(): void {
     this.dialogRef.close(null);
+  }
+
+  onAutocompleteClosed(): void {
+    this.autocompleteOpen = false;
+    this.autoClosedAt = Date.now();
+  }
+
+  onEnter(event: Event): void {
+    // If the autocomplete dropdown is open or just closed (Enter selected an item), skip save
+    if (this.autocompleteOpen || (Date.now() - this.autoClosedAt) < 200) {
+      return;
+    }
+    this.onSave();
   }
 
   onSave(): void {

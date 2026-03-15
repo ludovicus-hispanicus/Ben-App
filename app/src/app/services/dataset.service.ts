@@ -53,9 +53,10 @@ export class DatasetService {
         );
     }
 
-    getTexts(datasetId: number): Observable<TextPreview[]> {
-        return this.http.get<TextPreview[]>(
-            `${environment.apiUrl}${this.baseUrl}/${datasetId}/texts`
+    getTexts(datasetId: number, skip: number = 0, limit: number = 500): Observable<{ items: TextPreview[]; total: number; skip: number; limit: number }> {
+        return this.http.get<{ items: TextPreview[]; total: number; skip: number; limit: number }>(
+            `${environment.apiUrl}${this.baseUrl}/${datasetId}/texts`,
+            { params: { skip: skip.toString(), limit: limit.toString() } }
         );
     }
 

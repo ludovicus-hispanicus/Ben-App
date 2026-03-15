@@ -85,6 +85,11 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   // Production view mode ('dashboard' or 'editor')
   productionViewMode: string = 'dashboard';
 
+  onCuredStageChange(stage: number): void {
+    this.curedStage = stage;
+    this.cdr.detectChanges();
+  }
+
   get hideChrome(): boolean {
     return (this.curedStage >= 2 && this.ocrViewMode === OcrViewMode.Datasets)
         || (this.ocrViewMode === OcrViewMode.Export && this.productionViewMode === 'editor');

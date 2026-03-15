@@ -66,6 +66,7 @@ export interface SourceTextContent {
     lines: string[];
     image_name: string;
     label?: string;  // empty for transliterations
+    source?: string; // "cured", "url", etc.
 }
 
 export interface TranslationContent {
@@ -165,10 +166,20 @@ export class ProductionService {
     }
 
     /**
-     * Get all training data parts for a given identifier with their content.
+     * Remove a source text reference from a production text.
      */
-    getSourcesByIdentifier(identifier: string): Observable<SourceTextContent[]> {
-        return this.http.get<SourceTextContent[]>(`${environment.apiUrl}${this.baseUrl}/sources/${identifier}`);
+    removeSource(productionId: number, textId: number, transliterationId: number): Observable<{ deleted: boolean }> {
+        return this.http.delete<{ deleted: boolean }>(
+            `${environment.apiUrl}${this.baseUrl}/text/${productionId}/source/${textId}/${transliterationId}`
+        );
+    }
+
+    /**
+     * Get all training data parts for a given identifier with their content.
+     * Returns sources (transliterations) and translations separately.
+     */
+    getSourcesByIdentifier(identifier: string): Observable<ProductionSourcesResponse> {
+        return this.http.get<ProductionSourcesResponse>(`${environment.apiUrl}${this.baseUrl}/sources/${identifier}`);
     }
 
     /**

@@ -653,6 +653,9 @@
         overflow-x: auto;
 
         .source-tab {
+            display: flex;
+            align-items: center;
+            gap: 4px;
             padding: 8px 16px;
             border: 1px solid #e0e0e0;
             border-radius: 4px;
@@ -669,6 +672,21 @@
                 background: #1976d2;
                 color: white;
                 border-color: #1976d2;
+            }
+
+            .tab-delete-icon {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+                line-height: 16px;
+                opacity: 0.6;
+                cursor: pointer;
+                border-radius: 50%;
+
+                &:hover {
+                    opacity: 1;
+                    background: rgba(0, 0, 0, 0.15);
+                }
             }
         }
     }
@@ -802,47 +820,50 @@
     background: white;
     overflow: hidden;
 
-    .text-panel-actions {
-        display: flex;
-        gap: 4px;
-        padding: 10px;
-        background: white;
-        border-bottom: 1px solid #e0e0e0;
-        overflow-x: auto;
-        flex-shrink: 0;
-
-        .action-tab {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 8px 16px;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            white-space: nowrap;
-            font-size: 13px;
-            line-height: 1;
-            transition: all 0.15s;
-
-            mat-icon {
-                font-size: 16px;
-                width: 16px;
-                height: 16px;
-            }
-
-            &:hover {
-                background: #f0f7ff;
-                border-color: #1976d2;
-                color: #1976d2;
-            }
-        }
-    }
-
     text-editor {
         display: block;
         flex: 1;
         min-height: 0;
+    }
+
+    // Projected toolbar actions inside text-editor's right toolbar
+    [toolbar-actions] {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+
+        .rt-divider {
+            width: 24px;
+            height: 1px;
+            background: #ccc;
+            margin: 4px 0;
+        }
+
+        .rt-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: transparent;
+            color: #666;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+
+            mat-icon {
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+            }
+
+            &:hover {
+                background: rgba(0, 0, 0, 0.08);
+                color: #333;
+            }
+        }
     }
 }
 
@@ -917,6 +938,35 @@
                 background: #faf5ff;
                 color: #7b1fa2;
             }
+        }
+    }
+
+    .validation-status-inline {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #666;
+        margin-left: auto;
+
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+        .valid-icon { color: #4caf50; font-size: 18px; width: 18px; height: 18px; }
+        .invalid-icon { color: #f44336; font-size: 18px; width: 18px; height: 18px; }
+
+        .validation-info {
+            white-space: nowrap;
+            .error-count { color: #f44336; font-weight: 500; }
+        }
+
+        .validation-source {
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-size: 11px;
+            white-space: nowrap;
         }
     }
 }
@@ -1548,6 +1598,39 @@
                     height: 18px;
                 }
             }
+        }
+
+        .ebl-login-section {
+            padding: 16px 0;
+
+            h4 {
+                margin: 0 0 4px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+
+            p {
+                margin: 0 0 12px;
+                color: #666;
+                font-size: 13px;
+            }
+
+            mat-error {
+                display: block;
+                margin-top: 8px;
+                font-size: 13px;
+            }
+
+            .full-width {
+                width: 100%;
+                margin-top: 8px;
+            }
+        }
+
+        .ebl-divider {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 4px 0;
         }
 
         .parsed-lines {

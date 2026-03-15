@@ -154,7 +154,7 @@
           <mat-icon>arrow_back</mat-icon>
         </button>
         <h3>{{ selectedDataset?.name }}</h3>
-        <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} items</span>
+        <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} of {{ textsTotal }} items</span>
 
         <span class="header-spacer"></span>
 
@@ -313,6 +313,7 @@
         <!-- ===== LIST / DETAILS VIEW (Explorer style) ===== -->
         <div class="details-list" *ngIf="textViewMode === 'list' && filteredTexts.length > 0 && !kwicSearchActive && !isSearchingKwic">
           <div class="details-header">
+            <span class="details-col-num">#</span>
             <span class="details-col-icon"></span>
             <span class="details-col-name sortable" (click)="toggleSort('identifier')" [class.active-sort]="sortColumn === 'identifier'">
               Identifier
@@ -345,12 +346,17 @@
               Lines
               <mat-icon class="sort-arrow" *ngIf="sortColumn === 'lines_count'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
             </span>
+            <span class="details-col-size sortable" (click)="toggleSort('image_size')" [class.active-sort]="sortColumn === 'image_size'">
+              Size
+              <mat-icon class="sort-arrow" *ngIf="sortColumn === 'image_size'">{{ sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            </span>
             <span class="details-col-actions">Actions</span>
           </div>
-          <div class="details-row" *ngFor="let item of filteredTexts"
+          <div class="details-row" *ngFor="let item of filteredTexts; let i = index"
                [class.selected]="isTextSelected(item)"
                (click)="toggleTextSelection(item, $event)"
                (dblclick)="openListItem(item)">
+            <span class="details-num details-col-num">{{ textsPage * textsPageSize + i + 1 }}</span>
             <div class="details-icon details-col-icon">
               <mat-icon>description</mat-icon>
             </div>
@@ -379,6 +385,7 @@
               <mat-icon *ngIf="!item.is_curated_kraken && !item.is_curated_vlm" class="uncurated-icon">radio_button_unchecked</mat-icon>
             </span>
             <span class="details-lines details-col-lines">{{ item.lines_count || '—' }}</span>
+            <span class="details-size details-col-size">{{ formatFileSize(item.image_size) }}</span>
             <div class="details-actions details-col-actions">
               <button mat-icon-button [matMenuTriggerFor]="rowExport" (click)="$event.stopPropagation()" matTooltip="Download">
                 <mat-icon>download</mat-icon>
@@ -409,6 +416,20 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Pagination controls -->
+        <div class="texts-pagination" *ngIf="textsTotalPages > 1">
+          <button mat-icon-button [disabled]="textsPage === 0" (click)="goToTextsPage(textsPage - 1)">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <span class="pagination-info">
+            Page {{ textsPage + 1 }} of {{ textsTotalPages }}
+            <span class="pagination-range">({{ textsPage * textsPageSize + 1 }}–{{ textsPage * textsPageSize + curedTexts.length }})</span>
+          </span>
+          <button mat-icon-button [disabled]="textsPage >= textsTotalPages - 1" (click)="goToTextsPage(textsPage + 1)">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
         </div>
 
         <div class="empty-list" *ngIf="curedTexts.length > 0 && filteredTexts.length === 0 && !kwicSearchActive && !isSearchingKwic">

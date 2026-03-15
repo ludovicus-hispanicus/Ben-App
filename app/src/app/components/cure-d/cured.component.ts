@@ -140,7 +140,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public currentPart: string = '';
 
   // Resizable panels
-  public leftPanelWidth: number = 60; // percentage
+  public leftPanelWidth: number = 50; // percentage
   private isResizing: boolean = false;
   private resizeHandler: (e: MouseEvent | TouchEvent) => void;
   private resizeEndHandler: () => void;
@@ -152,6 +152,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public sortColumn: string = 'last_modified';
   public sortDirection: 'asc' | 'desc' = 'desc';
   public textViewMode: 'grid' | 'list' = 'list';
+
+  // Text list pagination
+  public textsPage: number = 0;
+  public textsPageSize: number = 500;
+  public textsTotal: number = 0;
 
   // Multi-selection for batch operations
   public selectedTexts: Set<number> = new Set();
@@ -474,19 +479,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     // Use almost all available height - just subtract navbar (~70px) and small margin
     const availableHeight = window.innerHeight - 100;
 
-    // For stages 2-3 (full width canvas), use more width
-    // For stage 5 (with line editor), use less width
-    const availableWidth = this.stage >= 4
-      ? Math.min(window.innerWidth * 0.5, 800) // When line editor is visible
-      : Math.min(window.innerWidth * 0.92, 1400); // Full width mode
-
-    console.log('Canvas dimensions:', {
-      viewportHeight: window.innerHeight,
-      calculatedHeight: availableHeight,
-      viewportWidth: window.innerWidth,
-      calculatedWidth: availableWidth,
-      stage: this.stage
-    });
+    // Canvas is always inside the split panel (leftPanelWidth% of container).
+    // Subtract toolbar (~50px) and padding.
+    const panelFraction = this.leftPanelWidth / 100;
+    const availableWidth = window.innerWidth * panelFraction - 60;
 
     return {
       width: Math.max(availableWidth, 500),
@@ -683,7 +679,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       'Ctrl+Shift+C     Crop image to selection box\n' +
       'Delete           Delete selected box\n' +
       'Double-click+hold Draw new box (in Pan mode)\n' +
-      'Ctrl+H           Find & Replace (in text editor)',
+      'Ctrl+H           Find & Replace (in text editor)\n' +
+      'Enter            Replace + Find Next (in replace field)\n' +
+      'Shift+Enter      Replace + Find Prev (in replace field)\n' +
+      'Alt+Enter        Replace All (in replace field)',
       'background: #333; color: #fff; padding: 4px 8px; font-weight: bold;',
       'color: #333; font-family: monospace;'
     );
@@ -1058,6 +1057,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.notificationService.showSuccess(
           `Saved (${this.currentPageIndex + 1}/${this.batchTotal}). Click "Next" for the next image.`
         );
+      } else if (!this.selectedDataset) {
+        this.notificationService.showInfo("Saved to Unassigned (no dataset selected)");
       } else {
         this.notificationService.showInfo("Successfully saved");
       }
@@ -2255,8 +2256,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showDatasetList = false;
     this.clearTextSelection();
     this.loadCuratedStats();
-    this.datasetService.getTexts(dataset.dataset_id).subscribe(data => {
-      this.curedTexts = data;
+    this.textsPage = 0;
+    this.datasetService.getTexts(dataset.dataset_id, 0, this.textsPageSize).subscribe(data => {
+      this.curedTexts = data.items;
+      this.textsTotal = data.total;
       this.collectExistingParts();
       this.loadTransliterationIds();
     });
@@ -2271,6 +2274,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
     this.existingParts = Array.from(parts).sort((a, b) => a - b);
+  }
+
+  get textsTotalPages(): number {
+    return Math.ceil(this.textsTotal / this.textsPageSize);
+  }
+
+  goToTextsPage(page: number): void {
+    if (!this.selectedDataset || page < 0 || page >= this.textsTotalPages) return;
+    this.textsPage = page;
+    this.clearTextSelection();
+    this.datasetService.getTexts(this.selectedDataset.dataset_id, page * this.textsPageSize, this.textsPageSize).subscribe(data => {
+      this.curedTexts = data.items;
+      this.textsTotal = data.total;
+      this.collectExistingParts();
+      this.loadTransliterationIds();
+    });
   }
 
   backToDatasets() {
@@ -2574,8 +2593,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.selectedDataset.dataset_id === -1) {
       this.loadUnassignedTexts();
     } else {
-      this.datasetService.getTexts(this.selectedDataset.dataset_id).subscribe(data => {
-        this.curedTexts = data;
+      this.datasetService.getTexts(this.selectedDataset.dataset_id, this.textsPage * this.textsPageSize, this.textsPageSize).subscribe(data => {
+        this.curedTexts = data.items;
+        this.textsTotal = data.total;
         this.collectExistingParts();
         this.loadTransliterationIds();
       });
@@ -2704,6 +2724,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     return items;
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) return '—';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   toggleSort(column: string): void {
@@ -3496,8 +3523,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // If text list nav not active (e.g. page reload), load the dataset's text list
         if (!this.textListNavActive && text?.dataset_id) {
-          this.datasetService.getTexts(text.dataset_id).subscribe(data => {
-            this.curedTexts = data;
+          this.datasetService.getTexts(text.dataset_id, 0, this.textsPageSize).subscribe(data => {
+            this.curedTexts = data.items;
+            this.textsTotal = data.total;
             this.collectExistingParts();
             this.loadTransliterationIds();
             this.textListNavActive = true;

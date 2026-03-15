@@ -147,6 +147,14 @@ class EblAtfParser:
                     else:
                         error_strings.append(f"Line {i}: {error_msg}")
                     errors.append(error)
+
+                # Also check brackets (Lark grammar may not catch mismatches)
+                if success and not stripped.startswith(('&', '#', '@', '$', '//')):
+                    bracket_err = self._check_brackets(stripped, i)
+                    if bracket_err:
+                        errors.append(bracket_err)
+                        col_str = f", col {bracket_err['column']}" if 'column' in bracket_err else ""
+                        error_strings.append(f"Line {i}{col_str}: {bracket_err['message']}")
             else:
                 # Fall back to basic validation
                 basic_errors = self._basic_validate_line(stripped, i)
@@ -164,6 +172,30 @@ class EblAtfParser:
             "parsed_lines": parsed_lines,
             "validation_source": validation_source
         }
+
+    def _check_brackets(self, line: str, line_num: int) -> Optional[ValidationError]:
+        """Check for mismatched brackets in a line. Returns error with column or None.
+        Uses separate stacks per bracket type because ATF allows interleaving
+        (e.g., [text {det]text} is valid — damage and determinative brackets are independent)."""
+        bracket_pairs = {'(': ')', '[': ']', '<': '>', '{': '}'}
+        closing = {v: k for k, v in bracket_pairs.items()}
+        stacks: Dict[str, List[int]] = {op: [] for op in bracket_pairs}
+
+        for i, ch in enumerate(line):
+            if ch in bracket_pairs:
+                stacks[ch].append(i)
+            elif ch in closing:
+                opener = closing[ch]
+                if stacks[opener]:
+                    stacks[opener].pop()
+                else:
+                    return {"line": line_num, "column": i + 1, "message": f"Invalid brackets."}
+
+        for op, positions in stacks.items():
+            if positions:
+                return {"line": line_num, "column": positions[-1] + 1, "message": f"Invalid brackets."}
+
+        return None
 
     def _basic_validate_line(self, line: str, line_num: int) -> List[str]:
         """Basic validation without Lark parser."""

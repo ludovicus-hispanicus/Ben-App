@@ -368,6 +368,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
     canvasTypeViewOnly = CanvasType.SingleSelection;
     CanvasMode = CanvasMode;
     sourceImageDataUrls: Map<number, string> = new Map();
+    // Per-source viewport state (zoom + pan position)
+    private sourceViewports: Map<number, number[]> = new Map();
 
     // Resizable panels
     leftPanelWidth: number = 45;
@@ -399,6 +401,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
         private http: HttpClient,
         private pagesService: PagesService
     ) {}
+
+    @HostListener('window:beforeunload', ['$event'])
+    onBeforeUnload(event: BeforeUnloadEvent): void {
+        if (this.hasUnsavedChanges) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
+    }
 
     @HostListener('document:keydown', ['$event'])
     onKeyDown(event: KeyboardEvent): void {
@@ -913,7 +923,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     createProductionText(group: GroupedText): void {
-        const sourceTextIds = group.parts.map(p => p.text_id);
+        // Only include transliteration parts, not translations
+        const sourceTextIds = group.parts.filter(p => p.label !== 'translation').map(p => p.text_id);
 
         this.productionService.createProductionText(
             group.identifier,
@@ -976,20 +987,26 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.pulledIntroduction = '';
         this.pulledNotes = '';
 
-        // Load sources from training data
+        // Load sources from training data (separated into transliterations and translations)
         this.productionService.getSourcesByIdentifier(identifier).subscribe({
-            next: (parts) => {
-                // Convert to source content format and load images
-                this.currentSources = parts.map(p => ({
+            next: (response) => {
+                // Sources are transliterations (with images)
+                this.currentSources = response.sources.map(p => ({
                     text_id: p.text_id,
                     transliteration_id: p.transliteration_id,
                     part: p.part,
                     lines: p.lines || [],
-                    image_name: p.image_name || ''
+                    image_name: p.image_name || '',
+                    source: p.source || '',
+                    label: p.label || ''
                 }));
+                this.sortSources();
+                // Translations are separate (text only)
+                this.currentTranslations = response.translations || [];
+                this.translationContent = this.formatTranslationText();
                 this.loadSourceImages();
 
-                // Generate initial editor content from sources
+                // Generate initial editor content from transliteration sources only
                 this.generateInitialContent();
 
                 this.isLoading = false;
@@ -1001,14 +1018,40 @@ export class ProductionComponent implements OnInit, OnDestroy {
         });
     }
 
+    private sortSources(): void {
+        this.currentSources.sort((a, b) => {
+            // Training before translation
+            const aIsTranslation = a.label === 'translation' ? 1 : 0;
+            const bIsTranslation = b.label === 'translation' ? 1 : 0;
+            if (aIsTranslation !== bIsTranslation) return aIsTranslation - bIsTranslation;
+            // Then by part alphanumerically
+            return (a.part || '').localeCompare(b.part || '', undefined, { numeric: true });
+        });
+    }
+
     /**
      * Generate initial editor content from source transliterations.
      */
     private generateInitialContent(): void {
         const mergedLines: string[] = [];
-        const sortedSources = [...this.currentSources].sort((a, b) => a.part.localeCompare(b.part));
+        // Only use one transliteration per part (prefer CuReD source)
+        const seenParts = new Set<string>();
+        const sortedSources = [...this.currentSources]
+            .filter(s => s.text_id !== -1) // exclude uploaded images
+            .sort((a, b) => {
+                const partCmp = a.part.localeCompare(b.part);
+                if (partCmp !== 0) return partCmp;
+                // Prefer CuReD source
+                if (a.source === 'cured' && b.source !== 'cured') return -1;
+                if (a.source !== 'cured' && b.source === 'cured') return 1;
+                return 0;
+            });
 
         for (const source of sortedSources) {
+            const partKey = `${source.text_id}_${source.part}`;
+            if (seenParts.has(partKey)) continue;
+            seenParts.add(partKey);
+
             if (source.lines && source.lines.length > 0) {
                 if (source.part) {
                     mergedLines.push(`# Part ${source.part}`);
@@ -1026,6 +1069,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
             next: (response) => {
                 // Sources are transliterations (with images)
                 this.currentSources = response.sources;
+                this.sortSources();
                 // Translations are separate (text only, no images)
                 this.currentTranslations = response.translations;
                 // Use saved translation content if available, otherwise format from sources
@@ -1113,11 +1157,114 @@ export class ProductionComponent implements OnInit, OnDestroy {
         });
     }
 
+    getSourceTabLabel(source: SourceTextContent, index: number): string {
+        const part = source.part || `${index + 1}`;
+        // Translation images
+        if (source.label === 'translation') {
+            return `Translation ${part}`;
+        }
+        // Uploaded images
+        if (source.text_id === -1) {
+            return source.image_name || `Image ${index + 1}`;
+        }
+        // Training (transliteration) sources
+        const samePart = this.currentSources.filter(s => s.part === source.part && s.text_id !== -1 && s.label !== 'translation');
+        if (samePart.length > 1 && source.source) {
+            return `Training ${part} (${source.source})`;
+        }
+        return `Training ${part}`;
+    }
+
+    deleteSource(index: number, event: Event): void {
+        event.stopPropagation();
+        const source = this.currentSources[index];
+        if (!source) return;
+
+        const label = this.getSourceTabLabel(source, index);
+        const isUploaded = this.uploadedImageIds.has(index);
+        const warning = isUploaded
+            ? `Remove "${label}" from this production text?`
+            : `Remove "${label}" from this production text?\n\nThis will remove the source reference. The original training data will not be deleted.`;
+
+        if (!confirm(warning)) return;
+
+        if (isUploaded) {
+            // Delete uploaded image from backend
+            const imageId = this.uploadedImageIds.get(index);
+            if (!imageId || !this.currentProductionText) return;
+            this.productionService.deleteUploadedImage(
+                this.currentProductionText.production_id, imageId
+            ).subscribe({
+                next: () => this.removeSourceFromList(index),
+                error: (err) => {
+                    console.error('Failed to delete image:', err);
+                    this.notificationService.showError('Failed to delete image');
+                }
+            });
+        } else if (this.currentProductionText) {
+            // Remove source reference from production text
+            this.productionService.removeSource(
+                this.currentProductionText.production_id,
+                source.text_id,
+                source.transliteration_id
+            ).subscribe({
+                next: () => this.removeSourceFromList(index),
+                error: (err) => {
+                    console.error('Failed to remove source:', err);
+                    this.notificationService.showError('Failed to remove source');
+                }
+            });
+        } else {
+            // No production text yet, just remove locally
+            this.removeSourceFromList(index);
+        }
+    }
+
+    private removeSourceFromList(index: number): void {
+        this.currentSources.splice(index, 1);
+        this.sourceImageDataUrls.delete(index);
+        this.sourceViewports.delete(index);
+        this.uploadedImageIds.delete(index);
+
+        // Rebuild maps with corrected indices
+        const newUploads = new Map<number, string>();
+        this.uploadedImageIds.forEach((id, idx) => {
+            newUploads.set(idx > index ? idx - 1 : idx, id);
+        });
+        this.uploadedImageIds = newUploads;
+
+        const newUrls = new Map<number, string>();
+        this.sourceImageDataUrls.forEach((url, idx) => {
+            newUrls.set(idx > index ? idx - 1 : idx, url);
+        });
+        this.sourceImageDataUrls = newUrls;
+
+        // Adjust selected index
+        if (this.selectedSourceIndex >= this.currentSources.length) {
+            this.selectedSourceIndex = Math.max(0, this.currentSources.length - 1);
+        }
+        const dataUrl = this.sourceImageDataUrls.get(this.selectedSourceIndex);
+        if (dataUrl) {
+            this.loadImageIntoCanvas(dataUrl);
+        }
+    }
+
     selectSource(index: number): void {
+        // Save current viewport state before switching
+        this.saveCurrentViewport();
         this.selectedSourceIndex = index;
         const dataUrl = this.sourceImageDataUrls.get(index);
         if (dataUrl) {
-            setTimeout(() => this.loadImageIntoCanvas(dataUrl), 0);
+            setTimeout(() => this.loadImageIntoCanvas(dataUrl, index), 0);
+        }
+    }
+
+    private saveCurrentViewport(): void {
+        if (this.sourceCanvas) {
+            const vpt = this.sourceCanvas.getViewportTransform();
+            if (vpt) {
+                this.sourceViewports.set(this.selectedSourceIndex, vpt);
+            }
         }
     }
 
@@ -1146,8 +1293,9 @@ export class ProductionComponent implements OnInit, OnDestroy {
             document.removeEventListener('touchmove', this.resizeHandler);
             document.removeEventListener('touchend', this.resizeEndHandler);
 
-            // Update canvas size to fit new panel width
+            // Update canvas size to fit new panel width, preserving zoom/pan
             if (this.sourceCanvas) {
+                this.saveCurrentViewport();
                 const dataUrl = this.sourceImageDataUrls.get(this.selectedSourceIndex);
                 if (dataUrl) {
                     setTimeout(() => this.loadImageIntoCanvas(dataUrl), 100);
@@ -1161,7 +1309,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         document.addEventListener('touchend', this.resizeEndHandler);
     }
 
-    private loadImageIntoCanvas(dataUrl: string): void {
+    private loadImageIntoCanvas(dataUrl: string, sourceIndex?: number): void {
         if (!this.sourceCanvas) return;
         this.sourceCanvas.props.canvasImage = dataUrl;
         this.sourceCanvas.setCanvasImage();
@@ -1172,7 +1320,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.sourceCanvas.props.canvasHeight = availableHeight;
         this.sourceCanvas.props.canvasWidth = availableWidth;
         this.sourceCanvas.forceCanvasSize();
-        this.sourceCanvas.forceZoomOut(0.5);
+
+        // Restore saved viewport if available, otherwise default zoom
+        const idx = sourceIndex ?? this.selectedSourceIndex;
+        const savedVpt = this.sourceViewports.get(idx);
+        if (savedVpt) {
+            this.sourceCanvas.restoreViewportTransform(savedVpt);
+        } else {
+            this.sourceCanvas.forceZoomOut(0.5);
+        }
     }
 
     onEditorContentChange(content: string): void {
@@ -1186,9 +1342,9 @@ export class ProductionComponent implements OnInit, OnDestroy {
         if (!this.currentProductionText) {
             // Create new production text first
             // Filter out uploaded images (text_id === -1) from source text IDs
-            const sourceTextIds = this.currentSources
+            const sourceTextIds = [...new Set(this.currentSources
                 .filter(s => s.text_id !== -1)
-                .map(s => s.text_id);
+                .map(s => s.text_id))];
             this.productionService.createProductionText(
                 this.currentIdentifier,
                 this.currentIdentifierType,
@@ -1317,12 +1473,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Insert translation lines into the transliteration with #tr.en: prefix.
-     * Each translation line is inserted after the corresponding transliteration line.
-     * Handles line number ranges like "1-3." by inserting the translation after the range.
+     * Insert translation lines into the transliteration using eBL ATF format.
      *
-     * Translation lines can have their own line numbers like "#tr.en: 1-2 If the..."
-     * which specify which transliteration lines they correspond to.
+     * eBL format:
+     * - Single line translation: #tr.en: text  (placed after the line)
+     * - Multi-line range (e.g., lines 1-2): #tr.en.(2): text  (placed after line 1, referencing end line 2)
+     *
+     * Translation source lines can have formats like:
+     *   "1 Translation text" or "1-2 Translation text" or "#tr.en: 1-2 Translation text"
      */
     insertTranslation(): void {
         if (!this.translationContent || this.translationContent.trim() === '') {
@@ -1336,70 +1494,118 @@ export class ProductionComponent implements OnInit, OnDestroy {
         }
 
         const translitLines = this.editorContent.split('\n');
-        const transLines = this.translationContent.split('\n')
-            .filter(line => line.trim() !== '' && !line.startsWith('# ')); // Skip empty lines and part headers (but keep #tr.)
+        const rawTransLines = this.translationContent.split('\n');
 
-        if (transLines.length === 0) {
-            this.notificationService.showWarning('No translation lines to insert');
+        // 1. Build section-qualified transliteration line map
+        //    Key: "section:lineNum" (e.g., "obverse:1", "reverse:1")
+        const translitLineNumToIndex: Map<string, number> = new Map();
+        let currentTranslitSection = 'obverse';
+        for (let i = 0; i < translitLines.length; i++) {
+            const trimmed = translitLines[i].trim().toLowerCase();
+            const secMatch = trimmed.match(/^[\$@](reverse|obverse|left|right|top|bottom|edge)/);
+            if (secMatch) {
+                currentTranslitSection = secMatch[1];
+                continue;
+            }
+            const nums = this.parseLineNumbers(translitLines[i]);
+            if (nums.length > 0) {
+                const minNum = Math.min(...nums);
+                translitLineNumToIndex.set(`${currentTranslitSection}:${minNum}`, i);
+            }
+        }
+
+        // 2. Parse translation lines with section awareness and embedded range splitting
+        let currentSection = 'obverse';
+        const parsedTranslations: {
+            section: string;
+            startLineNum: number; endLineNum: number;   // local line numbers
+            cleanedText: string;
+            hasPrime: boolean;
+        }[] = [];
+
+        for (const rawLine of rawTransLines) {
+            const trimmed = rawLine.trim();
+            if (trimmed === '' || trimmed.startsWith('# ')) continue;
+
+            // Check for section markers in translation (@reverse, @obverse, etc.)
+            const sectionMatch = trimmed.match(/^@(reverse|obverse|left|right|top|bottom|edge)/i);
+            if (sectionMatch) {
+                currentSection = sectionMatch[1].toLowerCase();
+                continue;
+            }
+
+            // Split line if it contains embedded ranges (e.g., "4–5 text 6–7 more text")
+            const subLines = this.splitEmbeddedRanges(trimmed);
+
+            for (const subLine of subLines) {
+                const parsed = this.parseAndCleanTranslationLine(subLine);
+                if (parsed.startLineNum > 0) {
+                    parsedTranslations.push({
+                        section: currentSection,
+                        startLineNum: parsed.startLineNum,
+                        endLineNum: parsed.endLineNum,
+                        cleanedText: parsed.cleanedText,
+                        hasPrime: parsed.hasPrime
+                    });
+                }
+            }
+        }
+
+        if (parsedTranslations.length === 0) {
+            this.notificationService.showWarning('No translation lines could be parsed');
             return;
         }
 
-        // Build a map: for each transliteration line index, store its max line number
-        // This helps us know which transliteration line "ends" at a given line number
-        const translitMaxLineNum: Map<number, number> = new Map(); // index -> max line num
+        // 4. Build map: transliteration line index → translations to insert after it
+        //    eBL format: translation is placed after the FIRST line of the range
+        const translationsAfterIndex: Map<number, string[]> = new Map();
 
-        for (let i = 0; i < translitLines.length; i++) {
-            const line = translitLines[i];
-            const lineNums = this.parseLineNumbers(line);
-            if (lineNums.length > 0) {
-                const maxNum = Math.max(...lineNums);
-                translitMaxLineNum.set(i, maxNum);
+        for (const parsed of parsedTranslations) {
+            const key = `${parsed.section}:${parsed.startLineNum}`;
+            const insertAfterIndex = translitLineNumToIndex.get(key);
+            if (insertAfterIndex === undefined) continue;
+
+            if (!translationsAfterIndex.has(insertAfterIndex)) {
+                translationsAfterIndex.set(insertAfterIndex, []);
             }
+
+            // Format: #tr.en.(section endLine'): for ranges, #tr.en: for single lines
+            // Section prefixes: o=obverse, r=reverse, b.e.=bottom, l.e.=left, r.e.=right, t.e.=top
+            let formattedLine: string;
+            const prime = parsed.hasPrime ? "'" : '';
+            const sectionPrefix = this.getSectionPrefix(parsed.section);
+            if (parsed.endLineNum > parsed.startLineNum) {
+                formattedLine = `#tr.en.(${sectionPrefix}${parsed.endLineNum}${prime}): ${parsed.cleanedText}`;
+            } else {
+                formattedLine = `#tr.en: ${parsed.cleanedText}`;
+            }
+            translationsAfterIndex.get(insertAfterIndex)!.push(formattedLine);
         }
 
-        // Build a map of translation lines by their ending line number
-        // e.g., "#tr.en: 1-2 If the..." -> ends at line 2
-        // Store both the line number and the cleaned translation text (without line numbers)
-        const translationsByEndLine: Map<number, string[]> = new Map();
-
-        for (const transLine of transLines) {
-            const parsed = this.parseAndCleanTranslationLine(transLine);
-            if (parsed.endLineNum > 0) {
-                if (!translationsByEndLine.has(parsed.endLineNum)) {
-                    translationsByEndLine.set(parsed.endLineNum, []);
-                }
-                // Store the cleaned text (without line numbers) - eBL ATF format doesn't include line numbers
-                translationsByEndLine.get(parsed.endLineNum).push(parsed.cleanedText);
-            }
-        }
-
-        // Create merged content with translations interleaved
+        // 5. Create merged content with translations interleaved
         const mergedLines: string[] = [];
         let insertedCount = 0;
 
         for (let i = 0; i < translitLines.length; i++) {
-            const line = translitLines[i];
-            mergedLines.push(line);
+            mergedLines.push(translitLines[i]);
 
-            // Check if there are translations to insert after this line
-            const maxLineNum = translitMaxLineNum.get(i);
-            if (maxLineNum !== undefined && translationsByEndLine.has(maxLineNum)) {
-                const translations = translationsByEndLine.get(maxLineNum);
-                for (const cleanedText of translations) {
-                    // Format with #tr.en: prefix (text is already cleaned of line numbers)
-                    const formattedLine = `#tr.en: ${cleanedText}`;
-                    mergedLines.push(formattedLine);
+            if (translationsAfterIndex.has(i)) {
+                for (const transLine of translationsAfterIndex.get(i)!) {
+                    mergedLines.push(transLine);
                     insertedCount++;
                 }
-                // Remove so we don't insert twice
-                translationsByEndLine.delete(maxLineNum);
             }
         }
 
-        // If there are remaining translation lines (unmatched), append them at the end
-        for (const [lineNum, translations] of translationsByEndLine) {
-            for (const cleanedText of translations) {
-                const formattedLine = `#tr.en: ${cleanedText}`;
+        // 6. Append any unmatched translations at the end
+        for (const parsed of parsedTranslations) {
+            const key = `${parsed.section}:${parsed.startLineNum}`;
+            if (!translitLineNumToIndex.has(key)) {
+                const prime = parsed.hasPrime ? "'" : '';
+                const sectionPrefix = this.getSectionPrefix(parsed.section);
+                const formattedLine = parsed.endLineNum > parsed.startLineNum
+                    ? `#tr.en.(${sectionPrefix}${parsed.endLineNum}${prime}): ${parsed.cleanedText}`
+                    : `#tr.en: ${parsed.cleanedText}`;
                 mergedLines.push(formattedLine);
                 insertedCount++;
             }
@@ -1415,19 +1621,30 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Split a translation line that contains embedded ranges.
+     * e.g., "4–5 If text; 6–7 the king..." → ["4–5 If text;", "6–7 the king..."]
+     * Only splits on en-dash ranges (N–M) to avoid false positives with hyphens in text.
+     */
+    private splitEmbeddedRanges(line: string): string[] {
+        // Split before embedded range patterns: digit(s) + optional prime + en-dash + digit(s)
+        // preceded by whitespace. Use lookahead to keep the range in the result.
+        const parts = line.split(/\s+(?=\d+'?\u2013\d+'?\.?\s)/);
+        return parts.filter(p => p.trim().length > 0);
+    }
+
+    /**
      * Parse line numbers from a transliteration line.
      * Handles formats like: "1.", "1'.", "1-3.", "1-3'."
      * Returns an array of all line numbers covered by this line.
      */
     private parseLineNumbers(line: string): number[] {
         // Match patterns like: 1. 1'. 1-3. 1-3'. Also handle spaces and various formats
-        const match = line.match(/^(\d+)(?:-(\d+))?'?\.\s/);
+        const match = line.match(/^(\d+)(?:[–-](\d+))?'?\.\s/);
         if (!match) return [];
 
         const start = parseInt(match[1], 10);
         const end = match[2] ? parseInt(match[2], 10) : start;
 
-        // Return all numbers in the range
         const nums: number[] = [];
         for (let i = start; i <= end; i++) {
             nums.push(i);
@@ -1436,32 +1653,50 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Parse line number from a translation line and return the cleaned text without line numbers.
-     * Handles formats like: "#tr.en: 1-2 If the..." or "1-2 If the..." or "1 text"
-     * Returns the ending line number (e.g., 2 from "1-2") and the cleaned translation text.
-     *
-     * Per eBL ATF spec, translation lines should NOT include line numbers in the output.
+     * Parse a translation line and return start line, end line, and cleaned text.
+     * Handles formats:
+     *   "1–2 text"    (en-dash range)
+     *   "1-2 text"    (hyphen range)
+     *   "4'–5'. text" (primed numbers with en-dash)
+     *   "13 text"     (single line)
+     *   "1'. text"    (single primed line)
+     *   "#tr.en: 1-2 text" (with prefix)
      */
-    private parseAndCleanTranslationLine(line: string): { endLineNum: number; cleanedText: string } {
-        // Remove #tr.XX: prefix if present
+    private parseAndCleanTranslationLine(line: string): { startLineNum: number; endLineNum: number; cleanedText: string; hasPrime: boolean } {
+        // Remove #tr.XX: or #tr.XX.(N): prefix if present
         let text = line;
-        const trMatch = line.match(/^#tr\.\w+:\s*/);
+        const trMatch = line.match(/^#tr\.\w+(?:\.\(\d+\))?:\s*/);
         if (trMatch) {
             text = line.substring(trMatch[0].length);
         }
 
-        // Match line number at start: "1-2 text" or "1 text"
-        const numMatch = text.match(/^(\d+)(?:-(\d+))?\s+(.*)$/);
+        // Match line number at start with optional primes and en-dash/hyphen:
+        // "1–2 text", "4'–5'. text", "13 text", "1'. text"
+        const numMatch = text.match(/^(\d+)(')?(?:[–\-](\d+)(')?)?\.?\s+(.*)$/);
         if (!numMatch) {
-            // No line number found - return 0 and the original text
-            return { endLineNum: 0, cleanedText: text };
+            return { startLineNum: 0, endLineNum: 0, cleanedText: text, hasPrime: false };
         }
 
-        // Return the ending number (or the single number if no range) and the cleaned text
-        const endLineNum = numMatch[2] ? parseInt(numMatch[2], 10) : parseInt(numMatch[1], 10);
-        const cleanedText = numMatch[3]; // The text after the line number
+        const startLineNum = parseInt(numMatch[1], 10);
+        const hasPrime = !!(numMatch[2] || numMatch[4]); // prime on start or end number
+        const endLineNum = numMatch[3] ? parseInt(numMatch[3], 10) : startLineNum;
+        const cleanedText = numMatch[5];
 
-        return { endLineNum, cleanedText };
+        return { startLineNum, endLineNum, cleanedText, hasPrime };
+    }
+
+    private getSectionPrefix(section: string): string {
+        const prefixes: { [key: string]: string } = {
+            'obverse': 'o ',
+            'reverse': 'r ',
+            'bottom': 'b.e. ',
+            'left': 'l.e. ',
+            'right': 'r.e. ',
+            'top': 't.e. ',
+            'edge': 'e. ',
+            'seal': 'seal ',
+        };
+        return prefixes[section] || '';
     }
 
     backToDashboard(): void {
@@ -1797,17 +2032,18 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
         // If there are validation errors, also update the live validation panel
         if (result.validation_errors && result.validation_errors.length > 0) {
-            // Create a validation result from the export errors to show in the live panel
+            // Use structured validation_details if available (has accurate line numbers)
+            const errors = result.validation_details
+                ? result.validation_details.map((d: any) => ({ line: d.line || 0, column: d.column || undefined, message: d.message }))
+                : result.validation_errors.map((err: string, idx: number) => ({ line: idx + 1, message: err }));
+
             this.validationResult = {
                 valid: false,
-                errors: result.validation_errors.map((err: string, idx: number) => ({
-                    line: idx + 1,  // Line number may not be accurate, but provides structure
-                    message: err
-                })),
+                errors: errors,
                 error_strings: result.validation_errors,
                 warnings: [],
                 parsed_lines: 0,
-                validation_source: 'ebl_api'  // These came from eBL API during export
+                validation_source: 'ebl_api'
             };
             // Enable live validation panel to show the errors
             this.liveValidationEnabled = true;
@@ -1836,6 +2072,39 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     closeEblSettings(): void {
         this.showEblSettings = false;
+    }
+
+    extractTokenFromJson(value: string): void {
+        if (!value) return;
+        const trimmed = value.trim();
+        // If it looks like JSON (starts with {), try to extract access_token
+        if (trimmed.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                const token = this.findAccessToken(parsed);
+                if (token) {
+                    this.eblConfig.access_token = token;
+                }
+            } catch (e) {
+                // Not valid JSON, leave as-is (user is typing a raw token)
+            }
+        }
+    }
+
+    private findAccessToken(obj: any): string | null {
+        if (!obj || typeof obj !== 'object') return null;
+        // Direct access_token field
+        if (typeof obj.access_token === 'string' && obj.access_token.length > 20) {
+            return obj.access_token;
+        }
+        // Search nested objects (e.g. { body: { access_token: "..." } })
+        for (const key of Object.keys(obj)) {
+            if (typeof obj[key] === 'object' && obj[key] !== null) {
+                const found = this.findAccessToken(obj[key]);
+                if (found) return found;
+            }
+        }
+        return null;
     }
 
     saveEblConfig(): void {

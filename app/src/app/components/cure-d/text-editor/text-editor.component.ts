@@ -45,6 +45,9 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
   // Disable character normalization (e.g., for translation editor - don't convert á to a₂)
   @Input() public disableNormalization: boolean = false;
 
+  // Hide the validation header (when parent component shows it externally)
+  @Input() public hideValidationHeader: boolean = false;
+
   // Custom preview HTML (e.g., CuRe transliteration readings). Overrides generated preview when set.
   @Input() public customPreviewHtml: string = '';
 
@@ -68,7 +71,7 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
 
   public textContent: string = '';
   public lineCount: number = 0;
-  public numberStyle: 'plain' | 'prime' = 'plain';
+  public numberStyle: 'plain' | 'prime' | 'alternate' | 'alternate-prime' = 'plain';
   public startNumber: number = 1;
   public viewMode: 'raw' | 'atf' = 'raw';
   public darkMode: boolean = false;
@@ -834,12 +837,24 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
     }
   }
 
+  public sectionNumbering: 'continuous' | 'reset' = 'continuous';
+
   get numberStyleLabel(): string {
-    return this.numberStyle === 'plain' ? '1' : "1'";
+    if (this.numberStyle === 'plain') return '1';
+    if (this.numberStyle === 'prime') return "1'";
+    if (this.numberStyle === 'alternate') return "1/1'";
+    return "1'/1";
   }
 
   toggleNumberStyle(): void {
-    this.numberStyle = this.numberStyle === 'plain' ? 'prime' : 'plain';
+    if (this.numberStyle === 'plain') this.numberStyle = 'prime';
+    else if (this.numberStyle === 'prime') this.numberStyle = 'alternate';
+    else if (this.numberStyle === 'alternate') this.numberStyle = 'alternate-prime';
+    else this.numberStyle = 'plain';
+  }
+
+  toggleSectionNumbering(): void {
+    this.sectionNumbering = this.sectionNumbering === 'continuous' ? 'reset' : 'continuous';
   }
 
   /**
@@ -855,22 +870,73 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
            trimmed === '';
   }
 
-  addLineNumbers(): void {
-    const suffix = this.numberStyle === 'prime' ? "'" : '';
+  /**
+   * Check if a line is a section marker that resets numbering (@obverse, @reverse, etc.)
+   */
+  private isSectionResetMarker(line: string): boolean {
+    const trimmed = line.trim().toLowerCase();
+    if (!trimmed.startsWith('@')) return false;
+    const sectionNames = ['obverse', 'reverse', 'left', 'right', 'top', 'bottom', 'edge', 'seal', 'column'];
+    const afterAt = trimmed.substring(1).trim();
+    return sectionNames.some(s => afterAt.startsWith(s));
+  }
 
+  /**
+   * Check if a line is a section marker that continues numbering ($obverse, $reverse, etc.)
+   */
+  private isSectionContinueMarker(line: string): boolean {
+    const trimmed = line.trim().toLowerCase();
+    if (!trimmed.startsWith('$')) return false;
+    // Only actual section names count, not state annotations like "$ traces", "$ broken", etc.
+    const sectionNames = ['obverse', 'reverse', 'left', 'right', 'top', 'bottom', 'edge', 'seal', 'column'];
+    const afterDollar = trimmed.substring(1).trim();
+    return sectionNames.some(s => afterDollar.startsWith(s));
+  }
+
+  private getSectionSuffix(sectionIndex: number): string {
+    if (this.numberStyle === 'plain') return '';
+    if (this.numberStyle === 'prime') return "'";
+    // alternate: even sections = plain, odd sections = prime
+    if (this.numberStyle === 'alternate') return sectionIndex % 2 === 0 ? '' : "'";
+    // alternate-prime: even sections = prime, odd sections = plain
+    return sectionIndex % 2 === 0 ? "'" : '';
+  }
+
+  addLineNumbers(): void {
     if (this.plainTextMode) {
       // In plain text mode, work directly with textContent
       const lines = this.textContent.split('\n');
       if (lines.length === 0) return;
 
       let lineNum = this.startNumber || 1;
-      const numbered = lines.map((line) => {
+      let sectionIndex = -1; // will become 0 on first @ marker
+      console.log('[addLineNumbers] numberStyle:', this.numberStyle, 'lines:', lines.length);
+      const numbered = lines.map((line, idx) => {
         // Skip control lines (# @ & $) and empty lines
         if (this.isAtfControlLine(line)) {
+          // @ sections advance section; reset numbering only in 'reset' mode
+          if (this.isSectionResetMarker(line)) {
+            sectionIndex++;
+            if (this.sectionNumbering === 'reset') {
+              lineNum = this.startNumber || 1;
+            }
+            console.log(`[addLineNumbers] line ${idx}: RESET marker "${line.trim()}", sectionIndex=${sectionIndex}, mode=${this.sectionNumbering}`);
+          }
+          // $ marker: lineNum continues, but advance section for style alternation
+          if (this.isSectionContinueMarker(line)) {
+            sectionIndex++;
+            console.log(`[addLineNumbers] line ${idx}: CONTINUE marker "${line.trim()}", sectionIndex=${sectionIndex}`);
+          }
           return line; // Keep as-is, don't number
         }
+        // If no section marker seen yet, treat as section 0
+        if (sectionIndex < 0) { sectionIndex = 0; }
 
+        const suffix = this.getSectionSuffix(sectionIndex);
         const num = `${lineNum}${suffix}. `;
+        if (idx < 5 || suffix) {
+          console.log(`[addLineNumbers] line ${idx}: sectionIndex=${sectionIndex}, suffix="${suffix}", num="${num}"`);
+        }
         // Remove existing line number if present
         const text = line.replace(/^\d+'?\.\s*/, '');
         lineNum++;
@@ -889,14 +955,26 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       if (!this.lines || this.lines.length === 0) return;
 
       let lineNum = this.startNumber || 1;
+      let sectionIndex = -1;
       const numbered = this.lines.map((l, i) => {
         // Skip control lines (# @ & $) and empty lines
         if (this.isAtfControlLine(l.letter)) {
+          if (this.isSectionResetMarker(l.letter)) {
+            sectionIndex++;
+            if (this.sectionNumbering === 'reset') {
+              lineNum = this.startNumber || 1;
+            }
+          }
+          if (this.isSectionContinueMarker(l.letter)) {
+            sectionIndex++;
+          }
           const letter = new Letter(l.letter);
           letter.index = new Index(i, 0);
           return letter;
         }
+        if (sectionIndex < 0) { sectionIndex = 0; }
 
+        const suffix = this.getSectionSuffix(sectionIndex);
         const num = `${lineNum}${suffix}. `;
         // Remove existing line number if present
         const text = l.letter.replace(/^\d+'?\.\s*/, '');
@@ -999,15 +1077,23 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
         type: 'error'
       });
 
-      // Add marker to highlight the error position if column is available
+      // Add marker to highlight the error position
+      const row = lineNum - 1;
       if (column !== undefined && column > 0) {
-        const row = lineNum - 1;
         const col = column - 1;
         // Highlight a few characters starting at the error position
         const endCol = Math.min(col + 5, session.getLine(row)?.length || col + 5);
         const range = new Range(row, col, row, endCol);
         const markerId = session.addMarker(range, 'ace_error-column-highlight', 'text', false);
         this.errorMarkers.push(markerId);
+      } else {
+        // No column — highlight the entire line
+        const lineLength = session.getLine(row)?.length || 0;
+        if (lineLength > 0) {
+          const range = new Range(row, 0, row, lineLength);
+          const markerId = session.addMarker(range, 'ace_error-column-highlight', 'text', false);
+          this.errorMarkers.push(markerId);
+        }
       }
     }
 

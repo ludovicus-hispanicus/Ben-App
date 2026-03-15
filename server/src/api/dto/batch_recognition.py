@@ -20,6 +20,7 @@ class BatchRecognitionRequest(BaseModel):
     image_scale: Optional[float] = None  # Image scale factor (0.33, 0.5, 1.0). None = use global setting.
     include_filenames: Optional[List[str]] = None  # Only process these filenames (for selective batch)
     exclude_filenames: Optional[List[str]] = None  # Skip these filenames (for resuming truncated batches)
+    box_mode: Optional[str] = None  # "estimate" (default) or "predict" (Kraken segmentation)
 
 
 class BatchRecognitionResultItem(BaseModel):
