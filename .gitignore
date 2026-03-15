@@ -69,6 +69,7 @@ deepseek-ocr/
 vlm-ocr/
 server/data/
 server/src/data/db/
+server/src/data/data/
 server/src/data/kraken_training_history.json
 server/src/data/qwen_training_history.json
 **/unsloth_compiled_cache/
