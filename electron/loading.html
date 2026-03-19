@@ -55,6 +55,24 @@
             margin-top: 30px;
             text-align: center;
         }
+
+        #log-container {
+            margin-top: 20px;
+            width: 80%;
+            max-width: 700px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.75em;
+            color: #8f8;
+            text-align: left;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 
@@ -66,11 +84,20 @@
         Starting backend server and frontend application.<br>
         Checking for Ollama VLM support...
     </p>
+    <div id="log-container"></div>
     <script>
         const statusElement = document.getElementById('status');
+        const logContainer = document.getElementById('log-container');
 
         window.electronAPI.onStatusUpdate((status) => {
             statusElement.innerText = status;
+        });
+
+        window.electronAPI.onLogAppend((message) => {
+            const line = document.createElement('div');
+            line.textContent = message;
+            logContainer.appendChild(line);
+            logContainer.scrollTop = logContainer.scrollHeight;
         });
     </script>
 </body>

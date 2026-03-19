@@ -5,6 +5,8 @@ import { Index, LineStats } from 'src/app/models/letter';
 import { ShortcutInput, ShortcutEventOutput, KeyboardShortcutsComponent, AllowIn } from "ng-keyboard-shortcuts";
 import { NotificationService } from 'src/app/services/notification.service';
 import { CanvasBoxService } from 'src/app/services/canvas-box.service';
+import { GuideLineService } from 'src/app/services/guide-line.service';
+import { GuideLineData } from 'src/app/models/cured';
 
 
 
@@ -25,7 +27,8 @@ export enum CanvasMode {
   Combine = "Combine",
   Delete = "Delete",
   Mark = "Mark",
-  AddTemplate = "AddTemplate"
+  AddTemplate = "AddTemplate",
+  Guide = "Guide"
 }
 
 export enum RectColor {
@@ -61,6 +64,7 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   @Output() combineBoxesEmitter: EventEmitter<any> = new EventEmitter();
 
   @Output() mouseUp: EventEmitter<any> = new EventEmitter();
+  @Output() imageRotated: EventEmitter<string> = new EventEmitter();
 
   @Input() public canvasType: CanvasType;
   @Input() public isLoading: boolean = false;
@@ -80,6 +84,7 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   public addTemplateMode = new CanvasModeProperties(CanvasMode.AddTemplate, "Add template (alt+a)", "add");
   public drawMode = new CanvasModeProperties(CanvasMode.Draw, "Draw (alt+r)", "brush");
   public eraseMode = new CanvasModeProperties(CanvasMode.Erase, "Erase (alt+e)", "phonelink_erase");
+  public guideMode = new CanvasModeProperties(CanvasMode.Guide, "Guide line (alt+g)", "straighten");
 
   shortcuts: ShortcutInput[] = [];  
 
@@ -130,7 +135,8 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.panMode,
     this.addMode,
     this.adjustMode,
-    this.deleteMode
+    this.deleteMode,
+    this.guideMode
   ]
 
   private tempTemplate = null;
@@ -157,10 +163,22 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   private crosshairH: fabric.Line = null;
   private crosshairV: fabric.Line = null;
 
+  // ── Guide lines (bezier reading guides) ──
+  @Output() guidesChanged: EventEmitter<GuideLineData[]> = new EventEmitter();
+  private guides: Map<string, { data: GuideLineData; path: fabric.Path; handles: fabric.Object[] }> = new Map();
+  private guideDrawState: 'idle' | 'placing' = 'idle';
+  private guideStartPoint: { x: number; y: number } | null = null;
+  private guidePreviewLine: fabric.Line | null = null;
+  public selectedGuideId: string | null = null;
+  public guideColor: string = 'rgba(255, 165, 0, 0.4)';
+  public guideHexColor: string = '#ffa500';
+  public guideStrokeWidth: number = 3;
+
   constructor(
     private cdref: ChangeDetectorRef,
     public notificationService: NotificationService,
-    private canvasBoxService: CanvasBoxService
+    private canvasBoxService: CanvasBoxService,
+    public guideLineService: GuideLineService
   ) {}
 
   // Keyboard listeners for pan mode (same as annotation-canvas)
@@ -172,6 +190,14 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
         this.canvas.defaultCursor = 'grab';
         this.canvas.renderAll();
       }
+    }
+    // Arrow keys: nudge selected guide
+    if (this.selectedGuideId && (event.code === 'ArrowUp' || event.code === 'ArrowDown')) {
+      event.preventDefault();
+      const zoom = this.canvas ? this.canvas.getZoom() : 1;
+      const step = 5 / zoom;  // adaptive to zoom
+      const dy = event.code === 'ArrowUp' ? -step : step;
+      this.nudgeSelectedGuide(dy);
     }
   }
 
@@ -251,28 +277,29 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
         key: "delete",
         preventDefault: true,
         command: e => this.deleteActiveObject()
+      },
+      {
+        key: "alt + g",
+        preventDefault: true,
+        command: e => this.changeMode(CanvasMode.Guide)
       }
     )
   }
 
   deleteActiveObject() {
-    console.log('[DELETE] deleteActiveObject called');
-    let activeObj = this.canvas.getActiveObject();
-    console.log('[DELETE] activeObj:', activeObj);
-    if (activeObj) {
-      console.log('[DELETE] type:', activeObj.type, 'data:', activeObj.data);
+    // Check if a guide is selected first
+    if (this.selectedGuideId) {
+      this.removeGuide(this.selectedGuideId);
+      return;
     }
+    let activeObj = this.canvas.getActiveObject();
     if (activeObj && activeObj.type === 'rect') {
-      console.log('[DELETE] Removing rect from canvas');
       this.canvas.remove(activeObj);
       this.canvas.discardActiveObject();
       this.canvas.requestRenderAll();
       if (activeObj.data) {
-        console.log('[DELETE] Emitting boxDeleted with index:', activeObj.data.index);
         this.boxDeleted.emit(activeObj.data.index);
       }
-    } else {
-      console.log('[DELETE] No active rect to delete');
     }
   }
 
@@ -660,6 +687,43 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     }
   }
 
+  /**
+   * Rotate the background image 90° clockwise.
+   * Swaps canvas dimensions and re-renders.
+   */
+  rotateImage(): void {
+    const bgImage = this.canvas.backgroundImage as fabric.Image;
+    if (!bgImage) return;
+
+    // Create an offscreen canvas to rotate the image
+    const srcEl = bgImage.getElement() as HTMLImageElement;
+    const offscreen = document.createElement('canvas');
+    const ctx = offscreen.getContext('2d');
+    // After 90° CW rotation: new width = old height, new height = old width
+    offscreen.width = srcEl.height;
+    offscreen.height = srcEl.width;
+    ctx.translate(offscreen.width, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(srcEl, 0, 0);
+
+    const rotatedDataUrl = offscreen.toDataURL('image/png');
+
+    // Update canvas dimensions
+    const newWidth = offscreen.width;
+    const newHeight = offscreen.height;
+    this.props.canvasWidth = newWidth;
+    this.props.canvasHeight = newHeight;
+    this.canvas.setWidth(newWidth);
+    this.canvas.setHeight(newHeight);
+
+    // Set rotated image as new background
+    this.props.canvasImage = rotatedDataUrl;
+    this.canvas.setBackgroundImage(rotatedDataUrl, () => {
+      this.canvas.renderAll();
+      this.imageRotated.emit(rotatedDataUrl);
+    }, { excludeFromExport: false });
+  }
+
   emitSelectionChanged(id) {
     this.deselectSelectedRect()
     this.selectionChange.emit(id)
@@ -1016,6 +1080,19 @@ resetCanvasOverlays() {
   this.canvas.remove(this.newRect);
   this.newRect = null;
   this.deleteLine = null;
+
+  // Clean up guide drawing state (but keep placed guides)
+  if (this.guidePreviewLine) {
+    this.canvas.remove(this.guidePreviewLine);
+    this.guidePreviewLine = null;
+  }
+  this.guideDrawState = 'idle';
+  this.guideStartPoint = null;
+  // Hide guide handles only when leaving guide mode (not re-entering)
+  if (this.mode !== CanvasMode.Guide) {
+    this.guides.forEach(g => this.showGuideHandles(g.data.id, false));
+    this.selectedGuideId = null;
+  }
 }
 
 resetEvents() {
@@ -1096,8 +1173,12 @@ changeMode(mode: CanvasMode) {
       this.setAddTemplateMode();
       break;
     }
-    default: { 
-       break; 
+    case CanvasMode.Guide: {
+      this.setGuideMode();
+      break;
+    }
+    default: {
+       break;
     }
   }
 
@@ -1218,8 +1299,554 @@ updateLines(lines: LineStats[]) {
   })
 
 
-  
+
 }
 
+// ════════════════════════════════════════════════
+// ── Guide Lines (bezier reading guides) ────────
+// ════════════════════════════════════════════════
+
+setGuideMode(): void {
+  this.canvas.selection = false;
+  this.setAllRectsSelectableState(false);
+  this.canvas.defaultCursor = 'crosshair';
+  this.guideDrawState = 'idle';
+  this.guideStartPoint = null;
+
+  // Show existing guide handles
+  this.guides.forEach(g => this.showGuideHandles(g.data.id, true));
+
+  const self = this;
+
+  this.canvas.on('mouse:down', (opt) => {
+    const evt = opt.e as MouseEvent;
+
+    // Middle mouse or space = panning
+    if (evt.button === 1 || (this.spacePressed && evt.button === 0)) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      this.canvas.defaultCursor = 'grabbing';
+      return;
+    }
+
+    // Right click on guide = add control point
+    if (evt.button === 2) {
+      evt.preventDefault();
+      const pointer = this.canvas.getPointer(opt.e);
+      this.addControlPointAtClick(pointer.x, pointer.y);
+      return;
+    }
+
+    const pointer = this.canvas.getPointer(opt.e);
+    const target = opt.target;
+
+    // Click on a guide handle (circle with guideId data)
+    if (target && target.data && target.data.guideId && target.data.handleType) {
+      this.selectGuide(target.data.guideId);
+      return;  // Let fabric handle the drag
+    }
+
+    // Click on a guide path
+    if (target && target.data && target.data.guideId && target.data.type === 'guidePath') {
+      this.selectGuide(target.data.guideId);
+      return;
+    }
+
+    // Drawing: first click sets start, second click sets end
+    if (this.guideDrawState === 'idle') {
+      this.guideStartPoint = { x: pointer.x, y: pointer.y };
+      this.guideDrawState = 'placing';
+
+      // Create preview line
+      this.guidePreviewLine = new fabric.Line(
+        [pointer.x, pointer.y, pointer.x, pointer.y],
+        {
+          stroke: this.guideColor,
+          strokeWidth: 2,
+          strokeDashArray: [6, 4],
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+          strokeUniform: true,
+        }
+      );
+      this.canvas.add(this.guidePreviewLine);
+    } else if (this.guideDrawState === 'placing') {
+      // Second click: place the guide
+      const guide = this.guideLineService.createGuide(
+        this.guideStartPoint.x, this.guideStartPoint.y,
+        pointer.x, pointer.y,
+        this.guideColor, this.guideStrokeWidth
+      );
+      this.addGuideToCanvas(guide);
+      this.selectGuide(guide.id);
+
+      // Cleanup
+      if (this.guidePreviewLine) {
+        this.canvas.remove(this.guidePreviewLine);
+        this.guidePreviewLine = null;
+      }
+      this.guideStartPoint = null;
+      this.guideDrawState = 'idle';
+      this.emitGuidesChanged();
+    }
+  });
+
+  this.canvas.on('mouse:move', (opt) => {
+    const evt = opt.e as MouseEvent;
+
+    // Handle panning
+    if (this.isPanning && this.lastPanPosition) {
+      const vpt = this.canvas.viewportTransform;
+      if (vpt) {
+        vpt[4] += evt.clientX - this.lastPanPosition.x;
+        vpt[5] += evt.clientY - this.lastPanPosition.y;
+        this.canvas.setViewportTransform(vpt);
+        this.lastPanPosition = { x: evt.clientX, y: evt.clientY };
+      }
+      return;
+    }
+
+    // Update preview line
+    if (this.guideDrawState === 'placing' && this.guidePreviewLine) {
+      const pointer = this.canvas.getPointer(opt.e);
+      this.guidePreviewLine.set({ x2: pointer.x, y2: pointer.y });
+      this.canvas.renderAll();
+    }
+  });
+
+  this.canvas.on('mouse:up', (opt) => {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.lastPanPosition = null;
+      this.canvas.defaultCursor = 'crosshair';
+      this.canvas.setViewportTransform(this.canvas.viewportTransform!);
+      this.canvas.renderAll();
+    }
+  });
+
+  // Suppress browser context menu on canvas
+  const upperCanvas = this.canvas.getSelectionElement();
+  if (upperCanvas) {
+    upperCanvas.oncontextmenu = (e) => { e.preventDefault(); return false; };
+  }
+}
+
+/** Add a fully rendered guide to the canvas. */
+addGuideToCanvas(guide: GuideLineData): void {
+  const svgPath = this.guideLineService.buildSvgPath(guide.points);
+  if (!svgPath) return;
+
+  const path = new fabric.Path(svgPath, {
+    fill: '',
+    stroke: guide.color,
+    strokeWidth: guide.strokeWidth,
+    strokeUniform: true,
+    selectable: false,
+    evented: true,
+    objectCaching: false,
+    data: { type: 'guidePath', guideId: guide.id },
+  });
+
+  this.canvas.add(path);
+
+  // Create control point handles
+  const handles: fabric.Object[] = [];
+  guide.points.forEach((pt, ptIdx) => {
+    // On-curve point
+    const anchor = this.createGuideHandle(pt.x, pt.y, guide.id, 'anchor', ptIdx);
+    handles.push(anchor);
+    this.canvas.add(anchor);
+
+    // cpBefore handle
+    if (pt.cpBefore) {
+      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guide.id, 'cpBefore', ptIdx);
+      handles.push(cpb);
+      this.canvas.add(cpb);
+      // Connector line from anchor to cpBefore
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guide.id, 'connBefore', ptIdx);
+      handles.push(line);
+      this.canvas.add(line);
+    }
+    // cpAfter handle
+    if (pt.cpAfter) {
+      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guide.id, 'cpAfter', ptIdx);
+      handles.push(cpa);
+      this.canvas.add(cpa);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guide.id, 'connAfter', ptIdx);
+      handles.push(line);
+      this.canvas.add(line);
+    }
+  });
+
+  this.guides.set(guide.id, { data: guide, path, handles });
+  this.canvas.renderAll();
+}
+
+/** Create a small draggable circle handle for a guide control point. */
+private createGuideHandle(x: number, y: number, guideId: string, handleType: string, ptIndex: number): fabric.Circle {
+  const isAnchor = handleType === 'anchor';
+  const circle = new fabric.Circle({
+    left: x,
+    top: y,
+    radius: isAnchor ? 5 : 4,
+    fill: isAnchor ? '#FF9800' : '#FFF',
+    stroke: '#FF9800',
+    strokeWidth: 1.5,
+    strokeUniform: true,
+    originX: 'center',
+    originY: 'center',
+    selectable: true,
+    evented: true,
+    hasBorders: false,
+    hasControls: false,
+    objectCaching: false,
+    data: { guideId, handleType, ptIndex },
+  });
+
+  // Live update path while dragging (don't rebuild handles)
+  circle.on('moving', () => {
+    this.onGuideHandleDrag(guideId, handleType, ptIndex, circle.left, circle.top);
+  });
+
+  // Full rebuild after drag ends
+  circle.on('modified', () => {
+    this.rebuildGuideVisuals(guideId);
+    this.emitGuidesChanged();
+  });
+
+  return circle;
+}
+
+/** Create a thin line connecting an anchor to its control handle. */
+private createHandleConnector(x1: number, y1: number, x2: number, y2: number,
+                              guideId: string, connType: string, ptIndex: number): fabric.Line {
+  return new fabric.Line([x1, y1, x2, y2], {
+    stroke: 'rgba(255, 152, 0, 0.5)',
+    strokeWidth: 1,
+    strokeUniform: true,
+    selectable: false,
+    evented: false,
+    objectCaching: false,
+    data: { guideId, handleType: connType, ptIndex },
+  });
+}
+
+/** Handle dragging of a guide control point — update path in-place without rebuilding handles. */
+private onGuideHandleDrag(guideId: string, handleType: string, ptIndex: number, newX: number, newY: number): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+
+  const pt = entry.data.points[ptIndex];
+  if (!pt) return;
+
+  if (handleType === 'anchor') {
+    const dx = newX - pt.x;
+    const dy = newY - pt.y;
+    pt.x = newX;
+    pt.y = newY;
+    if (pt.cpBefore) { pt.cpBefore.x += dx; pt.cpBefore.y += dy; }
+    if (pt.cpAfter) { pt.cpAfter.x += dx; pt.cpAfter.y += dy; }
+
+    // Move related handles (cpBefore, cpAfter, connectors) along with anchor
+    entry.handles.forEach(h => {
+      if (!h.data || h.data.ptIndex !== ptIndex) return;
+      if (h.data.handleType === 'cpBefore' && pt.cpBefore) {
+        h.set({ left: pt.cpBefore.x, top: pt.cpBefore.y });
+        h.setCoords();
+      } else if (h.data.handleType === 'cpAfter' && pt.cpAfter) {
+        h.set({ left: pt.cpAfter.x, top: pt.cpAfter.y });
+        h.setCoords();
+      } else if (h.data.handleType === 'connBefore' && pt.cpBefore) {
+        (h as any).set({ x1: pt.x, y1: pt.y, x2: pt.cpBefore.x, y2: pt.cpBefore.y });
+      } else if (h.data.handleType === 'connAfter' && pt.cpAfter) {
+        (h as any).set({ x1: pt.x, y1: pt.y, x2: pt.cpAfter.x, y2: pt.cpAfter.y });
+      }
+    });
+  } else if (handleType === 'cpBefore') {
+    pt.cpBefore = { x: newX, y: newY };
+    // Update connector line
+    entry.handles.forEach(h => {
+      if (h.data && h.data.ptIndex === ptIndex && h.data.handleType === 'connBefore') {
+        (h as any).set({ x2: newX, y2: newY });
+      }
+    });
+  } else if (handleType === 'cpAfter') {
+    pt.cpAfter = { x: newX, y: newY };
+    entry.handles.forEach(h => {
+      if (h.data && h.data.ptIndex === ptIndex && h.data.handleType === 'connAfter') {
+        (h as any).set({ x2: newX, y2: newY });
+      }
+    });
+  }
+
+  // Update just the SVG path (replace path object but keep handles alive)
+  this.updateGuidePath(guideId);
+}
+
+/** Update only the SVG path of a guide without touching handles. */
+private updateGuidePath(guideId: string): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+
+  const svgPath = this.guideLineService.buildSvgPath(entry.data.points);
+  this.canvas.remove(entry.path);
+  const newPath = new fabric.Path(svgPath, {
+    fill: '',
+    stroke: entry.data.color,
+    strokeWidth: entry.data.strokeWidth,
+    strokeUniform: true,
+    selectable: false,
+    evented: true,
+    objectCaching: false,
+    data: { type: 'guidePath', guideId },
+  });
+  this.canvas.add(newPath);
+  // Send path behind handles
+  newPath.sendToBack();
+  entry.path = newPath;
+  this.canvas.renderAll();
+}
+
+/** Full rebuild of path + handles (used after drag end, nudge, split). */
+private rebuildGuideVisuals(guideId: string): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+
+  // Remove old path + handles
+  this.canvas.remove(entry.path);
+  entry.handles.forEach(h => this.canvas.remove(h));
+  entry.handles = [];
+
+  // Recreate path
+  const svgPath = this.guideLineService.buildSvgPath(entry.data.points);
+  const newPath = new fabric.Path(svgPath, {
+    fill: '',
+    stroke: entry.data.color,
+    strokeWidth: entry.data.strokeWidth,
+    strokeUniform: true,
+    selectable: false,
+    evented: true,
+    objectCaching: false,
+    data: { type: 'guidePath', guideId },
+  });
+  this.canvas.add(newPath);
+  entry.path = newPath;
+
+  // Recreate handles
+  entry.data.points.forEach((pt, ptIdx) => {
+    const anchor = this.createGuideHandle(pt.x, pt.y, guideId, 'anchor', ptIdx);
+    entry.handles.push(anchor);
+    this.canvas.add(anchor);
+
+    if (pt.cpBefore) {
+      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guideId, 'cpBefore', ptIdx);
+      entry.handles.push(cpb);
+      this.canvas.add(cpb);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guideId, 'connBefore', ptIdx);
+      entry.handles.push(line);
+      this.canvas.add(line);
+    }
+    if (pt.cpAfter) {
+      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guideId, 'cpAfter', ptIdx);
+      entry.handles.push(cpa);
+      this.canvas.add(cpa);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guideId, 'connAfter', ptIdx);
+      entry.handles.push(line);
+      this.canvas.add(line);
+    }
+  });
+
+  // Show/hide handles based on selection
+  const showHandles = this.selectedGuideId === guideId;
+  entry.handles.forEach(h => h.set({ visible: showHandles, selectable: showHandles, evented: showHandles }));
+
+  this.canvas.renderAll();
+}
+
+/** Select a guide (show its handles, enable nudge/delete). */
+selectGuide(guideId: string): void {
+  // Deselect previous
+  if (this.selectedGuideId && this.selectedGuideId !== guideId) {
+    this.showGuideHandles(this.selectedGuideId, false);
+  }
+  this.selectedGuideId = guideId;
+  this.showGuideHandles(guideId, true);
+
+  // Update guide color selector to match
+  const entry = this.guides.get(guideId);
+  if (entry) {
+    this.guideColor = entry.data.color;
+  }
+  this.canvas.renderAll();
+}
+
+/** Deselect any selected guide. */
+deselectGuide(): void {
+  if (this.selectedGuideId) {
+    this.showGuideHandles(this.selectedGuideId, false);
+    this.selectedGuideId = null;
+    this.canvas.renderAll();
+  }
+}
+
+/** Show or hide handles for a guide. */
+private showGuideHandles(guideId: string, show: boolean): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+  entry.handles.forEach(h => {
+    h.set({ visible: show, selectable: show, evented: show });
+  });
+}
+
+/** Remove a guide from canvas and data. */
+removeGuide(guideId: string): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+  this.canvas.remove(entry.path);
+  entry.handles.forEach(h => this.canvas.remove(h));
+  this.guides.delete(guideId);
+  if (this.selectedGuideId === guideId) {
+    this.selectedGuideId = null;
+  }
+  this.canvas.renderAll();
+  this.emitGuidesChanged();
+}
+
+/** Nudge the selected guide up or down. */
+nudgeSelectedGuide(dy: number): void {
+  if (!this.selectedGuideId) return;
+  const entry = this.guides.get(this.selectedGuideId);
+  if (!entry) return;
+  entry.data = this.guideLineService.nudgeGuide(entry.data, dy);
+  this.rebuildGuideVisuals(this.selectedGuideId);
+  this.emitGuidesChanged();
+}
+
+/** Right-click to add a control point on the closest segment. */
+private addControlPointAtClick(px: number, py: number): void {
+  // Find the closest guide path
+  let bestGuideId: string | null = null;
+  let bestSeg = 0;
+  let bestT = 0.5;
+  let bestDist = Infinity;
+
+  this.guides.forEach((entry, id) => {
+    const result = this.guideLineService.findClosestSegment(entry.data, px, py);
+    if (result.distance < bestDist) {
+      bestDist = result.distance;
+      bestGuideId = id;
+      bestSeg = result.segIndex;
+      bestT = result.t;
+    }
+  });
+
+  const zoom = this.canvas ? this.canvas.getZoom() : 1;
+  if (bestGuideId && bestDist < 30 / zoom) {
+    const entry = this.guides.get(bestGuideId);
+    entry.data = this.guideLineService.splitSegment(entry.data, bestSeg, bestT);
+    this.selectGuide(bestGuideId);
+    this.rebuildGuideVisuals(bestGuideId);
+    this.emitGuidesChanged();
+  }
+}
+
+/** Update the color of the selected guide, or all guides if none selected. */
+setSelectedGuideColor(color: string): void {
+  this.guideColor = color;
+  this.guideHexColor = this.rgbaToHex(color);
+  const targets = this.selectedGuideId
+    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
+    : Array.from(this.guides.values());
+  if (!targets.length) return;
+  targets.forEach(entry => {
+    entry.data.color = color;
+    entry.path.set({ stroke: color });
+  });
+  this.canvas.renderAll();
+  this.emitGuidesChanged();
+}
+
+/** Handle color picker input (hex → rgba). */
+onGuideColorInput(event: Event): void {
+  const hex = (event.target as HTMLInputElement).value;
+  this.guideHexColor = hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const rgba = `rgba(${r}, ${g}, ${b}, 0.6)`;
+  this.setSelectedGuideColor(rgba);
+}
+
+/** Update opacity of the selected guide, or all guides if none selected. */
+setGuideOpacity(opacity: number): void {
+  const targets = this.selectedGuideId
+    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
+    : Array.from(this.guides.values());
+  if (!targets.length) return;
+  targets.forEach(entry => { entry.path.set({ opacity }); });
+  this.canvas.renderAll();
+  this.emitGuidesChanged();
+}
+
+/** Update stroke width of the selected guide, or all guides if none selected. */
+setGuideStrokeWidth(width: number): void {
+  this.guideStrokeWidth = width;
+  const targets = this.selectedGuideId
+    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
+    : Array.from(this.guides.values());
+  if (!targets.length) return;
+  targets.forEach(entry => {
+    entry.data.strokeWidth = width;
+    entry.path.set({ strokeWidth: width });
+  });
+  this.canvas.renderAll();
+  this.emitGuidesChanged();
+}
+
+private rgbaToHex(rgba: string): string {
+  const match = rgba.match(/\d+/g);
+  if (!match || match.length < 3) return '#ffa500';
+  const r = parseInt(match[0]).toString(16).padStart(2, '0');
+  const g = parseInt(match[1]).toString(16).padStart(2, '0');
+  const b = parseInt(match[2]).toString(16).padStart(2, '0');
+  return `#${r}${g}${b}`;
+}
+
+/** Get all guides as serializable data. */
+getGuides(): GuideLineData[] {
+  return Array.from(this.guides.values()).map(e => e.data);
+}
+
+/** Load guides from saved data. */
+loadGuides(guidesData: GuideLineData[]): void {
+  // Clear existing guides
+  this.clearGuides();
+  if (!guidesData || !guidesData.length) return;
+  guidesData.forEach(g => {
+    this.addGuideToCanvas(g);
+    this.showGuideHandles(g.id, false);  // Start with handles hidden
+  });
+}
+
+/** Remove all guides from canvas. */
+clearGuides(): void {
+  this.guides.forEach((entry) => {
+    this.canvas.remove(entry.path);
+    entry.handles.forEach(h => this.canvas.remove(h));
+  });
+  this.guides.clear();
+  this.selectedGuideId = null;
+  if (this.guidePreviewLine) {
+    this.canvas.remove(this.guidePreviewLine);
+    this.guidePreviewLine = null;
+  }
+  this.guideDrawState = 'idle';
+  this.guideStartPoint = null;
+}
+
+private emitGuidesChanged(): void {
+  this.guidesChanged.emit(this.getGuides());
+}
 
 }

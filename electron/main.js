@@ -195,23 +195,31 @@ function startPythonServer() {
     }
 
     pythonProcess.stdout.on('data', (data) => {
-        console.log(`Python: ${data}`);
+        const msg = data.toString().trim();
+        console.log(`Python: ${msg}`);
+        appendLog(msg);
     });
 
     pythonProcess.stderr.on('data', (data) => {
-        console.log(`Python: ${data}`);
-        if (data.toString().includes('Uvicorn running')) {
-            console.log('Python server is running!');
+        const msg = data.toString().trim();
+        console.log(`Python: ${msg}`);
+        appendLog(msg);
+        if (msg.includes('Uvicorn running')) {
+            updateStatus('Backend server is ready!');
         }
     });
 
     pythonProcess.on('error', (err) => {
         console.error('Failed to start Python server:', err);
         updateStatus('Error: Could not start backend server.');
+        appendLog(`Error: ${err.message}`);
     });
 
     pythonProcess.on('close', (code) => {
         console.log(`Python process exited with code ${code}`);
+        if (code !== 0 && code !== null) {
+            appendLog(`Server exited with code ${code}`);
+        }
     });
 }
 
@@ -250,6 +258,12 @@ function startAngularApp() {
 function updateStatus(message) {
     if (mainWindow) {
         mainWindow.webContents.send('update-status', message);
+    }
+}
+
+function appendLog(message) {
+    if (mainWindow) {
+        mainWindow.webContents.send('append-log', message);
     }
 }
 

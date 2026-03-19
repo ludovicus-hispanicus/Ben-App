@@ -27,7 +27,8 @@ import { ToolbarService } from 'src/app/services/toolbar.service';
 import { AtfConverterService } from 'src/app/services/atf-converter.service';
 import { TextService } from 'src/app/services/text.service';
 import { DatasetService } from 'src/app/services/dataset.service';
-import { TextPreview, DatasetPreview } from 'src/app/models/cured';
+import { TextPreview, DatasetPreview, GuideLineData } from 'src/app/models/cured';
+import { GuideLineService } from 'src/app/services/guide-line.service';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ProductionService, KwicResult } from 'src/app/services/production.service';
 
@@ -63,6 +64,12 @@ export class SelectedPdf {
 export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   // Expose CanvasMode enum for use in template
   public CanvasMode = CanvasMode;
+
+  // Guide lines
+  public guideColorPresets: { color: string; label: string }[] = [];
+  public guideHexColor: string = '#ffa500';
+  public guideOpacity: number = 40;
+  private currentGuides: GuideLineData[] = [];
 
   public options = {
     density: 100,
@@ -319,6 +326,14 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'akkadian', label: 'Akkadian', description: 'Fix glottal stops (ʾ), reference signs (↑), special chars' },
   ];
 
+  // Line detection / box mode
+  public boxMode: string = 'estimate';
+  public boxModeOptions: Array<{value: string; label: string; description: string}> = [
+    { value: 'none', label: 'None', description: 'No line boxes — text only' },
+    { value: 'estimate', label: 'Estimate', description: 'Evenly divide image height by line count' },
+    { value: 'predict', label: 'Predict (Kraken)', description: 'Kraken segmentation for line boundaries' },
+  ];
+
   // OCR prompt/mode selection (for VLM models like Ollama)
   public selectedOcrPrompt: string = 'dictionary';
   public ocrPromptModes: Array<{value: string; label: string; description: string}> = [
@@ -362,28 +377,19 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   public ocrModelCategories: Array<{
     name: string;
-    models: Array<{value: string; label: string; description?: string}>;
+    models: Array<{value: string; label: string; description?: string; trained?: boolean}>;
   }> = [
     {
       name: 'CPU',
       models: [
-        { value: 'kraken_typewriter', label: 'Typewriter', description: 'Pennsylvania Sumerian Dictionary' },
-        { value: 'kraken_base', label: 'Base (SAA)', description: 'SAA Corpus' },
-        { value: 'kraken_cusas', label: 'CUSAS-18', description: 'CUSAS-18 trained model' },
-        { value: 'trocr', label: 'TrOCR Base', description: 'Line-level handwritten OCR' },
+        // Populated dynamically from /available-models (kraken, trocr, qwen_lora trained models)
       ]
     },
     {
       name: 'Local GPU',
       models: [
-        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (8GB)' },
-        { value: 'deepseek_ocr', label: 'DeepSeek', description: 'Fast OCR' },
-        { value: 'qwen3_vl_4b', label: 'Qwen3 VL 4B', description: '2.5GB, fast' },
-        { value: 'qwen3_vl_8b', label: 'Qwen3 VL 8B', description: '6GB, best OCR' },
-        { value: 'qwen3_vl_32b', label: 'Qwen3 VL 32B', description: '21GB, highest quality' },
-        { value: 'llama4_vision', label: 'Llama 4', description: '12GB, most capable' },
-        { value: 'mistral_small_vision', label: 'Mistral Small', description: '15GB, vision' },
-        { value: 'llava_34b', label: 'LLaVA 34B', description: '20GB, specialist' },
+        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (1.7GB VRAM)' },
+        // Additional models populated dynamically from Ollama
       ]
     },
     {
@@ -402,35 +408,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
       ]
     },
-    {
-      name: 'Trained',
-      models: []  // Populated dynamically from /available-models
-    }
   ];
 
   // Available Ollama models from server (for Settings page)
   public availableOllamaModels: string[] = [];
   // Track which models are locally available
   public modelAvailability: { [key: string]: boolean } = {
-    // Kraken models
-    'kraken_typewriter': true,
-    'kraken_base': true,
-    'kraken_cusas': true,
-    'trocr': true,
-    // GPU models - local inference
     'nemotron_local': true,
-    'deepseek_ocr': true,
-    // Ollama VLM models (need to be pulled)
-    'llama4_vision': false,
-    'qwen3_vl_32b': false,
-    'qwen3_vl_8b': false,
-    'qwen3_vl_4b': false,
-    'mistral_small_vision': false,
-    'llava_34b': false,
-    // Ollama Cloud models (always available - runs on Ollama servers)
     'qwen3_vl_235b_cloud': true,
     'qwen3_vl_235b_thinking': true,
-    // External API models (always available)
     'nemotron_cloud': true,
     'gpt4_vision': true,
     'claude_vision': true,
@@ -586,7 +572,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       : undefined;
 
-    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, teiOptions, this.correctionRules || undefined).subscribe(data => {
+    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, teiOptions, this.correctionRules || undefined, this.boxMode || undefined).subscribe(data => {
       if (data.lines.length == 0) {
         this.notificationService.showWarning("AI failed to parse the image, please try again", 20000);
         this.isLoading = false;
@@ -638,7 +624,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.updateToolbarButtons();
-        this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode];
+        this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode, this.canvas.guideMode];
         this.canvas.changeMode(CanvasMode.Pan);
       }, 50);
     });
@@ -658,7 +644,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     private sanitizer: DomSanitizer,
     private location: Location,
     private http: HttpClient,
-    private productionService: ProductionService) {
+    private productionService: ProductionService,
+    public guideLineService: GuideLineService) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];
@@ -702,6 +689,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loadBaseModelsMetadata();
     this.loadAvailableOcrModels();
     this.loadAvailableOllamaModels();
+
+    // Guide line color presets
+    this.guideColorPresets = this.guideLineService.COLOR_PRESETS;
 
     // Subscribe to query param changes to handle navigation within the same route
     this.queryParamsSub = this.route.queryParams.subscribe(params => {
@@ -1052,7 +1042,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     let isVlm = this.isCurated;
     if (curateTarget === 'both') { isKraken = true; isVlm = true; }
 
-    this.curedService.createSubmission(this.textId, this.transliterationId, lines, dimensions, imageName, isKraken, isVlm).subscribe(result => {
+    const guides = this.canvas ? this.canvas.getGuides() : [];
+    console.log('[Save] guides:', guides.length, 'imageName:', imageName);
+    this.curedService.createSubmission(this.textId, this.transliterationId, lines, dimensions, imageName, isKraken, isVlm, guides).subscribe(result => {
       if (this.hasPendingPages) {
         this.notificationService.showSuccess(
           `Saved (${this.currentPageIndex + 1}/${this.batchTotal}). Click "Next" for the next image.`
@@ -1196,6 +1188,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.curedService.loadTransliteration(this.textId, this.transliterationId).subscribe(data => {
       this.processTransliteration(data.lines, data.boxes, true);
       this.isCurated = data.is_curated_kraken || data.is_curated_vlm || false;
+      // Load guide lines
+      console.log('[Load] guides from server:', data.guides);
+      if (data.guides && data.guides.length && this.canvas) {
+        this.canvas.loadGuides(data.guides);
+        this.currentGuides = data.guides;
+      }
       if (this.highlightQuery) {
         this.setHighlightByQuery(this.highlightQuery);
       }
@@ -1438,7 +1436,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       setTimeout(() => {
         if (this.canvas) {
           this.setCanvasImage(imageToShow);
-          this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode];
+          this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
           this.canvas.changeMode(CanvasMode.Pan);
         }
         this.updateToolbarButtons();
@@ -1458,6 +1456,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.canvas.props.canvasWidth = dims.width;
     this.canvas.forceCanvasSize();
     this.canvas.forceZoomOut(0.5);  // 50% zoom
+  }
+
+  onImageRotated(rotatedDataUrl: string): void {
+    this.uploadedImageBlob = this.dataUrlToFile(rotatedDataUrl, 'rotated-image.png');
+    this.hasUnsavedChanges = true;
+    this.notificationService.showInfo('Image rotated — save to persist');
   }
 
   cropToSelectedBox() {
@@ -1667,7 +1671,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
               this.canvas.props.canvasWidth = dims.width;
               this.canvas.forceCanvasSize();
               this.canvas.forceZoomOut();
-              this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode];
+              this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
               this.canvas.changeMode(CanvasMode.Pan);
             }
             this.updateToolbarButtons();
@@ -1848,7 +1852,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.stage = 5;
     this.updateUrl();
     this.updateToolbarButtons();
-    this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode];
+    this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode, this.canvas.guideMode];
     this.canvas.changeMode(CanvasMode.Pan);
   }
 
@@ -1868,7 +1872,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.backgroundImage = null;
       this.selectedBox = null;
       this.canvas.hardReset();
-      this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode];
+      this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
       if (this.pdfFile == null) {
         // Navigate to dashboard (clears query params)
         this.stage = 0;
@@ -1898,7 +1902,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.boundingBoxes = [];
       this.lines = [];
       this.selectedBox = null;
-      this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode];
+      this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
       this.updateToolbarButtons();
     } else if (this.stage == 1) {
       // From thumbnails back to upload - navigate to dashboard
@@ -2257,7 +2261,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.clearTextSelection();
     this.loadCuratedStats();
     this.textsPage = 0;
-    this.datasetService.getTexts(dataset.dataset_id, 0, this.textsPageSize).subscribe(data => {
+    this.datasetService.getTexts(dataset.dataset_id, 0, 0).subscribe(data => {
       this.curedTexts = data.items;
       this.textsTotal = data.total;
       this.collectExistingParts();
@@ -2277,19 +2281,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get textsTotalPages(): number {
-    return Math.ceil(this.textsTotal / this.textsPageSize);
+    return Math.ceil(this.filteredTexts.length / this.textsPageSize);
   }
 
   goToTextsPage(page: number): void {
-    if (!this.selectedDataset || page < 0 || page >= this.textsTotalPages) return;
+    if (page < 0 || page >= this.textsTotalPages) return;
     this.textsPage = page;
     this.clearTextSelection();
-    this.datasetService.getTexts(this.selectedDataset.dataset_id, page * this.textsPageSize, this.textsPageSize).subscribe(data => {
-      this.curedTexts = data.items;
-      this.textsTotal = data.total;
-      this.collectExistingParts();
-      this.loadTransliterationIds();
-    });
   }
 
   backToDatasets() {
@@ -2593,7 +2591,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.selectedDataset.dataset_id === -1) {
       this.loadUnassignedTexts();
     } else {
-      this.datasetService.getTexts(this.selectedDataset.dataset_id, this.textsPage * this.textsPageSize, this.textsPageSize).subscribe(data => {
+      this.datasetService.getTexts(this.selectedDataset.dataset_id, 0, 0).subscribe(data => {
         this.curedTexts = data.items;
         this.textsTotal = data.total;
         this.collectExistingParts();
@@ -2679,10 +2677,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.datasetSearchQuery = '';
   }
 
+  /** All texts matching the current search/sort — global, not paginated */
   get filteredTexts(): TextPreview[] {
     let items = [...this.curedTexts];
 
-    // Text search filter
+    // Text search filter (global across all texts)
     if (this.searchQuery.trim()) {
       const q = this.searchQuery.trim().toLowerCase();
       items = items.filter(t => {
@@ -2726,6 +2725,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     return items;
   }
 
+  /** Paginated slice of filteredTexts for display only */
+  get displayedTexts(): TextPreview[] {
+    const start = this.textsPage * this.textsPageSize;
+    return this.filteredTexts.slice(start, start + this.textsPageSize);
+  }
+
   formatFileSize(bytes: number): string {
     if (!bytes) return '—';
     if (bytes < 1024) return bytes + ' B';
@@ -2744,6 +2749,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   clearSearch(): void {
     this.searchQuery = '';
+    this.textsPage = 0;
   }
 
   searchKwic(): void {
@@ -3330,16 +3336,20 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       response => {
         this.availableOcrModels = response.models;
 
-        // Populate "Trained" category from dynamic models
-        const trainedCategory = this.ocrModelCategories.find(c => c.name === 'Trained');
-        if (trainedCategory) {
-          trainedCategory.models = [];
-          const trainedPrefixes = ['qwen_lora:', 'kraken:', 'trocr:'];
+        // Add trained models (kraken, qwen_lora, trocr) into the CPU category
+        const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
+        if (cpuCategory) {
+          const existingValues = new Set(cpuCategory.models.map(m => m.value));
+          const trainedPrefixes = ['kraken:', 'qwen_lora:', 'trocr:'];
           for (const model of response.models) {
-            if (trainedPrefixes.some(p => model.value.startsWith(p))) {
-              trainedCategory.models.push({
+            if (trainedPrefixes.some(p => model.value.startsWith(p)) && !existingValues.has(model.value)) {
+              cpuCategory.models.push({
                 value: model.value,
-                label: model.label,
+                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, '').replace(/ \(TrOCR.*\)/, ''),
+                description: model.value.startsWith('kraken:') ? 'Trained Kraken model' :
+                             model.value.startsWith('qwen_lora:') ? 'Qwen QLoRA fine-tuned' :
+                             'TrOCR fine-tuned',
+                trained: true,
               });
               this.modelAvailability[model.value] = true;
             }
@@ -3450,38 +3460,27 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Load available Ollama models from backend
   loadAvailableOllamaModels() {
-    this.curedService.getOllamaModels().subscribe(
-      models => {
-        this.availableOllamaModels = models;
-        // Update availability for preset models
-        for (const model of models) {
-          const normalizedName = model.toLowerCase();
-          if (normalizedName.includes('deepseek')) {
-            this.modelAvailability['deepseek_ocr'] = true;
-          }
-          if (normalizedName.includes('llama4')) {
-            this.modelAvailability['llama4_vision'] = true;
-          }
-          if (normalizedName.includes('qwen3-vl:32b')) {
-            this.modelAvailability['qwen3_vl_32b'] = true;
-          }
-          if (normalizedName.includes('qwen3-vl:8b') || normalizedName.includes('qwen3-vl:latest')) {
-            this.modelAvailability['qwen3_vl_8b'] = true;
-          }
-          if (normalizedName.includes('qwen3-vl:4b')) {
-            this.modelAvailability['qwen3_vl_4b'] = true;
-          }
-          if (normalizedName.includes('mistral-small')) {
-            this.modelAvailability['mistral_small_vision'] = true;
-          }
-          if (normalizedName.includes('llava:34b') || normalizedName.includes('llava-v1.6:34b')) {
-            this.modelAvailability['llava_34b'] = true;
-          }
+    this.curedService.getRecommendedModels().subscribe(
+      response => {
+        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
+        if (!gpuCategory) return;
+
+        // Append installed Ollama models to existing entries (e.g. Nemotron)
+        const existingValues = new Set(gpuCategory.models.map(m => m.value));
+        for (const m of response.models) {
+          if (!m.installed) continue;
+          const value = m.id.replace(/[-:]/g, '_');
+          if (existingValues.has(value)) continue;
+          gpuCategory.models.push({
+            value,
+            label: m.name,
+            description: m.description,
+          });
+          this.modelAvailability[value] = true;
         }
       },
       () => {
         // Ollama not available
-        this.availableOllamaModels = [];
       }
     );
   }
@@ -3523,7 +3522,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // If text list nav not active (e.g. page reload), load the dataset's text list
         if (!this.textListNavActive && text?.dataset_id) {
-          this.datasetService.getTexts(text.dataset_id, 0, this.textsPageSize).subscribe(data => {
+          this.datasetService.getTexts(text.dataset_id, 0, 0).subscribe(data => {
             this.curedTexts = data.items;
             this.textsTotal = data.total;
             this.collectExistingParts();
@@ -3621,6 +3620,55 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   // ─── Detect Lines (Kraken segmentation) ────────────────────
 
   public isDetectingLines: boolean = false;
+
+  // ── Guide lines toolbar helpers ──
+
+  onGuideColorInput(event: Event): void {
+    const hex = (event.target as HTMLInputElement).value;
+    this.guideHexColor = hex;
+    // Convert hex to rgba with moderate opacity for reading
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const rgba = `rgba(${r}, ${g}, ${b}, 0.6)`;
+    this.canvas?.setSelectedGuideColor(rgba);
+  }
+
+  setGuideColor(color: string): void {
+    this.canvas?.setSelectedGuideColor(color);
+    // Update hex picker to match (approximate)
+    this.guideHexColor = this.rgbaToHex(color);
+  }
+
+  activateGuideMode(): void {
+    if (this.canvas && this.canvas.allowedActions?.some(a => a.name === CanvasMode.Guide)) {
+      this.canvas.changeMode(CanvasMode.Guide);
+    }
+  }
+
+  onGuideStrokeChange(event: Event): void {
+    const val = +(event.target as HTMLInputElement).value;
+    this.canvas?.setGuideStrokeWidth(val);
+  }
+
+  onGuideOpacityChange(event: Event): void {
+    this.guideOpacity = +(event.target as HTMLInputElement).value;
+    this.canvas?.setGuideOpacity(this.guideOpacity / 100);
+  }
+
+  onGuidesChanged(guides: GuideLineData[]): void {
+    this.currentGuides = guides;
+    this.hasUnsavedChanges = true;
+  }
+
+  private rgbaToHex(rgba: string): string {
+    const match = rgba.match(/\d+/g);
+    if (!match || match.length < 3) return '#ffa500';
+    const r = parseInt(match[0]).toString(16).padStart(2, '0');
+    const g = parseInt(match[1]).toString(16).padStart(2, '0');
+    const b = parseInt(match[2]).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
 
   detectLines() {
     // Get the background image from canvas to respect any crop area

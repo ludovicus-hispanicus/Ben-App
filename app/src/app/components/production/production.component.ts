@@ -368,8 +368,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
     canvasTypeViewOnly = CanvasType.SingleSelection;
     CanvasMode = CanvasMode;
     sourceImageDataUrls: Map<number, string> = new Map();
+    // Original (unrotated) image data URLs
+    private sourceOriginalDataUrls: Map<number, string> = new Map();
     // Per-source viewport state (zoom + pan position)
     private sourceViewports: Map<number, number[]> = new Map();
+    // Per-source guide lines (persisted in localStorage)
+    private sourceGuides: Map<number, any[]> = new Map();
+    // Per-source rotation count (0=0°, 1=90°, 2=180°, 3=270°) — persisted in localStorage
+    private sourceRotations: Map<number, number> = new Map();
 
     // Resizable panels
     leftPanelWidth: number = 45;
@@ -1080,6 +1086,9 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 this.loadSourceImages();
                 // Also load uploaded images from the production text
                 this.loadUploadedImages();
+                // Load saved annotations from localStorage
+                this.loadGuidesFromStorage();
+                this.loadRotationsFromStorage();
                 this.isLoading = false;
             },
             error: (err) => {
@@ -1250,8 +1259,9 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     selectSource(index: number): void {
-        // Save current viewport state before switching
+        // Save current state before switching
         this.saveCurrentViewport();
+        this.saveCurrentGuides();
         this.selectedSourceIndex = index;
         const dataUrl = this.sourceImageDataUrls.get(index);
         if (dataUrl) {
@@ -1309,11 +1319,167 @@ export class ProductionComponent implements OnInit, OnDestroy {
         document.addEventListener('touchend', this.resizeEndHandler);
     }
 
+    activateGuideMode(): void {
+        if (this.sourceCanvas?.allowedActions?.some(a => a.name === CanvasMode.Guide)) {
+            this.sourceCanvas.changeMode(CanvasMode.Guide);
+        }
+    }
+
+    onGuideStrokeChange(event: Event): void {
+        const val = +(event.target as HTMLInputElement).value;
+        this.sourceCanvas?.setGuideStrokeWidth(val);
+    }
+
+    onGuidesChanged(guides: any[]): void {
+        this.sourceGuides.set(this.selectedSourceIndex, guides);
+        this.persistGuidesToStorage();
+    }
+
+    private saveCurrentGuides(): void {
+        if (this.sourceCanvas) {
+            const guides = this.sourceCanvas.getGuides();
+            if (guides.length > 0) {
+                this.sourceGuides.set(this.selectedSourceIndex, guides);
+            } else {
+                this.sourceGuides.delete(this.selectedSourceIndex);
+            }
+            this.persistGuidesToStorage();
+        }
+    }
+
+    private loadGuidesForSource(index: number): void {
+        if (!this.sourceCanvas) return;
+        const guides = this.sourceGuides.get(index);
+        if (guides && guides.length) {
+            this.sourceCanvas.loadGuides(guides);
+        } else {
+            this.sourceCanvas.clearGuides();
+        }
+    }
+
+    private get guidesStorageKey(): string {
+        const prodId = this.currentProductionText?.production_id || 'draft';
+        return `prod_guides_${prodId}`;
+    }
+
+    private persistGuidesToStorage(): void {
+        const data: { [key: number]: any[] } = {};
+        this.sourceGuides.forEach((guides, idx) => {
+            if (guides.length > 0) data[idx] = guides;
+        });
+        if (Object.keys(data).length > 0) {
+            localStorage.setItem(this.guidesStorageKey, JSON.stringify(data));
+        } else {
+            localStorage.removeItem(this.guidesStorageKey);
+        }
+    }
+
+    private loadGuidesFromStorage(): void {
+        try {
+            const raw = localStorage.getItem(this.guidesStorageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            this.sourceGuides.clear();
+            Object.keys(data).forEach(key => {
+                this.sourceGuides.set(+key, data[key]);
+            });
+        } catch (e) {
+            // ignore invalid data
+        }
+    }
+
+    // ── Rotation persistence ──
+
+    private get rotationsStorageKey(): string {
+        const prodId = this.currentProductionText?.production_id || 'draft';
+        return `prod_rotations_${prodId}`;
+    }
+
+    private persistRotationsToStorage(): void {
+        const data: { [key: number]: number } = {};
+        this.sourceRotations.forEach((count, idx) => {
+            if (count > 0) data[idx] = count;
+        });
+        if (Object.keys(data).length > 0) {
+            localStorage.setItem(this.rotationsStorageKey, JSON.stringify(data));
+        } else {
+            localStorage.removeItem(this.rotationsStorageKey);
+        }
+    }
+
+    private loadRotationsFromStorage(): void {
+        try {
+            const raw = localStorage.getItem(this.rotationsStorageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            this.sourceRotations.clear();
+            Object.keys(data).forEach(key => {
+                this.sourceRotations.set(+key, data[key]);
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    /** Apply N×90° clockwise rotations to a data URL. */
+    private applyRotations(dataUrl: string, count: number): Promise<string> {
+        if (count <= 0) return Promise.resolve(dataUrl);
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                let src: HTMLCanvasElement | HTMLImageElement = img;
+                let w = img.width, h = img.height;
+                for (let i = 0; i < count; i++) {
+                    const offscreen = document.createElement('canvas');
+                    const ctx = offscreen.getContext('2d');
+                    offscreen.width = h;
+                    offscreen.height = w;
+                    ctx.translate(h, 0);
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(src, 0, 0);
+                    src = offscreen;
+                    [w, h] = [h, w];
+                }
+                resolve((src as HTMLCanvasElement).toDataURL('image/png'));
+            };
+            img.src = dataUrl;
+        });
+    }
+
+    onSourceImageRotated(rotatedDataUrl: string): void {
+        // Update cached data URL so rotation persists when switching tabs
+        this.sourceImageDataUrls.set(this.selectedSourceIndex, rotatedDataUrl);
+        // Track rotation count and persist
+        const current = this.sourceRotations.get(this.selectedSourceIndex) || 0;
+        this.sourceRotations.set(this.selectedSourceIndex, (current + 1) % 4);
+        this.persistRotationsToStorage();
+    }
+
     private loadImageIntoCanvas(dataUrl: string, sourceIndex?: number): void {
         if (!this.sourceCanvas) return;
+        const idx = sourceIndex ?? this.selectedSourceIndex;
+
+        // Store original if not yet stored
+        if (!this.sourceOriginalDataUrls.has(idx)) {
+            this.sourceOriginalDataUrls.set(idx, dataUrl);
+        }
+
+        // Apply saved rotation from original
+        const original = this.sourceOriginalDataUrls.get(idx) || dataUrl;
+        const rotCount = this.sourceRotations.get(idx) || 0;
+        if (rotCount > 0) {
+            this.applyRotations(original, rotCount).then(rotatedUrl => {
+                this.sourceImageDataUrls.set(idx, rotatedUrl);
+                this.doLoadImageIntoCanvas(rotatedUrl, idx);
+            });
+        } else {
+            this.doLoadImageIntoCanvas(dataUrl, idx);
+        }
+    }
+
+    private doLoadImageIntoCanvas(dataUrl: string, idx: number): void {
         this.sourceCanvas.props.canvasImage = dataUrl;
         this.sourceCanvas.setCanvasImage();
-        // Calculate dimensions from viewport (same approach as CuReD's getCanvasDimensions)
         const availableHeight = window.innerHeight - 130;
         const sourcePanel = document.querySelector('.source-panel');
         const availableWidth = sourcePanel ? sourcePanel.clientWidth : window.innerWidth * 0.45;
@@ -1321,14 +1487,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.sourceCanvas.props.canvasWidth = availableWidth;
         this.sourceCanvas.forceCanvasSize();
 
-        // Restore saved viewport if available, otherwise default zoom
-        const idx = sourceIndex ?? this.selectedSourceIndex;
         const savedVpt = this.sourceViewports.get(idx);
         if (savedVpt) {
             this.sourceCanvas.restoreViewportTransform(savedVpt);
         } else {
             this.sourceCanvas.forceZoomOut(0.5);
         }
+
+        // Restore guides for this source
+        this.loadGuidesForSource(idx);
     }
 
     onEditorContentChange(content: string): void {
@@ -1496,57 +1663,50 @@ export class ProductionComponent implements OnInit, OnDestroy {
         const translitLines = this.editorContent.split('\n');
         const rawTransLines = this.translationContent.split('\n');
 
-        // 1. Build section-qualified transliteration line map
-        //    Key: "section:lineNum" (e.g., "obverse:1", "reverse:1")
-        const translitLineNumToIndex: Map<string, number> = new Map();
-        let currentTranslitSection = 'obverse';
+        // 1. Build a map from displayed line label (e.g. "1'", "13'", "2") to transliteration array index.
+        //    The label is what appears at the start of each line: number + optional prime.
+        const translitLabelToIndex: Map<string, number> = new Map();
+        let currentSection = '';
         for (let i = 0; i < translitLines.length; i++) {
             const trimmed = translitLines[i].trim().toLowerCase();
-            const secMatch = trimmed.match(/^[\$@](reverse|obverse|left|right|top|bottom|edge)/);
+            const secMatch = trimmed.match(/^[\$@](reverse|obverse|left|right|top|bottom|edge|seal|column)/);
             if (secMatch) {
-                currentTranslitSection = secMatch[1];
+                currentSection = secMatch[1];
                 continue;
             }
-            const nums = this.parseLineNumbers(translitLines[i]);
-            if (nums.length > 0) {
-                const minNum = Math.min(...nums);
-                translitLineNumToIndex.set(`${currentTranslitSection}:${minNum}`, i);
+            // Extract line label: "1'." or "1." or "16" at start of line (use trimmed for whitespace tolerance)
+            const lineMatch = trimmed.match(/^(\d+'?)\.\s/);
+            if (lineMatch) {
+                const label = lineMatch[1]; // e.g. "1'", "13'", "2"
+                if (!translitLabelToIndex.has(label)) {
+                    translitLabelToIndex.set(label, i);
+                }
             }
         }
 
-        // 2. Parse translation lines with section awareness and embedded range splitting
-        let currentSection = 'obverse';
+        // 2. Parse translation lines, splitting embedded ranges
         const parsedTranslations: {
-            section: string;
-            startLineNum: number; endLineNum: number;   // local line numbers
+            startLabel: string;   // e.g. "2'", "13'", "3"
+            endLabel: string;     // e.g. "4'", "2", "4"
             cleanedText: string;
-            hasPrime: boolean;
+            isRange: boolean;
         }[] = [];
 
         for (const rawLine of rawTransLines) {
             const trimmed = rawLine.trim();
             if (trimmed === '' || trimmed.startsWith('# ')) continue;
 
-            // Check for section markers in translation (@reverse, @obverse, etc.)
+            // Skip section markers in translation (they're for readability, we use line labels)
             const sectionMatch = trimmed.match(/^@(reverse|obverse|left|right|top|bottom|edge)/i);
-            if (sectionMatch) {
-                currentSection = sectionMatch[1].toLowerCase();
-                continue;
-            }
+            if (sectionMatch) continue;
 
-            // Split line if it contains embedded ranges (e.g., "4–5 text 6–7 more text")
+            // Split line if it contains embedded ranges
             const subLines = this.splitEmbeddedRanges(trimmed);
 
             for (const subLine of subLines) {
-                const parsed = this.parseAndCleanTranslationLine(subLine);
-                if (parsed.startLineNum > 0) {
-                    parsedTranslations.push({
-                        section: currentSection,
-                        startLineNum: parsed.startLineNum,
-                        endLineNum: parsed.endLineNum,
-                        cleanedText: parsed.cleanedText,
-                        hasPrime: parsed.hasPrime
-                    });
+                const parsed = this.parseTranslationLineByLabel(subLine);
+                if (parsed) {
+                    parsedTranslations.push(parsed);
                 }
             }
         }
@@ -1556,39 +1716,34 @@ export class ProductionComponent implements OnInit, OnDestroy {
             return;
         }
 
-        // 4. Build map: transliteration line index → translations to insert after it
-        //    eBL format: translation is placed after the FIRST line of the range
+        // 3. Build map: transliteration line index → translations to insert after it
         const translationsAfterIndex: Map<number, string[]> = new Map();
 
         for (const parsed of parsedTranslations) {
-            const key = `${parsed.section}:${parsed.startLineNum}`;
-            const insertAfterIndex = translitLineNumToIndex.get(key);
+            const insertAfterIndex = translitLabelToIndex.get(parsed.startLabel);
             if (insertAfterIndex === undefined) continue;
 
             if (!translationsAfterIndex.has(insertAfterIndex)) {
                 translationsAfterIndex.set(insertAfterIndex, []);
             }
 
-            // Format: #tr.en.(section endLine'): for ranges, #tr.en: for single lines
-            // Section prefixes: o=obverse, r=reverse, b.e.=bottom, l.e.=left, r.e.=right, t.e.=top
+            // Determine end label's section prefix for eBL format
             let formattedLine: string;
-            const prime = parsed.hasPrime ? "'" : '';
-            const sectionPrefix = this.getSectionPrefix(parsed.section);
-            if (parsed.endLineNum > parsed.startLineNum) {
-                formattedLine = `#tr.en.(${sectionPrefix}${parsed.endLineNum}${prime}): ${parsed.cleanedText}`;
+            if (parsed.isRange) {
+                const endSectionPrefix = this.getSectionPrefixForLabel(parsed.endLabel, translitLines);
+                formattedLine = `#tr.en.(${endSectionPrefix}${parsed.endLabel}): ${parsed.cleanedText}`;
             } else {
                 formattedLine = `#tr.en: ${parsed.cleanedText}`;
             }
             translationsAfterIndex.get(insertAfterIndex)!.push(formattedLine);
         }
 
-        // 5. Create merged content with translations interleaved
+        // 4. Create merged content with translations interleaved
         const mergedLines: string[] = [];
         let insertedCount = 0;
 
         for (let i = 0; i < translitLines.length; i++) {
             mergedLines.push(translitLines[i]);
-
             if (translationsAfterIndex.has(i)) {
                 for (const transLine of translationsAfterIndex.get(i)!) {
                     mergedLines.push(transLine);
@@ -1597,14 +1752,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
             }
         }
 
-        // 6. Append any unmatched translations at the end
+        // 5. Append any unmatched translations at the end
         for (const parsed of parsedTranslations) {
-            const key = `${parsed.section}:${parsed.startLineNum}`;
-            if (!translitLineNumToIndex.has(key)) {
-                const prime = parsed.hasPrime ? "'" : '';
-                const sectionPrefix = this.getSectionPrefix(parsed.section);
-                const formattedLine = parsed.endLineNum > parsed.startLineNum
-                    ? `#tr.en.(${sectionPrefix}${parsed.endLineNum}${prime}): ${parsed.cleanedText}`
+            if (!translitLabelToIndex.has(parsed.startLabel)) {
+                const formattedLine = parsed.isRange
+                    ? `#tr.en.(${parsed.endLabel}): ${parsed.cleanedText}`
                     : `#tr.en: ${parsed.cleanedText}`;
                 mergedLines.push(formattedLine);
                 insertedCount++;
@@ -1618,6 +1770,55 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.editorMode = 'transliteration';
 
         this.notificationService.showSuccess(`Inserted ${insertedCount} translation lines`);
+    }
+
+    /**
+     * Parse a translation line by its label (e.g., "2'–4'", "13'–2", "3-4").
+     * Returns start/end labels as strings preserving primes.
+     */
+    private parseTranslationLineByLabel(line: string): { startLabel: string; endLabel: string; cleanedText: string; isRange: boolean } | null {
+        // Remove #tr.XX: prefix if present
+        let text = line;
+        const trMatch = line.match(/^#tr\.\w+(?:\.\([^)]+\))?:\s*/);
+        if (trMatch) {
+            text = line.substring(trMatch[0].length);
+        }
+
+        // Match: "1'–2" or "13'–2" or "3-4" or "1'." or "3" etc.
+        // startNum + optional prime + optional (dash/endash + endNum + optional prime) + optional period + space + text
+        const numMatch = text.match(/^(\d+'?)(?:[–\-](\d+'?))?\.?\s+(.*)$/);
+        if (!numMatch) return null;
+
+        const startLabel = numMatch[1];  // e.g. "2'", "13'", "3"
+        const endLabel = numMatch[2] || startLabel;  // e.g. "4'", "2", "4"
+        const cleanedText = numMatch[3];
+        const isRange = startLabel !== endLabel;
+
+        return { startLabel, endLabel, cleanedText, isRange };
+    }
+
+    /**
+     * Find the eBL section prefix for a given line label by scanning transliteration.
+     * E.g., if label "2" appears after @reverse, returns "r ".
+     */
+    private getSectionPrefixForLabel(label: string, translitLines: string[]): string {
+        let currentSection = 'obverse';
+        for (const line of translitLines) {
+            const trimmed = line.trim().toLowerCase();
+            const secMatch = trimmed.match(/^[\$@](reverse|obverse|left|right|top|bottom|edge|seal|column)/);
+            if (secMatch) {
+                currentSection = secMatch[1];
+                continue;
+            }
+            // Use trimmed line for matching to handle leading whitespace
+            const lineMatch = trimmed.match(/^(\d+'?)\.\s/);
+            if (lineMatch && lineMatch[1] === label) {
+                return this.getSectionPrefix(currentSection);
+            }
+        }
+        // Fallback: if label not found, return prefix based on last known section
+        console.warn(`[getSectionPrefixForLabel] label "${label}" not found, using last section "${currentSection}"`);
+        return this.getSectionPrefix(currentSection);
     }
 
     /**

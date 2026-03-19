@@ -53,6 +53,7 @@ class TransliterationSubmitDto(BaseSubmissionDto):
     boxes: Optional[List[Dimensions]] = None
     image_name: str = ""
     url: str = ""
+    guides: Optional[List[Dict]] = None
 
 
 class CuredSubmissionDto(BaseModel):
@@ -65,6 +66,7 @@ class CuredSubmissionDto(BaseModel):
     training_targets: Optional[List[str]] = None  # legacy
     image_name: Optional[str] = None
     transliteration_id: Optional[int] = None
+    guides: Optional[List[Dict]] = None
 
 
 
@@ -100,6 +102,7 @@ class CuredTransliterationData(BaseModel):
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
     training_targets: Optional[List[str]] = None  # legacy
+    guides: Optional[List[Dict]] = None
 
     @staticmethod
     def from_transliteration_entity(entity: TransliterationSubmission):
@@ -125,5 +128,6 @@ class CuredTransliterationData(BaseModel):
             is_fixed=getattr(last, 'is_fixed', False),
             is_curated_kraken=is_kraken,
             is_curated_vlm=is_vlm,
-            training_targets=getattr(last, 'training_targets', None)
+            training_targets=getattr(last, 'training_targets', None),
+            guides=getattr(last, 'guides', None)
         )

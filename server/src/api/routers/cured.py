@@ -1439,6 +1439,7 @@ async def submit(request: Request, submit_dto: CuredSubmissionDto):
         is_curated_kraken=submit_dto.is_curated_kraken,
         is_curated_vlm=submit_dto.is_curated_vlm,
         training_targets=submit_dto.training_targets,
+        guides=submit_dto.guides,
     )
 
     transliteration_id = global_new_text_handler.save_new_transliteration(dto=submit_dto, uploader_id=user_id)

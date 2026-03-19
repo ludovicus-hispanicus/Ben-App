@@ -97,24 +97,14 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     {
       name: 'CPU',
       models: [
-        { value: 'kraken_typewriter', label: 'Typewriter', description: 'Pennsylvania Sumerian Dictionary' },
-        { value: 'kraken_base', label: 'Base (SAA)', description: 'SAA Corpus' },
-        { value: 'kraken_cusas', label: 'CUSAS-18', description: 'CUSAS-18 trained model' },
-        { value: 'trocr', label: 'TrOCR Base', description: 'Line-level handwritten OCR' },
-        // Additional trained models are loaded dynamically from the backend
+        // Trained Kraken, Qwen LoRA, and TrOCR models are loaded dynamically from the backend
       ]
     },
     {
       name: 'Local GPU',
       models: [
-        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (8GB)' },
-        { value: 'deepseek_ocr', label: 'DeepSeek', description: 'Fast OCR' },
-        { value: 'qwen3_vl_4b', label: 'Qwen3 VL 4B', description: '2.5GB, fast' },
-        { value: 'qwen3_vl_8b', label: 'Qwen3 VL 8B', description: '6GB, best OCR' },
-        { value: 'qwen3_vl_32b', label: 'Qwen3 VL 32B', description: '21GB, highest quality' },
-        { value: 'llama4_vision', label: 'Llama 4', description: '12GB, most capable' },
-        { value: 'mistral_small_vision', label: 'Mistral Small', description: '15GB, vision' },
-        { value: 'llava_34b', label: 'LLaVA 34B', description: '20GB, specialist' },
+        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (1.7GB VRAM)' },
+        // Additional models populated dynamically from Ollama
       ]
     },
     {
@@ -123,10 +113,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         { value: 'qwen3_vl_235b_cloud', label: 'Qwen3 VL 235B', description: 'Free, best quality' },
         { value: 'qwen3_vl_235b_thinking', label: 'Qwen3 VL 235B Thinking', description: 'STEM/math reasoning' },
       ]
-    },
-    {
-      name: 'vLLM',
-      models: []  // Populated dynamically from vLLM server
     },
     {
       name: 'API',
@@ -140,18 +126,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   ];
 
   modelAvailability: { [key: string]: boolean } = {
-    'kraken_typewriter': true,
-    'kraken_base': true,
-    'kraken_cusas': true,
-    'trocr': true,
     'nemotron_local': true,
-    'deepseek_ocr': true,
-    'llama4_vision': false,
-    'qwen3_vl_32b': false,
-    'qwen3_vl_8b': false,
-    'qwen3_vl_4b': false,
-    'mistral_small_vision': false,
-    'llava_34b': false,
     'qwen3_vl_235b_cloud': true,
     'qwen3_vl_235b_thinking': true,
     'nemotron_cloud': true,
@@ -193,6 +168,14 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     { value: 0.33, label: '200 DPI' },
   ];
 
+  // Box detection mode
+  boxMode: string = 'estimate';
+  boxModeOptions: Array<{value: string; label: string; description: string}> = [
+    { value: 'none', label: 'None', description: 'No line boxes — text only' },
+    { value: 'estimate', label: 'Estimate', description: 'Evenly divide image height by line count' },
+    { value: 'predict', label: 'Predict (Kraken)', description: 'Kraken segmentation for line boundaries' },
+  ];
+
   // Batch config — "dynamic" = size-based batching, "fixed" = user-specified batch size
   batchMode: 'dynamic' | 'fixed' = 'fixed';
   batchSize: number = 0;
@@ -227,7 +210,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     this.loadRecentJobs();
     this.loadOllamaModels();
     this.loadKrakenModels();
-    this.loadVllmModels();
     this.loadPrompts();
     this.loadCuredDatasets();
     this.loadUsage();
@@ -568,12 +550,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
         if (!cpuCategory) return;
 
-        // Base models already hardcoded (typewriter, base, cusas)
-        const hardcodedValues = new Set(cpuCategory.models.map(m => m.value));
+        const existingValues = new Set(cpuCategory.models.map(m => m.value));
 
         for (const model of response.models) {
-          // Add Kraken, Qwen LoRA, and TrOCR models that aren't already in the list
-          if ((model.value.startsWith('kraken:') || model.value.startsWith('qwen_lora:') || model.value.startsWith('trocr:')) && !hardcodedValues.has(model.value)) {
+          // Add trained Kraken, Qwen LoRA, and TrOCR models that aren't already in the list
+          if ((model.value.startsWith('kraken:') || model.value.startsWith('qwen_lora:') || model.value.startsWith('trocr:')) && !existingValues.has(model.value)) {
             let description = 'Trained Kraken model';
             if (model.value.startsWith('qwen_lora:')) description = 'Qwen QLoRA fine-tuned';
             else if (model.value.startsWith('trocr:')) description = 'TrOCR fine-tuned (line-level)';
@@ -591,38 +572,23 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   }
 
   private loadOllamaModels(): void {
-    this.curedService.getOllamaModels().subscribe({
-      next: (models) => {
-        const ollamaModelMap: { [key: string]: string } = {
-          'llama4_vision': 'x/llama4-maverick',
-          'qwen3_vl_32b': 'qwen3-vl:32b',
-          'qwen3_vl_8b': 'qwen3-vl:8b',
-          'qwen3_vl_4b': 'qwen3-vl:4b',
-          'mistral_small_vision': 'mistral-small3.1',
-          'llava_34b': 'llava:34b',
-        };
-        for (const [key, ollamaName] of Object.entries(ollamaModelMap)) {
-          this.modelAvailability[key] = models.some(m => m.includes(ollamaName));
-        }
-      },
-      error: () => {}
-    });
-  }
+    this.curedService.getRecommendedModels().subscribe({
+      next: (response) => {
+        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
+        if (!gpuCategory) return;
 
-  private loadVllmModels(): void {
-    this.batchService.getVllmStatus().subscribe({
-      next: (status: VllmStatus) => {
-        const vllmCategory = this.ocrModelCategories.find(c => c.name === 'vLLM');
-        if (!vllmCategory || !status.available) return;
-
-        vllmCategory.models = status.models.map(modelId => ({
-          value: `vllm:${modelId}`,
-          label: modelId,
-          description: 'vLLM server',
-        }));
-
-        for (const model of vllmCategory.models) {
-          this.modelAvailability[model.value] = true;
+        // Append installed Ollama models to existing entries (e.g. Nemotron)
+        const existingValues = new Set(gpuCategory.models.map(m => m.value));
+        for (const m of response.models) {
+          if (!m.installed) continue;
+          const value = m.id.replace(/[-:]/g, '_');
+          if (existingValues.has(value)) continue;
+          gpuCategory.models.push({
+            value,
+            label: m.name,
+            description: m.description,
+          });
+          this.modelAvailability[value] = true;
         }
       },
       error: () => {}
@@ -843,6 +809,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       batch_size: this.batchMode === 'dynamic' ? -1 : Math.max(1, this.batchSize || 1),
       correction_rules: this.correctionRules || undefined,
       image_scale: this.imageScale ?? undefined,
+      box_mode: this.boxMode || undefined,
     };
 
     this.batchService.startBatch(request).subscribe({
@@ -1158,6 +1125,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       batch_size: prevJob.batch_size != null ? prevJob.batch_size : 1,
       correction_rules: prevJob.correction_rules,
       image_scale: prevJob.image_scale ?? undefined,
+      box_mode: prevJob.box_mode || undefined,
       exclude_filenames: processedFilenames.length > 0 ? processedFilenames : undefined,
     };
 

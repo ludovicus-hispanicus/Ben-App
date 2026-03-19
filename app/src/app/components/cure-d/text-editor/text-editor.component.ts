@@ -873,24 +873,30 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
   /**
    * Check if a line is a section marker that resets numbering (@obverse, @reverse, etc.)
    */
-  private isSectionResetMarker(line: string): boolean {
+  // Sections that reset numbering when in 'reset' mode
+  private static readonly RESET_SECTIONS = ['obverse', 'reverse', 'left', 'right', 'seal'];
+  // Sections that always continue numbering (never reset)
+  private static readonly CONTINUE_SECTIONS = ['bottom', 'top', 'edge', 'column'];
+
+  /** Extract section name from a @ or $ line, returns null if not a section marker */
+  private getSectionName(line: string): string | null {
     const trimmed = line.trim().toLowerCase();
-    if (!trimmed.startsWith('@')) return false;
-    const sectionNames = ['obverse', 'reverse', 'left', 'right', 'top', 'bottom', 'edge', 'seal', 'column'];
-    const afterAt = trimmed.substring(1).trim();
-    return sectionNames.some(s => afterAt.startsWith(s));
+    if (!trimmed.startsWith('@') && !trimmed.startsWith('$')) return null;
+    const afterPrefix = trimmed.substring(1).trim();
+    const allSections = [...TextEditorComponent.RESET_SECTIONS, ...TextEditorComponent.CONTINUE_SECTIONS];
+    return allSections.find(s => afterPrefix.startsWith(s)) || null;
   }
 
-  /**
-   * Check if a line is a section marker that continues numbering ($obverse, $reverse, etc.)
-   */
+  /** Reset sections: obverse, reverse, left, right, seal — reset numbering in 'reset' mode */
+  private isSectionResetMarker(line: string): boolean {
+    const name = this.getSectionName(line);
+    return name !== null && TextEditorComponent.RESET_SECTIONS.includes(name);
+  }
+
+  /** Continue sections: bottom, top, edge, column — always continue numbering */
   private isSectionContinueMarker(line: string): boolean {
-    const trimmed = line.trim().toLowerCase();
-    if (!trimmed.startsWith('$')) return false;
-    // Only actual section names count, not state annotations like "$ traces", "$ broken", etc.
-    const sectionNames = ['obverse', 'reverse', 'left', 'right', 'top', 'bottom', 'edge', 'seal', 'column'];
-    const afterDollar = trimmed.substring(1).trim();
-    return sectionNames.some(s => afterDollar.startsWith(s));
+    const name = this.getSectionName(line);
+    return name !== null && TextEditorComponent.CONTINUE_SECTIONS.includes(name);
   }
 
   private getSectionSuffix(sectionIndex: number): string {
@@ -914,7 +920,7 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       const numbered = lines.map((line, idx) => {
         // Skip control lines (# @ & $) and empty lines
         if (this.isAtfControlLine(line)) {
-          // @ sections advance section; reset numbering only in 'reset' mode
+          // Reset sections (obverse, reverse, left, right, seal): advance section index + optionally reset numbering
           if (this.isSectionResetMarker(line)) {
             sectionIndex++;
             if (this.sectionNumbering === 'reset') {
@@ -922,10 +928,9 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
             }
             console.log(`[addLineNumbers] line ${idx}: RESET marker "${line.trim()}", sectionIndex=${sectionIndex}, mode=${this.sectionNumbering}`);
           }
-          // $ marker: lineNum continues, but advance section for style alternation
+          // Continue sections (bottom, top, edge, column): keep same sectionIndex and numbering
           if (this.isSectionContinueMarker(line)) {
-            sectionIndex++;
-            console.log(`[addLineNumbers] line ${idx}: CONTINUE marker "${line.trim()}", sectionIndex=${sectionIndex}`);
+            console.log(`[addLineNumbers] line ${idx}: CONTINUE marker "${line.trim()}", sectionIndex=${sectionIndex} (unchanged)`);
           }
           return line; // Keep as-is, don't number
         }
@@ -965,8 +970,9 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
               lineNum = this.startNumber || 1;
             }
           }
+          // Continue sections: keep same sectionIndex and numbering
           if (this.isSectionContinueMarker(l.letter)) {
-            sectionIndex++;
+            // no-op: inherit parent section's style and numbering
           }
           const letter = new Letter(l.letter);
           letter.index = new Index(i, 0);

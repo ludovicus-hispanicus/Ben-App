@@ -65,6 +65,7 @@ class TransliterationEdit(DbModel):
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
     training_targets: Optional[List[str]] = None  # legacy
+    guides: Optional[List[Dict]] = None  # bezier reading guide lines
 
     @property
     def is_curated(self) -> bool:

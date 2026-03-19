@@ -161,6 +161,7 @@
         <div class="text-search-box" *ngIf="curedTexts.length > 0">
           <mat-icon class="text-search-icon">search</mat-icon>
           <input [(ngModel)]="searchQuery"
+                 (ngModelChange)="textsPage = 0"
                  placeholder="Search texts (Enter for KWIC)..."
                  class="text-search-input"
                  (keyup.enter)="searchKwic()" />
@@ -277,7 +278,7 @@
 
         <!-- ===== GRID VIEW ===== -->
         <div class="text-grid" *ngIf="filteredTexts.length > 0 && textViewMode === 'grid' && !kwicSearchActive && !isSearchingKwic">
-          <div class="text-grid-card" *ngFor="let item of filteredTexts"
+          <div class="text-grid-card" *ngFor="let item of displayedTexts"
                [class.selected]="isTextSelected(item)"
                (click)="openListItem(item)"
                (contextmenu)="onTextContextMenu(item, $event)">
@@ -352,7 +353,7 @@
             </span>
             <span class="details-col-actions">Actions</span>
           </div>
-          <div class="details-row" *ngFor="let item of filteredTexts; let i = index"
+          <div class="details-row" *ngFor="let item of displayedTexts; let i = index"
                [class.selected]="isTextSelected(item)"
                (click)="toggleTextSelection(item, $event)"
                (dblclick)="openListItem(item)">
@@ -425,7 +426,7 @@
           </button>
           <span class="pagination-info">
             Page {{ textsPage + 1 }} of {{ textsTotalPages }}
-            <span class="pagination-range">({{ textsPage * textsPageSize + 1 }}–{{ textsPage * textsPageSize + curedTexts.length }})</span>
+            <span class="pagination-range">({{ textsPage * textsPageSize + 1 }}–{{ textsPage * textsPageSize + displayedTexts.length }})</span>
           </span>
           <button mat-icon-button [disabled]="textsPage >= textsTotalPages - 1" (click)="goToTextsPage(textsPage + 1)">
             <mat-icon>chevron_right</mat-icon>
@@ -540,6 +541,51 @@
 
     <div class="toolbar-divider"></div>
 
+    <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Guide"
+            (click)="activateGuideMode()"
+            [matMenuTriggerFor]="guideMenu"
+            matTooltip="Guide line (Alt+G)">
+      <mat-icon>straighten</mat-icon>
+    </button>
+    <mat-menu #guideMenu="matMenu" class="guide-dropdown">
+      <div class="guide-panel" (click)="$event.stopPropagation()">
+        <div class="guide-panel-row">
+          <label>Color</label>
+          <div class="guide-panel-colors">
+            <input type="color" class="guide-color-input"
+                   [value]="canvas?.guideHexColor || '#ffa500'"
+                   (input)="canvas?.onGuideColorInput($event)">
+            <button class="guide-swatch" *ngFor="let preset of guideColorPresets"
+                    [style.background-color]="preset.color"
+                    [class.active]="canvas?.guideColor === preset.color"
+                    (click)="canvas?.setSelectedGuideColor(preset.color)"
+                    [matTooltip]="preset.label">
+            </button>
+          </div>
+        </div>
+        <div class="guide-panel-row">
+          <label>Stroke</label>
+          <div class="guide-panel-field">
+            <input type="number" class="guide-num-input" min="1" max="12"
+                   [value]="canvas?.guideStrokeWidth || 3"
+                   (change)="onGuideStrokeChange($event)">
+            <span class="guide-unit">px</span>
+          </div>
+        </div>
+        <div class="guide-panel-row">
+          <label>Opacity</label>
+          <div class="guide-panel-field">
+            <input type="range" class="guide-range-input" min="10" max="100" step="5"
+                   [value]="guideOpacity"
+                   (input)="onGuideOpacityChange($event)">
+            <span class="guide-unit">{{ guideOpacity }}%</span>
+          </div>
+        </div>
+      </div>
+    </mat-menu>
+
+    <div class="toolbar-divider"></div>
+
     <button class="tool-btn" (click)="canvas?.zoomIn()" matTooltip="Zoom in">
       <mat-icon>zoom_in</mat-icon>
     </button>
@@ -549,6 +595,12 @@
     <button class="tool-btn" (click)="canvas?.forceZoomOut(1)" matTooltip="Reset zoom">
       <mat-icon>fit_screen</mat-icon>
     </button>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="tool-btn" (click)="canvas?.rotateImage()" matTooltip="Rotate 90°">
+      <mat-icon>rotate_right</mat-icon>
+    </button>
   </div>
 
   <!-- Split Panels -->
@@ -557,7 +609,9 @@
     <div class="panel panel-left" [style.width.%]="leftPanelWidth">
       <fabric-canvas #canvas (modeChange)="modeChanged($event)"
         [canvasType]="canvasType" (selectionChange)="boxSelectionChanged($event)"
-        (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)">
+        (boxAdded)="boxAdded($event)" (boxDeleted)="boxDeleted($event)"
+        (imageRotated)="onImageRotated($event)"
+        (guidesChanged)="onGuidesChanged($event)">
       </fabric-canvas>
     </div>
 
@@ -609,6 +663,7 @@
                         [class.selected]="selectedOcrModel === model.value"
                         [class.available]="isModelAvailable(model.value)"
                         [class.unavailable]="!isModelAvailable(model.value)"
+                        [class.trained]="model.trained"
                         (click)="selectOcrModel(model.value)"
                         [matTooltip]="getModelTooltip(model)">
                   {{ model.label }}
@@ -664,6 +719,20 @@
                       (click)="correctionRules = rule.value"
                       [matTooltip]="rule.description">
                 {{ rule.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Line Detection Mode -->
+          <div class="ocr-mode-section">
+            <h3>Line Detection</h3>
+            <div class="mode-buttons">
+              <button *ngFor="let opt of boxModeOptions"
+                      class="mode-btn"
+                      [class.selected]="boxMode === opt.value"
+                      (click)="boxMode = opt.value"
+                      [matTooltip]="opt.description">
+                {{ opt.label }}
               </button>
             </div>
           </div>

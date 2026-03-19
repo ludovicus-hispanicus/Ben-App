@@ -32,7 +32,8 @@ export class CuredService {
         prompt: string = 'dictionary',
         apiKey?: string,
         teiOptions?: { teiModel: string; teiProvider: string; teiApiKey?: string },
-        correctionRules?: string
+        correctionRules?: string,
+        boxMode?: string
     ) {
         const body: any = {
             "image": imageBase64,
@@ -51,6 +52,9 @@ export class CuredService {
         }
         if (correctionRules) {
             body.correctionRules = correctionRules;
+        }
+        if (boxMode) {
+            body.boxMode = boxMode;
         }
         return this.http.post<CuredResult>(`${environment.apiUrl}${this.baseUrl}/getTransliterations`, body);
     }
@@ -74,7 +78,7 @@ export class CuredService {
         return this.http.post<string>(`${environment.apiUrl}${this.baseUrl}${url}`, uploadData);
     }
 
-    createSubmission(textId: number, transliterationId: number, lines: string[], boxes: Dimensions[], imageName: string, isCuratedKraken: boolean = false, isCuratedVlm: boolean = false) {
+    createSubmission(textId: number, transliterationId: number, lines: string[], boxes: Dimensions[], imageName: string, isCuratedKraken: boolean = false, isCuratedVlm: boolean = false, guides: any[] = null) {
         const body: any = {
             "text_id": textId,
             "transliteration_id": transliterationId,
@@ -84,6 +88,9 @@ export class CuredService {
             "is_curated_kraken": isCuratedKraken,
             "is_curated_vlm": isCuratedVlm
         };
+        if (guides && guides.length) {
+            body.guides = guides;
+        }
         return this.http.post<number>(`${environment.apiUrl}${this.baseUrl}/createSubmission`, body);
     }
 
@@ -195,6 +202,10 @@ export class CuredService {
 
     getOllamaModels(): Observable<string[]> {
         return this.http.get<string[]>(`${environment.apiUrl}${this.baseUrl}/ollama/models`);
+    }
+
+    getRecommendedModels(): Observable<{ ollama_available: boolean; models: Array<{ id: string; name: string; description: string; size_gb: number; installed: boolean }> }> {
+        return this.http.get<any>(`${environment.apiUrl}${this.baseUrl}/ollama/recommended-models`);
     }
 
     // ==========================================

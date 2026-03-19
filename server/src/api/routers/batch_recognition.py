@@ -75,6 +75,21 @@ async def get_usage(days: int = 7):
     return usage_tracker.get_usage(days=days)
 
 
+@router.get("/usage/reset-hours")
+async def get_reset_hours():
+    """Get configured quota reset hours per provider."""
+    from services.usage_tracker import _load_reset_hours
+    return _load_reset_hours()
+
+
+@router.put("/usage/reset-hours/{provider}")
+async def set_reset_hour(provider: str, hour: int):
+    """Set the quota reset hour (0-23) for a provider prefix (e.g. 'gemini')."""
+    from services import usage_tracker
+    usage_tracker.set_reset_hour(provider, hour)
+    return {"provider": provider, "reset_hour": max(0, min(23, hour))}
+
+
 @router.get("/vllm-status")
 async def get_vllm_status():
     """Check if a vLLM server is reachable and list available models/adapters."""

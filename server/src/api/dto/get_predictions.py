@@ -29,6 +29,8 @@ class CureDGetTransliterationsDto(BaseModel):
     teiApiKey: Optional[str] = None      # API key for TEI encoding (if different from OCR provider)
     # Post-OCR correction rules applied before returning text (e.g. "akkadian")
     correctionRules: Optional[str] = None
+    # Line detection mode: "none", "estimate" (default), or "predict" (Kraken segmentation)
+    boxMode: Optional[str] = None
 
 
 

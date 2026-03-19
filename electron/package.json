@@ -8,7 +8,13 @@
     "package": "electron-forge package",
     "make": "electron-forge make"
   },
-  "keywords": ["dictionary", "curation", "ocr", "kraken", "vlm"],
+  "keywords": [
+    "dictionary",
+    "curation",
+    "ocr",
+    "kraken",
+    "vlm"
+  ],
   "author": "DigPasts",
   "license": "ISC",
   "devDependencies": {

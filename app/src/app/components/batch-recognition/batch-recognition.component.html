@@ -151,35 +151,6 @@
       </div>
     </div>
 
-    <!-- Batch Mode -->
-    <div class="config-section">
-      <label class="config-label">Images per Call</label>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <select [(ngModel)]="batchMode" class="batch-size-input" style="flex: 1;">
-          <option value="fixed">Fixed</option>
-          <option value="dynamic">Dynamic (by image size)</option>
-        </select>
-        <input *ngIf="batchMode === 'fixed'" type="number" [(ngModel)]="batchSize" min="0" class="batch-size-input" style="width: 70px;" placeholder="0">
-        <input *ngIf="batchMode === 'dynamic'" type="text" value="-" readonly class="batch-size-input" style="width: 70px; text-align: center; opacity: 0.5;">
-      </div>
-    </div>
-
-    <!-- Image Scale -->
-    <div class="config-section">
-      <label class="config-label">Image Resolution <span class="optional">(reduces tokens)</span></label>
-      <select [(ngModel)]="imageScale" class="batch-size-input">
-        <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">{{ opt.label }}</option>
-      </select>
-    </div>
-
-    <!-- Start Button -->
-    <button mat-raised-button color="primary" class="start-btn"
-            [disabled]="!canStart"
-            (click)="startBatch()">
-      <mat-icon>{{ isStarting ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
-      {{ isStarting ? 'Starting...' : 'Start Batch' }}
-    </button>
-
     <!-- Active Jobs Progress (supports multiple concurrent jobs) -->
     <ng-container *ngFor="let jobId of activeJobIds">
       <div class="progress-section" *ngIf="jobStatuses.get(jobId) as status"
@@ -357,6 +328,41 @@
       </div>
     </div>
 
+    <!-- Images per Call -->
+    <div class="config-section">
+      <div class="section-label">Images per Call</div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <select [(ngModel)]="batchMode" class="batch-size-input" style="flex: 1;">
+          <option value="fixed">Fixed</option>
+          <option value="dynamic">Dynamic (by image size)</option>
+        </select>
+        <input *ngIf="batchMode === 'fixed'" type="number" [(ngModel)]="batchSize" min="0" class="batch-size-input" style="width: 70px;" placeholder="0">
+        <input *ngIf="batchMode === 'dynamic'" type="text" value="-" readonly class="batch-size-input" style="width: 70px; text-align: center; opacity: 0.5;">
+      </div>
+    </div>
+
+    <!-- Image Resolution -->
+    <div class="config-section">
+      <div class="section-label">Image Resolution <span class="optional">(reduces tokens)</span></div>
+      <select [(ngModel)]="imageScale" class="batch-size-input">
+        <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <!-- Line Detection Mode -->
+    <div class="config-section">
+      <div class="section-label">Line Detection</div>
+      <div class="mode-buttons">
+        <button *ngFor="let opt of boxModeOptions"
+                class="mode-btn"
+                [class.selected]="boxMode === opt.value"
+                (click)="boxMode = opt.value"
+                [matTooltip]="opt.description">
+          {{ opt.label }}
+        </button>
+      </div>
+    </div>
+
     <!-- API Key Section -->
     <div class="api-key-section" *ngIf="requiresApiKey()">
       <mat-form-field appearance="outline" class="api-key-input">
@@ -377,6 +383,14 @@
         </mat-select>
       </mat-form-field>
     </div>
+    <!-- Start Button -->
+    <button mat-raised-button color="primary" class="start-btn"
+            [disabled]="!canStart"
+            (click)="startBatch()">
+      <mat-icon>{{ isStarting ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
+      {{ isStarting ? 'Starting...' : 'Start Batch' }}
+    </button>
+
     </div><!-- /settings tab -->
 
     <!-- ====== REPORT TAB ====== -->
@@ -407,6 +421,7 @@
             <tr><td>Batch Mode</td><td>{{ reportStatus.batch_size && reportStatus.batch_size < 0 ? 'Dynamic' : 'Fixed (' + (reportStatus.batch_size || 1) + ')' }}</td></tr>
             <tr *ngIf="reportStatus.image_scale"><td>Image Scale</td><td>{{ reportStatus.image_scale }}</td></tr>
             <tr *ngIf="reportStatus.correction_rules"><td>Corrections</td><td>{{ reportStatus.correction_rules }}</td></tr>
+            <tr><td>Line Boxes</td><td>{{ reportStatus.box_mode === 'none' ? 'None' : reportStatus.box_mode === 'predict' ? 'Predict (Kraken)' : 'Estimate' }}</td></tr>
             <tr *ngIf="reportStatus.created_at"><td>Started</td><td>{{ reportStatus.created_at | date:'short' }}</td></tr>
             <tr *ngIf="reportStatus.completed_at"><td>Completed</td><td>{{ reportStatus.completed_at | date:'short' }}</td></tr>
             <tr *ngIf="reportStatus.started_at && reportStatus.completed_at"><td>Duration</td><td>{{ getDuration(reportStatus.started_at, reportStatus.completed_at) }}</td></tr>
@@ -431,19 +446,19 @@
           <div class="report-section-label">Dynamic Batching</div>
           <table class="report-table report-table-full">
             <thead>
-              <tr><th>Category</th><th>Images</th><th>Batch Size</th><th>Chunks</th><th>Tiled</th><th>Inferences</th></tr>
+              <tr><th>Category</th><th>Images</th><th>Batch Size</th><th>Tiles</th><th>API Calls</th></tr>
             </thead>
             <tbody>
               <tr *ngFor="let cat of reportStatus.dynamic_report">
                 <td><span class="category-tag cat-{{ cat.category }}">{{ cat.category }}</span></td>
                 <td>{{ cat.image_count }}</td>
                 <td>{{ cat.batch_size }}</td>
-                <td>{{ cat.chunks }}</td>
                 <td>
-                  <span *ngIf="cat.tiled_count">{{ cat.tiled_count }} ({{ cat.total_tiles }} parts)</span>
+                  <span *ngIf="cat.tiled_count && cat.min_tiles">{{ cat.min_tiles === cat.max_tiles ? cat.min_tiles : cat.min_tiles + '-' + cat.max_tiles }} each</span>
+                  <span *ngIf="cat.tiled_count && !cat.min_tiles">{{ cat.tiled_count }} images</span>
                   <span *ngIf="!cat.tiled_count" class="report-muted">—</span>
                 </td>
-                <td>{{ cat.inferences || cat.chunks }}</td>
+                <td>{{ cat.api_calls || cat.inferences || cat.chunks }}</td>
               </tr>
             </tbody>
             <tfoot>
@@ -451,13 +466,8 @@
                 <td>Total</td>
                 <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'image_count') }}</td>
                 <td></td>
-                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
-                <td>
-                  <span *ngIf="getDynamicTotal(reportStatus.dynamic_report, 'tiled_count')">
-                    {{ getDynamicTotal(reportStatus.dynamic_report, 'tiled_count') }} ({{ getDynamicTotal(reportStatus.dynamic_report, 'total_tiles') }} parts)
-                  </span>
-                </td>
-                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'inferences') || getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
+                <td></td>
+                <td>{{ getDynamicTotal(reportStatus.dynamic_report, 'api_calls') || getDynamicTotal(reportStatus.dynamic_report, 'inferences') || getDynamicTotal(reportStatus.dynamic_report, 'chunks') }}</td>
               </tr>
             </tfoot>
           </table>

@@ -46,7 +46,7 @@ SIZE_CATEGORIES = [
     ("xxxl", 5000, None, 1),
 ]
 
-TILE_TARGET_HEIGHT = 2000  # px — target height for each tile when splitting tall images
+TILE_TARGET_HEIGHT = 3500  # px — target height for each tile when splitting tall images
 TILE_OVERLAP = 100         # px — overlap between tiles to avoid cutting text mid-line
 TILE_MERGE_MARKER = "************************"  # inserted at tile merge points for manual review
 
@@ -905,7 +905,7 @@ class BatchRecognitionHandler:
                                     full_img.close()
                                     retry_full = ocr_client.ocr_image(full_b64, fw, fh, prompt)
                                     text_lines = retry_full.get("lines", [])
-                                    boxes = retry_full.get("dimensions", [])
+                                    boxes = retry_full.get("dimensions", []) if box_mode != "none" else []
                                     text_lines = [line.replace("\n", "") for line in text_lines]
                                     if correction_rules == "akkadian":
                                         from utils.akkadian_ocr_corrections import correct_lines
@@ -919,8 +919,27 @@ class BatchRecognitionHandler:
                                 failed_results.append({"filename": filename, "error": "No text detected"})
                                 continue
 
+                        pub_id = f"{source_name}/{filename}"
+
+                        # Dedup: skip if a text with this publication_id already exists in the destination
+                        if dest_did:
+                            existing = global_new_text_handler._collection.find_many(
+                                find_filter={"dataset_id": int(dest_did), "publication_id": pub_id},
+                                limit=1,
+                            )
+                            if existing:
+                                logger.info(f"Batch job {job_id}: skipping {filename} — already exists in dataset {dest_did} (text_id={existing[0].get('text_id')})")
+                                processed += 1
+                                results.append({
+                                    "filename": filename,
+                                    "text_id": existing[0].get("text_id"),
+                                    "transliteration_id": None,
+                                    "lines_count": len(text_lines),
+                                })
+                                continue
+
                         identifiers = TextIdentifiersDto.from_values(
-                            publication=f"{source_name}/{filename}"
+                            publication=pub_id
                         )
                         text_id = global_new_text_handler.create_new_text(
                             identifiers=identifiers,
@@ -1084,25 +1103,31 @@ class BatchRecognitionHandler:
                 # Count tiled images and total tiles for this category
                 tiled_count = 0
                 total_tiles = 0
+                min_tiles_per_image = None
+                max_tiles_per_image = None
                 for fn in fnames:
                     h = image_heights.get(fn, 0)
                     if h > TILE_TARGET_HEIGHT:
                         n_tiles = max(2, math.ceil(h / TILE_TARGET_HEIGHT))
                         tiled_count += 1
                         total_tiles += n_tiles
-                # Inferences: non-tiled chunks + tile parts
-                inferences = (n_chunks - tiled_count) + total_tiles
+                        if min_tiles_per_image is None or n_tiles < min_tiles_per_image:
+                            min_tiles_per_image = n_tiles
+                        if max_tiles_per_image is None or n_tiles > max_tiles_per_image:
+                            max_tiles_per_image = n_tiles
+                # API calls: non-tiled chunks + tile parts
+                api_calls = (n_chunks - tiled_count) + total_tiles
                 entry = {
                     "category": cat,
                     "image_count": len(fnames),
                     "batch_size": bs,
-                    "chunks": n_chunks,
                     "tiled_count": tiled_count,
-                    "total_tiles": total_tiles,
-                    "inferences": inferences,
+                    "min_tiles": min_tiles_per_image,
+                    "max_tiles": max_tiles_per_image,
+                    "api_calls": api_calls,
                 }
                 category_report.append(entry)
-                logger.info(f"Batch job {job_id}: category '{cat}' → {len(fnames)} images, batch_size={bs}, {n_chunks} chunks, {tiled_count} tiled ({total_tiles} tiles), {inferences} inferences")
+                logger.info(f"Batch job {job_id}: category '{cat}' → {len(fnames)} images, batch_size={bs}, {n_chunks} chunks, {tiled_count} tiled ({total_tiles} tiles), {api_calls} API calls")
 
         # Store report in job status
         self._update_status(job_id, "running", dynamic_report=category_report)
@@ -1176,6 +1201,7 @@ class BatchRecognitionHandler:
             "export_images": job.get("export_images", False),
             "correction_rules": job.get("correction_rules"),
             "effective_model": job.get("effective_model"),
+            "box_mode": job.get("box_mode", "estimate"),
             "rate_limit_reached": job.get("rate_limit_reached", False),
             "rate_limit_reset": job.get("rate_limit_reset"),
         }

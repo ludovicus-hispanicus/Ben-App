@@ -797,7 +797,8 @@ class NewTextsHandler:
             is_fixed=dto.is_fixed,
             is_curated_kraken=dto.is_curated_kraken,
             is_curated_vlm=dto.is_curated_vlm,
-            training_targets=dto.training_targets
+            training_targets=dto.training_targets,
+            guides=getattr(dto, 'guides', None),
         )
         self.save_transliteration_edit(text_id=dto.text_id, transliteration_id=transliteration_id,
                                        transliteration_edit=transliteration_edit)

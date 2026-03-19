@@ -189,6 +189,22 @@ class CuredHandler:
                 import traceback
                 traceback.print_exc()
 
+        # Apply box mode override
+        box_mode = getattr(dto, 'boxMode', None) or 'estimate'
+        if box_mode == 'none':
+            boxes = []
+        elif box_mode == 'predict' and text_lines:
+            try:
+                from services.kraken_training_service import kraken_training_service
+                seg_boxes = kraken_training_service.segment_lines(image_base64)
+                if seg_boxes:
+                    boxes = seg_boxes
+                    logging.info(f"Kraken segmentation returned {len(boxes)} line boxes")
+            except Exception as e:
+                logging.warning(f"Kraken segmentation failed, falling back to estimate: {e}")
+        # 'estimate' is the default — uses whatever boxes the OCR model returned
+        # (which are typically evenly-divided estimates)
+
         return CuredResultDto(lines=text_lines, dimensions=boxes, validation_results=validation_results)
 
     @staticmethod

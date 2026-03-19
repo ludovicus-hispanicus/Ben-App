@@ -10,6 +10,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatSliderModule } from '@angular/material/slider';
 
 import { ProductionComponent } from './production.component';
 import { PdfUploaderModule } from '../cure-d/cured.module';
@@ -32,6 +34,8 @@ import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
         MatInputModule,
         MatProgressSpinnerModule,
         MatChipsModule,
+        MatMenuModule,
+        MatSliderModule,
         PdfUploaderModule,
         TextEditorModule,
         FabricCanvasModule

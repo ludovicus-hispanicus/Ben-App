@@ -294,6 +294,39 @@
                                 (click)="sourceCanvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan">
                             <mat-icon>pan_tool</mat-icon>
                         </button>
+                        <button class="tool-btn" [class.active]="sourceCanvas?.selectedMode === CanvasMode.Guide"
+                                (click)="activateGuideMode()"
+                                [matMenuTriggerFor]="guideMenu"
+                                matTooltip="Guide line (Alt+G)">
+                            <mat-icon>straighten</mat-icon>
+                        </button>
+                        <mat-menu #guideMenu="matMenu" class="guide-dropdown">
+                          <div class="guide-panel" (click)="$event.stopPropagation()">
+                            <div class="guide-panel-row">
+                              <label>Color</label>
+                              <div class="guide-panel-colors">
+                                <input type="color" class="guide-color-input"
+                                       [value]="sourceCanvas?.guideHexColor || '#ffa500'"
+                                       (input)="sourceCanvas?.onGuideColorInput($event)">
+                                <button class="guide-swatch" *ngFor="let preset of sourceCanvas?.guideLineService?.COLOR_PRESETS || []"
+                                        [style.background-color]="preset.color"
+                                        [class.active]="sourceCanvas?.guideColor === preset.color"
+                                        (click)="sourceCanvas?.setSelectedGuideColor(preset.color)"
+                                        [matTooltip]="preset.label">
+                                </button>
+                              </div>
+                            </div>
+                            <div class="guide-panel-row">
+                              <label>Stroke</label>
+                              <div class="guide-panel-field">
+                                <input type="number" class="guide-num-input" min="1" max="12"
+                                       [value]="sourceCanvas?.guideStrokeWidth || 3"
+                                       (change)="onGuideStrokeChange($event)">
+                                <span class="guide-unit">px</span>
+                              </div>
+                            </div>
+                          </div>
+                        </mat-menu>
 
                         <div class="toolbar-divider"></div>
 
@@ -313,12 +346,20 @@
                                 (click)="sourceCanvas?.toggleCrosshair()" matTooltip="Toggle crosshair">
                             <mat-icon>add</mat-icon>
                         </button>
+
+                        <div class="toolbar-divider"></div>
+
+                        <button class="tool-btn" (click)="sourceCanvas?.rotateImage()" matTooltip="Rotate 90°">
+                            <mat-icon>rotate_right</mat-icon>
+                        </button>
                     </div>
 
                     <div class="source-canvas-container">
                         <fabric-canvas #sourceCanvas
                             [canvasType]="canvasTypeViewOnly"
-                            [isLoading]="!sourceImageDataUrls.has(selectedSourceIndex)">
+                            [isLoading]="!sourceImageDataUrls.has(selectedSourceIndex)"
+                            (imageRotated)="onSourceImageRotated($event)"
+                            (guidesChanged)="onGuidesChanged($event)">
                         </fabric-canvas>
                         <div class="no-image" *ngIf="!sourceImageDataUrls.has(selectedSourceIndex) && !isLoading">
                             <mat-icon>image_not_supported</mat-icon>

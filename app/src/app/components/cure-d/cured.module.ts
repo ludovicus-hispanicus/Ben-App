@@ -22,6 +22,7 @@ import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { MatSelectModule } from "@angular/material/select";
+import { MatSliderModule } from "@angular/material/slider";
 import { ReactiveFormsModule } from "@angular/forms";
 import { MoveTextDialogComponent } from "../common/move-text-dialog/move-text-dialog.component";
 import { PartDialogComponent } from "../common/part-dialog/part-dialog.component";
@@ -52,6 +53,7 @@ import { PartDialogComponent } from "../common/part-dialog/part-dialog.component
         MatInputModule,
         MatAutocompleteModule,
         MatSelectModule,
+        MatSliderModule,
         KeyboardShortcutsModule.forRoot()
     ],
     declarations: [

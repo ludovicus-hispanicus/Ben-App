@@ -2382,3 +2382,86 @@ mark.search-highlight {
     background: rgba(0, 0, 0, 0.4);
     z-index: 1000;
 }
+
+// Guide line dropdown — Photoshop-style properties panel
+::ng-deep .guide-dropdown {
+    .guide-panel {
+        padding: 10px 14px;
+        min-width: 200px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 12px;
+
+        .guide-panel-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            &:last-child { margin-bottom: 0; }
+
+            > label {
+                color: #666;
+                font-size: 11px;
+                font-weight: 500;
+                min-width: 48px;
+            }
+        }
+
+        .guide-panel-colors {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            .guide-color-input {
+                width: 24px;
+                height: 24px;
+                padding: 0;
+                border: 1px solid #bbb;
+                border-radius: 3px;
+                background: none;
+                cursor: pointer;
+                &::-webkit-color-swatch-wrapper { padding: 1px; }
+                &::-webkit-color-swatch { border: none; border-radius: 2px; }
+            }
+
+            .guide-swatch {
+                width: 20px;
+                height: 20px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                cursor: pointer;
+                padding: 0;
+                transition: border-color 0.15s;
+                &:hover { border-color: #555; }
+                &.active { border-color: #333; box-shadow: inset 0 0 0 1px #fff; }
+            }
+        }
+
+        .guide-panel-field {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            .guide-num-input {
+                width: 48px;
+                height: 24px;
+                border: 1px solid #bbb;
+                border-radius: 3px;
+                padding: 0 4px;
+                font-size: 12px;
+                text-align: center;
+                background: #fafafa;
+                outline: none;
+                &:focus { border-color: #2196F3; }
+                &::-webkit-inner-spin-button,
+                &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+                -moz-appearance: textfield;
+            }
+
+            .guide-unit {
+                color: #999;
+                font-size: 10px;
+                min-width: 24px;
+            }
+        }
+    }
+}

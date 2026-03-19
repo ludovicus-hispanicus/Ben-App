@@ -390,11 +390,13 @@
 // ============== Start Button ==============
 
 .start-btn {
-  width: 100%;
+  width: auto;
   margin-top: 8px;
   margin-bottom: 16px;
-  font-size: 14px;
-  padding: 8px 0;
+  font-size: 12px;
+  padding: 4px 16px;
+  min-height: 32px;
+  line-height: 32px;
 }
 
 // ============== Progress Section ==============
