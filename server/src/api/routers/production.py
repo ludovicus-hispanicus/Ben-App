@@ -14,7 +14,9 @@ from pydantic import BaseModel
 
 from entities.production_text import IdentifierType, SourceTextReference, UploadedImage
 from handlers.production_texts_handler import production_texts_handler
-from common.global_handlers import global_new_text_handler
+from handlers.lemmatization_handler import lemmatization_handler
+from common.global_handlers import global_new_text_handler, global_datasets_handler
+from services.oracc_atf_import_service import oracc_import_service
 import logging
 
 
@@ -57,6 +59,12 @@ class SourceTextInfo(BaseModel):
     image_name: str
 
 
+class ImportOraccAtfDto(BaseModel):
+    atf_text: str
+    identifier_override: Optional[str] = None  # Override auto-detected identifier
+    identifier_type_override: Optional[str] = None  # Override auto-detected type
+
+
 # ==========================================
 # Endpoints
 # ==========================================
@@ -71,6 +79,14 @@ async def get_grouped_training_data():
 
     # Get all texts from training data (no limit — production needs the full catalog)
     texts = global_new_text_handler.list_texts(limit=0)
+
+    # Production is opt-in at the dataset (folder) level: only include texts whose
+    # dataset is flagged for_production. Texts without a dataset are excluded.
+    production_dataset_ids = {
+        d.dataset_id for d in global_datasets_handler.list_datasets(parent_id=None)
+        if getattr(d, 'for_production', False)
+    }
+    texts = [t for t in texts if t.dataset_id is not None and t.dataset_id in production_dataset_ids]
 
     # Group by museum_id, p_number, and publication_id
     grouped = {}
@@ -128,6 +144,30 @@ async def get_grouped_training_data():
                 group["production_id"] = prod_text.production_id
                 group["is_exported"] = getattr(prod_text, 'is_exported', False)
 
+    # Include standalone production texts (e.g. imported ORACC texts with no training sources)
+    for pt in all_prod_texts:
+        key = pt.identifier
+        if key not in grouped:
+            content_lines = len(pt.content.split('\n')) if pt.content else 0
+            grouped[key] = {
+                "identifier": key,
+                "identifier_type": pt.identifier_type,
+                "parts": [{
+                    "text_id": -1,
+                    "part": "",
+                    "transliteration_id": -1,
+                    "is_curated": False,
+                    "lines_count": content_lines,
+                    "last_modified": pt.last_modified,
+                    "labels": ["imported"],
+                    "label": "imported",
+                    "dataset_id": None
+                }],
+                "has_production_text": True,
+                "production_id": pt.production_id,
+                "is_exported": getattr(pt, 'is_exported', False)
+            }
+
     # Sort parts within each group by part number
     for group in grouped.values():
         group["parts"].sort(key=lambda x: x.get("part", ""))
@@ -172,6 +212,10 @@ async def get_production_sources(production_id: int):
         raise HTTPException(status_code=404, detail="Production text not found")
 
     logging.info(f"Loading sources for production {production_id}, {len(prod_text.source_texts)} source refs")
+
+    # Fast path: imported texts with no training sources — skip the expensive full scan
+    if not prod_text.source_texts:
+        return {"sources": [], "translations": []}
 
     # Get current source text_ids for reference
     current_text_ids = {ref.text_id for ref in prod_text.source_texts}
@@ -266,6 +310,20 @@ async def get_production_sources(production_id: int):
     sources.sort(key=lambda x: x.get("part", ""))
     translations.sort(key=lambda x: x.get("part", ""))
 
+    # Seed synced_translation_ids for existing production texts that don't have it yet.
+    # Only seed translations whose content is already present in the saved translation_content.
+    if translations and not prod_text.synced_translation_ids and prod_text.translation_content:
+        saved_content = prod_text.translation_content
+        seeded_ids = []
+        for t in translations:
+            # Check if at least the first line of this translation appears in the saved content
+            first_line = next((l for l in t.get("lines", []) if l.strip()), None)
+            if first_line and first_line.strip() in saved_content:
+                seeded_ids.append(t["text_id"])
+        if seeded_ids:
+            production_texts_handler.update_field(production_id, "synced_translation_ids", seeded_ids)
+            logging.info(f"Seeded synced_translation_ids for production {production_id}: {seeded_ids}")
+
     logging.info(f"Returning {len(sources)} sources and {len(translations)} translations")
     return {
         "sources": sources,
@@ -341,6 +399,79 @@ async def create_production_text(request: Request, dto: CreateProductionTextDto)
     )
 
     return prod_text
+
+
+@router.post("/import-oracc")
+async def import_oracc_atf(request: Request, dto: ImportOraccAtfDto):
+    """
+    Import an ORACC-style ATF text.
+
+    Parses the ATF to extract transliteration, translation, and lemmatization,
+    then creates a ProductionText and seeds TextLemmatization.
+    """
+    user_id = request.state.user_id
+
+    # Parse ORACC ATF
+    parsed = oracc_import_service.parse(dto.atf_text)
+
+    # Use overrides if provided
+    identifier = dto.identifier_override or parsed["identifier"]
+    id_type_str = dto.identifier_type_override or parsed["identifier_type"]
+
+    if not identifier:
+        raise HTTPException(status_code=400, detail="No identifier found in ATF header. Provide identifier_override.")
+
+    # Validate identifier type
+    try:
+        id_type = IdentifierType(id_type_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid identifier type: {id_type_str}")
+
+    # Check if production text already exists
+    existing = production_texts_handler.get_by_identifier(identifier, id_type)
+    if existing:
+        raise HTTPException(status_code=409, detail="Production text already exists for this identifier")
+
+    # Create the production text with transliteration and translation
+    prod_text = production_texts_handler.create(
+        identifier=identifier,
+        identifier_type=id_type,
+        source_texts=[],  # No source training data — imported directly
+        uploader_id=user_id,
+        initial_content=parsed["transliteration"]
+    )
+
+    # Store translation if present
+    if parsed["translation"]:
+        production_texts_handler.update_content(
+            production_id=prod_text.production_id,
+            content=parsed["transliteration"],
+            translation_content=parsed["translation"],
+            user_id=user_id
+        )
+
+    # Seed lemmatization from #lem lines (resolve to eBL IDs via dictionary)
+    lem_result = None
+    if parsed["lemmatization_lines"]:
+        text_lem = oracc_import_service.build_lemmatization(
+            production_id=prod_text.production_id,
+            transliteration=parsed["transliteration"],
+            lem_data=parsed["lemmatization_lines"],
+            dictionary=lemmatization_handler._dictionary
+        )
+        if text_lem:
+            lem_result = lemmatization_handler.save_lemmatization(text_lem)
+            logging.info(f"Seeded lemmatization for production {prod_text.production_id}: {len(text_lem.lines)} lines")
+
+    return {
+        "production_id": prod_text.production_id,
+        "identifier": identifier,
+        "identifier_type": id_type_str,
+        "transliteration_lines": len(parsed["transliteration"].split('\n')),
+        "translation_lines": len(parsed["translation"].split('\n')) if parsed["translation"] else 0,
+        "lemmatization_lines": len(lem_result.lines) if lem_result else 0,
+        "metadata": parsed["metadata"]
+    }
 
 
 @router.put("/text/{production_id}")
@@ -475,6 +606,79 @@ async def sync_production_sources(production_id: int):
         "success": True,
         "added_count": len(new_source_refs),
         "total_sources": len(updated_prod_text.source_texts) if updated_prod_text else 0
+    }
+
+
+@router.post("/text/{production_id}/sync-translations")
+async def sync_translations(production_id: int):
+    """
+    Find new translations not yet synced for this production text.
+    Returns only translations whose text_id is not in synced_translation_ids.
+    Updates synced_translation_ids with the new text_ids.
+    """
+    prod_text = production_texts_handler.get_by_id(production_id)
+    if not prod_text:
+        raise HTTPException(status_code=404, detail="Production text not found")
+
+    # Get all matching texts (same logic as get_production_sources)
+    all_texts = global_new_text_handler.list_texts(limit=0)
+    identifier = prod_text.identifier
+
+    already_synced = set(prod_text.synced_translation_ids)
+    new_translations = []
+
+    for text in all_texts:
+        identifiers = text.text_identifiers
+        museum_val = identifiers.museum.get_value() if identifiers.museum else None
+        p_number_val = identifiers.p_number.get_value() if identifiers.p_number else None
+        pub_val = identifiers.publication.get_value() if identifiers.publication else None
+
+        matches = (
+            (museum_val and museum_val == identifier) or
+            (p_number_val and p_number_val == identifier) or
+            (pub_val and pub_val == identifier)
+        )
+
+        if not matches:
+            continue
+
+        label = text.label or ""
+        if label != "translation":
+            continue
+
+        if text.text_id in already_synced:
+            continue
+
+        # New translation — fetch content
+        full_text = global_new_text_handler.get_by_text_id(text.text_id)
+        if not full_text or not full_text.transliterations:
+            continue
+
+        cured_trans = [t for t in full_text.transliterations if t.source == "cured"]
+        trans = cured_trans[-1] if cured_trans else full_text.transliterations[-1]
+        if not trans.edit_history:
+            continue
+
+        latest_edit = trans.edit_history[-1]
+        new_translations.append({
+            "text_id": text.text_id,
+            "transliteration_id": trans.transliteration_id,
+            "part": text.part or "",
+            "lines": latest_edit.lines,
+            "label": label,
+        })
+
+    # Update synced_translation_ids with all new text_ids
+    if new_translations:
+        new_ids = [t["text_id"] for t in new_translations]
+        updated_ids = list(already_synced | set(new_ids))
+        production_texts_handler.update_field(production_id, "synced_translation_ids", updated_ids)
+        logging.info(f"Synced {len(new_translations)} new translations for production {production_id}")
+
+    return {
+        "new_translations": new_translations,
+        "new_count": len(new_translations),
+        "total_synced": len(already_synced) + len(new_translations),
     }
 
 

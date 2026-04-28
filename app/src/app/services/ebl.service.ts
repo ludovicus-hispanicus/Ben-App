@@ -141,11 +141,12 @@ export class EblService {
     /**
      * Export transliteration to eBL
      */
-    exportToEbl(fragmentNumber: string, atfText: string, notes?: string): Observable<ExportResult> {
+    exportToEbl(fragmentNumber: string, atfText: string, notes?: string, skipValidation?: boolean): Observable<ExportResult> {
         return this.http.post<ExportResult>(`${this.baseUrl}/ebl/export`, {
             fragment_number: fragmentNumber,
             atf_text: atfText,
-            notes: notes
+            notes: notes,
+            skip_validation: skipValidation || false
         });
     }
 

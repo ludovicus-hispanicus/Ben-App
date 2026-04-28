@@ -513,7 +513,7 @@
           <h4>Classes</h4>
           <div class="class-chips">
             <span class="class-chip" *ngFor="let cls of selectedModel.classes"
-                  [style.background-color]="classColors[cls.name] || '#888'">
+                  [style.background-color]="cls.color || classColors[cls.name] || '#888'">
               {{ cls.name }}
             </span>
           </div>

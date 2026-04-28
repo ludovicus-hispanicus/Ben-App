@@ -1,0 +1,671 @@
+.lemmatization-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fafafa;
+    color: #333;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+}
+
+// ── Toolbar ──
+
+.lemma-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: #f0f0f0;
+    border-bottom: 1px solid #ddd;
+    flex-shrink: 0;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lemma-stats {
+    font-size: 12px;
+    color: #777;
+}
+
+.sync-warning {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #d68000;
+
+    .warning-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+    }
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #444;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s;
+
+    mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+    }
+
+    &:hover:not(:disabled) {
+        background: #e8e8e8;
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    &.danger:hover:not(:disabled) {
+        background: #fde8e8;
+        color: #c33;
+    }
+
+    &.small {
+        padding: 2px 8px;
+        font-size: 11px;
+    }
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+// ── Dictionary banner ──
+
+.dict-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #eef0ff;
+    border-bottom: 1px solid #ccd;
+    font-size: 12px;
+    color: #556;
+
+    mat-icon {
+        font-size: 18px;
+        color: #44f;
+    }
+}
+
+// ── Notification ──
+
+.notification {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid #ddd;
+
+    &.success { background: #e8f5e9; color: #2e7d32; }
+    &.error { background: #fde8e8; color: #c62828; }
+    &.info { background: #e3f2fd; color: #1565c0; }
+}
+
+// ── Loading ──
+
+.loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    color: #888;
+}
+
+// ── Token lines ──
+
+.lemma-lines {
+    overflow-y: auto;
+    padding: 8px 0;
+    max-height: calc(100vh - 180px);
+}
+
+.lemma-line {
+    display: flex;
+    align-items: flex-start;
+    padding: 4px 12px;
+    min-height: 28px;
+
+    &:hover {
+        background: rgba(0, 0, 0, 0.02);
+    }
+
+    &.meta {
+        .meta-text {
+            color: #999;
+            font-style: italic;
+            padding: 2px 0;
+        }
+    }
+}
+
+.line-number {
+    min-width: 40px;
+    color: #999;
+    font-size: 12px;
+    padding-top: 4px;
+    flex-shrink: 0;
+}
+
+.token-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.token-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+
+    .token-text {
+        font-size: 13px;
+    }
+
+    .token-lemma {
+        font-size: 10px;
+        color: #888;
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &.assigned {
+        background: #e8f5e9;
+        border-color: #a5d6a7;
+
+        .token-text { color: #2e7d32; }
+    }
+
+    &.suggestion {
+        background: #e3f2fd;
+        border-color: #90caf9;
+
+        .token-text { color: #1565c0; }
+        .token-lemma { color: #1976d2; }
+    }
+
+    &.ambiguous {
+        background: #fff8e1;
+        border-color: #ffe082;
+
+        .token-text { color: #f57f17; }
+    }
+
+    &.atf_suggestion {
+        background: #f3e5f5;
+        border-color: #ce93d8;
+        border-style: dashed;
+
+        .token-text { color: #7b1fa2; }
+        .token-lemma { color: #9c27b0; font-style: italic; }
+    }
+
+    &.unmatched {
+        background: #fde8e8;
+        border-color: #ef9a9a;
+
+        .token-text { color: #c62828; }
+    }
+
+    &.skip {
+        background: transparent;
+        cursor: default;
+
+        .token-text { color: #bbb; }
+    }
+
+    &.selected {
+        border-color: #1976d2;
+        box-shadow: 0 0 0 1px #1976d2;
+    }
+
+    &:hover:not(.skip) {
+        border-color: #999;
+    }
+}
+
+// ── Empty state ──
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #999;
+
+    mat-icon {
+        font-size: 48px;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+    }
+
+    p {
+        max-width: 300px;
+        text-align: center;
+    }
+}
+
+// ── Token popup ──
+
+.token-popup {
+    position: fixed;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    min-width: 280px;
+    max-width: 400px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    background: #f5f5f5;
+    border-radius: 6px 6px 0 0;
+
+    .popup-token {
+        font-weight: bold;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .popup-cleaned {
+        color: #888;
+        font-size: 12px;
+    }
+
+    .popup-complex {
+        font-size: 11px;
+        color: #e65100;
+        background: rgba(230, 81, 0, 0.08);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .popup-enclitic {
+        font-size: 11px;
+        color: #6a1b9a;
+        background: rgba(106, 27, 154, 0.08);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .popup-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        padding: 2px;
+
+        mat-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+        }
+
+        &:hover { color: #333; }
+    }
+}
+
+.popup-section {
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.popup-label {
+    padding: 2px 12px;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    &.no-match {
+        color: #c62828;
+    }
+}
+
+.current-lemmas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 12px;
+
+    .assigned-lemma {
+        background: #e8f5e9;
+        border: 1px solid #a5d6a7;
+        color: #2e7d32;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+}
+
+// ATF import suggestion section
+.atf-suggestion-section {
+    background: #faf4fc;
+
+    .atf-import-badge {
+        display: inline-block;
+        background: #9c27b0;
+        color: #fff;
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-right: 4px;
+        vertical-align: middle;
+    }
+}
+
+.atf-suggestion-content {
+    padding: 4px 12px;
+}
+
+.atf-suggestion-row {
+    font-size: 12px;
+    padding: 2px 0;
+
+    &.akkadian {
+        font-style: italic;
+        color: #666;
+    }
+
+    .atf-english {
+        color: #7b1fa2;
+        font-weight: 600;
+    }
+
+    .atf-pos {
+        color: #999;
+        font-size: 11px;
+        margin-left: 4px;
+    }
+
+    .atf-citation {
+        color: #555;
+    }
+
+    .atf-resolved {
+        background: #f3e5f5;
+        border: 1px dashed #ce93d8;
+        padding: 2px 8px;
+        border-radius: 3px;
+        color: #7b1fa2;
+    }
+}
+
+.atf-suggestion-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+
+    button {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px solid;
+
+        mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    }
+
+    .atf-accept-btn {
+        background: #e8f5e9;
+        border-color: #a5d6a7;
+        color: #2e7d32;
+
+        &:hover { background: #c8e6c9; }
+    }
+
+    .atf-reject-btn {
+        background: #fde8e8;
+        border-color: #ef9a9a;
+        color: #c62828;
+
+        &:hover { background: #ffcdd2; }
+    }
+}
+
+// Morphological analysis
+.morph-section {
+    .morph-entry {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 12px;
+        font-size: 12px;
+        color: #555;
+    }
+
+    .morph-stem {
+        font-weight: 600;
+        color: #1565c0;
+        min-width: 28px;
+    }
+
+    .morph-tense {
+        color: #333;
+    }
+
+    .morph-person {
+        color: #888;
+        font-size: 11px;
+    }
+}
+
+.candidate-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+
+    &:hover {
+        background: #f0f4ff;
+    }
+
+    .candidate-id {
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+    }
+
+    .candidate-pos {
+        color: #1976d2;
+        font-size: 11px;
+    }
+
+    .candidate-morph {
+        color: #6a1b9a;
+        font-size: 11px;
+        background: rgba(106, 27, 154, 0.06);
+        padding: 1px 5px;
+        border-radius: 3px;
+    }
+
+    .candidate-meaning {
+        color: #2e7d32;
+        font-size: 12px;
+        font-style: italic;
+    }
+}
+
+.suffix-section {
+    .suffix-current {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+
+        .suffix-lemma-badge {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            color: #1565c0;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .suffix-info {
+            color: #888;
+            font-size: 12px;
+            font-style: italic;
+        }
+    }
+
+    .suffix-alternatives {
+        .suffix-alt {
+            padding-left: 20px;
+            font-size: 12px;
+            opacity: 0.7;
+
+            &:hover {
+                opacity: 1;
+            }
+        }
+    }
+}
+
+.suffix-add-section {
+    .suffix-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px 12px;
+    }
+
+    .suffix-option-btn {
+        display: inline-block;
+        border: 1px solid #ccc;
+        background: white;
+        border-radius: 3px;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.15s;
+        user-select: none;
+
+        &:hover {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+    }
+}
+
+.search-section {
+    padding: 8px 12px;
+}
+
+.search-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.search-input {
+    flex: 1;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    color: #333;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+
+    &:focus {
+        border-color: #1976d2;
+    }
+}
+
+.search-btn {
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    color: #666;
+    cursor: pointer;
+    padding: 2px 6px;
+
+    mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+    }
+
+    &:hover { background: #e8e8e8; }
+}
+
+.popup-footer {
+    padding: 6px 12px;
+    border-top: 1px solid #eee;
+}
+
+.popup-action {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 0;
+
+    mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+    }
+
+    &:hover { color: #c62828; }
+}

@@ -69,6 +69,7 @@ a = Analysis(
         'aiofiles',
         'httpx',
         'dotenv',
+        'email_validator',  # lazy-imported by pydantic for EmailStr
         'encodings',
         'encodings.utf_8',
         'encodings.ascii',
@@ -80,12 +81,33 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Exclude heavy optional deps that are only for cloud/local VLM
-        # Uncomment these to create a smaller build without local VLM support:
-        # 'transformers',
-        # 'bitsandbytes',
-        # 'accelerate',
-        # 'open_clip_torch',
+        # Local VLM stack — not used in baseline (CuReD + Library + Settings).
+        # Future training module will ship these in its own bundle.
+        'transformers',
+        'bitsandbytes',
+        'accelerate',
+        'open_clip_torch',
+        'datasets',
+        # NLP — pulled in by hooks but never imported by src/
+        'spacy',
+        'thinc',
+        'blis',
+        # ML training frameworks — training module only
+        'tensorflow',
+        'lightning',
+        'pytorch_lightning',
+        'onnxruntime',
+        # Numba/triton — torch transitively, never used directly
+        'numba',
+        'llvmlite',
+        'triton',
+        # Heavy optional deps from various hooks
+        'pyarrow',
+        'shapely',
+        'pywt',
+        'imageio',
+        'cloudpickle',
+        'dask',
     ],
     noarchive=False,
 )

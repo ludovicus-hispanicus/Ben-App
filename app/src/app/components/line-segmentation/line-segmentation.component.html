@@ -1,0 +1,268 @@
+<div class="segmentation-container">
+  <!-- Left Toolbar -->
+  <div class="side-toolbar">
+    <button mat-icon-button (click)="goBack()" matTooltip="Back" matTooltipPosition="right">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="triggerFileInput()" matTooltip="Load Image/PDF" matTooltipPosition="right">
+      <mat-icon>upload</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <!-- Image type toggle -->
+    <button mat-icon-button
+            *ngIf="currentTablet?.has_lineart && currentTablet?.has_photo"
+            (click)="toggleImageType()"
+            [matTooltip]="showingLineart ? 'Switch to Photo' : 'Switch to Lineart'"
+            matTooltipPosition="right">
+      <mat-icon>{{ showingLineart ? 'photo' : 'draw' }}</mat-icon>
+    </button>
+
+    <span class="toolbar-divider" *ngIf="currentTablet?.has_lineart && currentTablet?.has_photo"></span>
+
+    <!-- Optional: split a composite image into obverse + reverse crops -->
+    <button mat-icon-button
+            *ngIf="imageLoaded"
+            (click)="destitchCurrentImage()"
+            [disabled]="isDestitching"
+            [class.active]="hasDestitchedViews"
+            [matTooltip]="isDestitching ? 'Destitching…' :
+                         (hasDestitchedViews ? 'Re-run destitch' : 'Destitch (split into obverse / reverse)')"
+            matTooltipPosition="right">
+      <mat-icon>{{ isDestitching ? 'hourglass_empty' : 'grid_view' }}</mat-icon>
+    </button>
+
+    <span class="toolbar-divider" *ngIf="imageLoaded"></span>
+
+    <button mat-icon-button
+            (click)="toggleDrawMode()"
+            [class.active]="drawModeActive"
+            matTooltip="Highlighter (D, or hold Shift)" matTooltipPosition="right">
+      <mat-icon>gesture</mat-icon>
+    </button>
+    <button mat-icon-button
+            (click)="togglePanMode()"
+            [class.active]="panModeActive"
+            matTooltip="Pan Mode (default)" matTooltipPosition="right">
+      <mat-icon>pan_tool</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="zoomOut()" matTooltip="Zoom Out (-)" matTooltipPosition="right">
+      <mat-icon>zoom_out</mat-icon>
+    </button>
+    <span class="zoom-level">{{ (zoomLevel * 100) | number:'1.0-0' }}%</span>
+    <button mat-icon-button (click)="zoomIn()" matTooltip="Zoom In (+)" matTooltipPosition="right">
+      <mat-icon>zoom_in</mat-icon>
+    </button>
+    <button mat-icon-button (click)="resetZoom()" matTooltip="Reset Zoom (0)" matTooltipPosition="right">
+      <mat-icon>fit_screen</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <div class="stroke-height-control"
+         matTooltip="Stroke height: {{ strokeHeight }}px (also: Ctrl+Wheel)"
+         matTooltipPosition="right"
+         [matMenuTriggerFor]="strokeSliderMenu">
+      <mat-icon>height</mat-icon>
+      <button mat-icon-button class="stroke-step-btn" (click)="increaseStrokeHeight(); $event.stopPropagation()"
+              [disabled]="!canIncreaseStroke" matTooltip="Increase (+)" matTooltipPosition="right">
+        <mat-icon>add</mat-icon>
+      </button>
+      <span class="stroke-height-value">{{ strokeHeight }}</span>
+      <button mat-icon-button class="stroke-step-btn" (click)="decreaseStrokeHeight(); $event.stopPropagation()"
+              [disabled]="!canDecreaseStroke" matTooltip="Decrease (−)" matTooltipPosition="right">
+        <mat-icon>remove</mat-icon>
+      </button>
+    </div>
+    <mat-menu #strokeSliderMenu="matMenu" class="stroke-slider-menu">
+      <div class="stroke-slider-panel" (click)="$event.stopPropagation()">
+        <label>Highlighter height: <strong>{{ strokeHeight }} px</strong></label>
+        <input type="range"
+               [min]="strokeHeightMin" [max]="strokeHeightMax" step="2"
+               [value]="strokeHeight"
+               (input)="setStrokeHeight($any($event.target).value)" />
+        <div class="stroke-slider-bounds">
+          <span>{{ strokeHeightMin }}</span>
+          <span>{{ strokeHeightMax }}</span>
+        </div>
+      </div>
+    </mat-menu>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="undoLastLine()" [disabled]="lineAnnotations.length === 0" matTooltip="Undo (Ctrl+Z)" matTooltipPosition="right">
+      <mat-icon>undo</mat-icon>
+    </button>
+    <button mat-icon-button (click)="deleteSelected()" [disabled]="selectedLineIndex === -1" matTooltip="Delete Selected (Del)" matTooltipPosition="right">
+      <mat-icon>delete</mat-icon>
+    </button>
+    <button mat-icon-button (click)="clearAllLines()" [disabled]="lineAnnotations.length === 0" matTooltip="Clear All" matTooltipPosition="right">
+      <mat-icon>clear_all</mat-icon>
+    </button>
+
+    <span class="toolbar-spacer"></span>
+
+    <div class="toolbar-info" *ngIf="lineAnnotations.length > 0">
+      <span class="toolbar-info-text" matTooltip="Lines annotated" matTooltipPosition="right">{{ lineAnnotations.length }}</span>
+    </div>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button (click)="saveAnnotations()" [disabled]="isLoading || lineAnnotations.length === 0"
+            matTooltip="Save" matTooltipPosition="right" class="save-btn">
+      <mat-icon>save</mat-icon>
+    </button>
+  </div>
+
+  <!-- Main Content: Split Panels -->
+  <div class="main-content">
+    <!-- Tablet info bar -->
+    <div class="tablet-info-bar" *ngIf="currentTablet">
+      <span class="tablet-designation">{{ currentTablet.designation }}</span>
+      <span class="tablet-meta">{{ currentTablet.period }}</span>
+      <span class="tablet-meta">{{ currentTablet.genre }}</span>
+      <span class="tablet-meta image-type-badge">{{ showingLineart ? 'Lineart' : 'Photo' }}</span>
+      <span class="tablet-meta line-count-badge" *ngIf="lineAnnotations.length > 0">{{ lineAnnotations.length }} lines annotated</span>
+
+      <!-- Destitched-view selector — only shown after the user runs the destitcher -->
+      <div class="view-selector" *ngIf="hasDestitchedViews">
+        <button [class.active]="currentView === 'original'" (click)="selectDestitchView('original')">Original</button>
+        <button *ngIf="destitchedViews.obverse"
+                [class.active]="currentView === 'obverse'"
+                (click)="selectDestitchView('obverse')">Obverse</button>
+        <button *ngIf="destitchedViews.reverse"
+                [class.active]="currentView === 'reverse'"
+                (click)="selectDestitchView('reverse')">Reverse</button>
+        <button class="view-clear" (click)="clearDestitch()" matTooltip="Discard destitched crops">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <span class="tablet-meta destitch-error" *ngIf="destitchError">{{ destitchError }}</span>
+    </div>
+
+    <!-- Split Container (CuReD-style resizable) -->
+    <div class="split-container" #splitContainer>
+      <!-- Left Panel: Canvas with highlighter -->
+      <div class="panel panel-left" [style.width.%]="leftPanelWidth">
+        <input #fileInput type="file" accept=".png,.jpg,.jpeg,image/*" (change)="onFileSelected($event)" hidden>
+
+        <div class="canvas-wrapper" #canvasContainer>
+          <canvas #segCanvas></canvas>
+
+          <div class="empty-state" *ngIf="!imageLoaded">
+            <mat-icon>image</mat-icon>
+            <p>Select a tablet from the browser or load an image</p>
+            <button mat-raised-button (click)="triggerFileInput()">
+              <mat-icon>upload</mat-icon> Load Image
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resizer (CuReD-style draggable divider) -->
+      <div class="panel-resizer"
+           (mousedown)="startResize($event)"
+           (touchstart)="startResize($event)">
+        <div class="resizer-handle"></div>
+      </div>
+
+      <!-- Right Panel: ACE Text Editor -->
+      <div class="panel panel-right" [style.width.%]="100 - leftPanelWidth">
+        <text-editor
+          [plainTextMode]="true"
+          [initialText]="editorText"
+          [canEdit]="true"
+          [disableNormalization]="true"
+          [hideValidationHeader]="true"
+          (textContentChanged)="onEditorTextChanged($event)">
+        </text-editor>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel - Tablet Browser -->
+  <div class="right-panel" [class.collapsed]="rightPanelCollapsed">
+    <div class="panel-header">
+      <h3 *ngIf="!rightPanelCollapsed">
+        {{ rightPanelTab === 'tablets' ? 'Tablets' : 'Lines (' + lineAnnotations.length + ')' }}
+      </h3>
+      <button mat-icon-button class="panel-toggle" (click)="rightPanelCollapsed = !rightPanelCollapsed">
+        <mat-icon>{{ rightPanelCollapsed ? 'chevron_left' : 'chevron_right' }}</mat-icon>
+      </button>
+    </div>
+
+    <!-- Panel tabs -->
+    <div class="panel-tabs" *ngIf="!rightPanelCollapsed">
+      <button class="panel-tab" [class.active]="rightPanelTab === 'tablets'" (click)="rightPanelTab = 'tablets'">
+        <mat-icon>list</mat-icon> Tablets
+      </button>
+      <button class="panel-tab" [class.active]="rightPanelTab === 'lines'" (click)="rightPanelTab = 'lines'">
+        <mat-icon>format_list_numbered</mat-icon> Lines
+      </button>
+    </div>
+
+    <!-- Tablets tab -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'tablets'">
+      <div class="tablet-list" *ngIf="tablets.length > 0">
+        <div class="tablet-item"
+             *ngFor="let t of tablets"
+             [class.active]="currentTablet?.p_number === t.p_number"
+             (click)="loadTablet(t.p_number)">
+          <span class="tablet-p">{{ t.p_number }}</span>
+          <span class="tablet-name">{{ t.designation }}</span>
+          <span class="tablet-lines">{{ t.line_count }}L</span>
+        </div>
+      </div>
+      <div class="tablet-list-empty" *ngIf="tablets.length === 0 && !isLoading">
+        <mat-spinner *ngIf="loadingTablets" diameter="24"></mat-spinner>
+        <p *ngIf="!loadingTablets">No test tablets available</p>
+      </div>
+    </div>
+
+    <!-- Lines tab -->
+    <div class="panel-content" *ngIf="!rightPanelCollapsed && rightPanelTab === 'lines'">
+      <div class="line-list">
+        <div class="line-item"
+             *ngFor="let line of lineAnnotations; let i = index"
+             [class.selected]="selectedLineIndex === i"
+             (click)="selectLine(i)">
+          <span class="line-color" [style.background-color]="getLineColor(i)"></span>
+          <span class="line-label">Line {{ i + 1 }}</span>
+          <span class="line-points">{{ line.points.length }} pts</span>
+          <button mat-icon-button class="line-delete-btn" (click)="deleteLine(i, $event)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="line-list-empty" *ngIf="lineAnnotations.length === 0">
+        <p>No lines yet.<br>Use the highlighter to mark text lines.</p>
+      </div>
+
+      <div class="section-divider" *ngIf="lineAnnotations.length > 0"></div>
+
+      <div class="help-section">
+        <h4>Shortcuts</h4>
+        <div class="shortcut"><span class="key">D</span><span class="action">Toggle draw mode</span></div>
+        <div class="shortcut"><span class="key">Ctrl+Wheel</span><span class="action">Adjust height</span></div>
+        <div class="shortcut"><span class="key">Del</span><span class="action">Delete selected</span></div>
+        <div class="shortcut"><span class="key">Ctrl+Z</span><span class="action">Undo last</span></div>
+        <div class="shortcut"><span class="key">Space</span><span class="action">Pan (hold)</span></div>
+        <div class="shortcut"><span class="key">+/-</span><span class="action">Zoom</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" *ngIf="isLoading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Processing...</span>
+  </div>
+</div>

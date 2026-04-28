@@ -15,8 +15,10 @@ Endpoints:
   GET    /api/v1/pages/projects/{project_id}/image/{page}     - Full-res page image
   GET    /api/v1/pages/projects/{project_id}/thumbnail/{page} - Page thumbnail
   DELETE /api/v1/pages/projects/{project_id}                  - Delete project
+  PATCH  /api/v1/pages/projects/{project_id}/pages/move         - Move pages to another project
   DELETE /api/v1/pages/projects/{project_id}/pages             - Delete specific pages
 """
+import asyncio
 import logging
 import os
 from typing import List, Optional
@@ -51,7 +53,7 @@ def _process_upload(file_bytes: bytes, filename: str, content_type: str,
         return handler.upload_pdf(file_bytes, filename, project_id=project_id,
                                   project_name=project_name, page_from=page_from, page_to=page_to, dpi=dpi)
     elif content_type in ALLOWED_IMAGE_TYPES or filename.lower().endswith((".png", ".jpg", ".jpeg")):
-        return handler.upload_image(file_bytes, filename, project_id=project_id, project_name=project_name)
+        return handler.upload_image(file_bytes, filename, project_id=project_id, project_name=project_name, preserve_name=True)
     else:
         raise HTTPException(
             status_code=400,
@@ -96,19 +98,19 @@ async def create_project(dto: CreateProjectDto):
 @router.get("/projects", response_model=ProjectListResponse)
 async def list_projects():
     """List all projects in the library."""
-    return handler.list_projects()
+    return await asyncio.to_thread(handler.list_projects)
 
 
 @router.get("/tree")
 async def get_project_tree():
     """Get full project tree with nested children."""
-    return handler.get_tree()
+    return await asyncio.to_thread(handler.get_tree)
 
 
 @router.get("/projects/{project_id}", response_model=ProjectDetail)
 async def get_project(project_id: str):
     """Get project detail with all its pages."""
-    project = handler.get_project(project_id)
+    project = await asyncio.to_thread(handler.get_project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
     return project
@@ -117,13 +119,13 @@ async def get_project(project_id: str):
 @router.get("/projects/{project_id}/children")
 async def get_children(project_id: str):
     """Get direct children of a project."""
-    return handler.get_children(project_id)
+    return await asyncio.to_thread(handler.get_children, project_id)
 
 
 @router.get("/projects/{project_id}/breadcrumb")
 async def get_breadcrumb(project_id: str):
     """Get path from root to this project."""
-    return handler.get_breadcrumb(project_id)
+    return await asyncio.to_thread(handler.get_breadcrumb, project_id)
 
 
 @router.patch("/projects/{project_id}/rename")
@@ -215,6 +217,17 @@ async def download_project(project_id: str):
     )
 
 
+@router.patch("/projects/{project_id}/pages/move")
+async def move_pages(project_id: str, target_project_id: str = Body(..., embed=True),
+                     filenames: List[str] = Body(..., embed=True)):
+    """Move pages from one project to another."""
+    try:
+        result = handler.move_pages(project_id, target_project_id, filenames)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return result
+
+
 @router.delete("/projects/{project_id}/pages")
 async def delete_pages(project_id: str, filenames: List[str] = Body(..., embed=True)):
     """Delete specific pages from a project by filename."""
@@ -228,7 +241,7 @@ async def delete_pages(project_id: str, filenames: List[str] = Body(..., embed=T
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str):
     """Delete a project and all its files. Refuses if project has subfolders."""
-    result = handler.delete_project(project_id)
+    result = await asyncio.to_thread(handler.delete_project, project_id)
     if not result.get("deleted"):
         error = result.get("error", "Delete failed")
         status = 404 if "not found" in error.lower() else 400

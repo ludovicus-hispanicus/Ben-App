@@ -51,6 +51,7 @@ class ExportToEblRequest(BaseModel):
     atf_text: str
     notes: Optional[str] = None
     introduction: Optional[str] = None
+    skip_validation: bool = False
 
 
 class ExportToEblResponse(BaseModel):
@@ -148,7 +149,8 @@ async def export_to_ebl(request: ExportToEblRequest):
             fragment_number=request.fragment_number,
             atf_text=request.atf_text,
             notes=request.notes,
-            introduction=request.introduction
+            introduction=request.introduction,
+            skip_validation=request.skip_validation
         )
         return result
     except Exception as e:

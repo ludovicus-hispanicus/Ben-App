@@ -1438,6 +1438,7 @@ async def submit(request: Request, submit_dto: CuredSubmissionDto):
         is_fixed=submit_dto.is_fixed,
         is_curated_kraken=submit_dto.is_curated_kraken,
         is_curated_vlm=submit_dto.is_curated_vlm,
+        is_reviewed=getattr(submit_dto, 'is_reviewed', False),
         training_targets=submit_dto.training_targets,
         guides=submit_dto.guides,
     )
@@ -1525,28 +1526,21 @@ class DetectLinesDto(BaseModel):
 @router.post("/detectLines")
 async def detect_lines(dto: DetectLinesDto):
     """
-    Run Kraken line segmentation on the image (no OCR).
+    Run line segmentation on the image (no OCR).
+    Delegates to the shared SegmentationService.
     Returns bounding boxes only. Fast, CPU-only, no model required.
-    Use this to add boxes to VLM OCR results for training data preparation.
     """
-    from clients.kraken_client import KrakenOcrClient
+    from services.segmentation_service import SegmentationService
 
-    # Strip data URL prefix if present
-    image_base64 = dto.image
-    if image_base64.startswith("data:"):
-        comma_idx = image_base64.find(",")
-        if comma_idx != -1:
-            image_base64 = image_base64[comma_idx + 1:]
+    service = SegmentationService()
+    result = service.segment(dto.image)
 
-    result = KrakenOcrClient.segment_image(image_base64)
-    boxes = result.get("dimensions", [])
-    error = result.get("error")
+    logging.info(f"detectLines: {len(result.lines)} lines detected (method={result.method})")
+    if result.error:
+        logging.error(f"detectLines error: {result.error}")
 
-    logging.info(f"detectLines: {len(boxes)} boxes detected")
-    if error:
-        logging.error(f"detectLines error: {error}")
-
-    return {"dimensions": boxes, "error": error}
+    # Maintain backwards-compatible response shape
+    return {"dimensions": result.lines, "error": result.error}
 
 
 # ─── TEI Lex-0 Validation ─────────────────────────────────────────

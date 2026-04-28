@@ -27,6 +27,8 @@ import { SettingsModule } from './components/settings/settings.module';
 import { ProductionModule } from './components/production/production.module';
 import { CureModule } from './components/cure/cure.module';
 import { DocumentLibraryModule } from './components/document-library/document-library.module';
+import { LineSegmentationModule } from './components/line-segmentation/line-segmentation.module';
+import { SegmentationModule } from './components/segmentation/segmentation.module';
 import { ConfirmDialogComponent } from './components/common/confirm-dialog/confirm-dialog.component';
 import { LabelDialogComponent } from './components/common/label-dialog/label-dialog.component';
 import { SaveDialogComponent } from './components/common/save-dialog/save-dialog.component';
@@ -81,6 +83,8 @@ import { MatDividerModule } from '@angular/material/divider';
     ProductionModule,
     CureModule,
     DocumentLibraryModule,
+    LineSegmentationModule,
+    SegmentationModule,
     KeyboardShortcutsModule.forRoot()
   ],
   exports: [

@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 
 import { environment } from 'src/environments/environment';
 import { Observable } from 'rxjs';
-import { CuredResult, Dimensions, LetterDto, TeiValidationResult, TeiEntryResult, TeiValidationError } from '../models/letter';
+import { CuredResult, Dimensions, LetterDto } from '../models/letter';
 import { SelectedPdf } from '../components/cure-d/cured.component';
 import { CuredTransliterationData, CuredTransliterationPreview } from '../models/cured';
 
@@ -31,7 +31,6 @@ export class CuredService {
         model: string = 'latest',
         prompt: string = 'dictionary',
         apiKey?: string,
-        teiOptions?: { teiModel: string; teiProvider: string; teiApiKey?: string },
         correctionRules?: string,
         boxMode?: string
     ) {
@@ -42,13 +41,6 @@ export class CuredService {
         };
         if (apiKey) {
             body.apiKey = apiKey;
-        }
-        if (teiOptions) {
-            body.teiModel = teiOptions.teiModel;
-            body.teiProvider = teiOptions.teiProvider;
-            if (teiOptions.teiApiKey) {
-                body.teiApiKey = teiOptions.teiApiKey;
-            }
         }
         if (correctionRules) {
             body.correctionRules = correctionRules;
@@ -78,7 +70,7 @@ export class CuredService {
         return this.http.post<string>(`${environment.apiUrl}${this.baseUrl}${url}`, uploadData);
     }
 
-    createSubmission(textId: number, transliterationId: number, lines: string[], boxes: Dimensions[], imageName: string, isCuratedKraken: boolean = false, isCuratedVlm: boolean = false, guides: any[] = null) {
+    createSubmission(textId: number, transliterationId: number, lines: string[], boxes: Dimensions[], imageName: string, isCuratedKraken: boolean = false, isCuratedVlm: boolean = false, guides: any[] = null, isReviewed: boolean = false) {
         const body: any = {
             "text_id": textId,
             "transliteration_id": transliterationId,
@@ -86,7 +78,8 @@ export class CuredService {
             "boxes": boxes,
             "image_name": imageName,
             "is_curated_kraken": isCuratedKraken,
-            "is_curated_vlm": isCuratedVlm
+            "is_curated_vlm": isCuratedVlm,
+            "is_reviewed": isReviewed
         };
         if (guides && guides.length) {
             body.guides = guides;
@@ -460,34 +453,6 @@ export class CuredService {
         return this.http.post<{ dimensions: Dimensions[]; error?: string }>(
             `${environment.apiUrl}${this.baseUrl}/detectLines`,
             { image: imageBase64 }
-        );
-    }
-
-    // ==========================================
-    // TEI Lex-0 Validation Methods
-    // ==========================================
-
-    /**
-     * Validate a TEI Lex-0 entry against XSD + custom rules.
-     */
-    validateTei(xml: string) {
-        return this.http.post<TeiValidationResult>(
-            `${environment.apiUrl}${this.baseUrl}/validate-tei`,
-            { xml }
-        );
-    }
-
-    /**
-     * Retry a failed TEI entry with correction prompt via VLM.
-     */
-    retryTeiEntry(xml: string, errors: TeiValidationError[], provider: string, apiKey?: string) {
-        const body: any = { xml, errors, provider };
-        if (apiKey) {
-            body.apiKey = apiKey;
-        }
-        return this.http.post<TeiEntryResult>(
-            `${environment.apiUrl}${this.baseUrl}/retry-tei`,
-            body
         );
     }
 

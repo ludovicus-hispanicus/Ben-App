@@ -340,13 +340,35 @@
         <span>Loading...</span>
       </div>
 
+      <!-- Bulk action bar -->
+      <div class="bulk-action-bar" *ngIf="hasSelection">
+        <span class="selection-count">{{ selectedImageIds.size }} selected</span>
+        <button mat-stroked-button size="small" (click)="selectAllImages()" *ngIf="selectedImageIds.size < savedImages.length">
+          Select all
+        </button>
+        <button mat-stroked-button size="small" (click)="clearSelection()">
+          Clear
+        </button>
+        <button mat-flat-button color="warn" size="small" (click)="deleteSelectedImages()" [disabled]="deletingSelected">
+          <mat-icon>delete</mat-icon> Delete ({{ selectedImageIds.size }})
+        </button>
+      </div>
+
       <div class="saved-images-list" *ngIf="!loadingSavedImages && savedImages.length > 0">
         <div class="saved-image-item"
-             *ngFor="let img of savedImages"
+             *ngFor="let img of savedImages; let i = index"
              [class.active]="isViewingSavedImage(img.image_id, img.split)"
+             [class.selected]="isImageSelected(img.image_id)"
              [class.split-train]="img.split === 'train'"
              [class.split-val]="img.split === 'val'"
+             [class.selection-mode]="hasSelection"
              (click)="viewSavedImage(img.image_id, img.split)">
+          <mat-checkbox
+            class="image-select-checkbox"
+            [checked]="isImageSelected(img.image_id)"
+            (click)="toggleImageSelection(img.image_id, i, $event)"
+            (change)="$event">
+          </mat-checkbox>
           <div class="saved-image-info">
             <span class="saved-image-name" [title]="img.filename">
               {{ img.filename }}

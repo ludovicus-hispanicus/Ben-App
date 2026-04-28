@@ -12,15 +12,22 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSliderModule } from '@angular/material/slider';
+import { MatSelectModule } from '@angular/material/select';
+import { MatDialogModule } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 
 import { ProductionComponent } from './production.component';
+import { LemmatizationPanelComponent } from './lemmatization-panel/lemmatization-panel.component';
+import { AddTextDialogComponent } from '../common/add-text-dialog/add-text-dialog.component';
 import { PdfUploaderModule } from '../cure-d/cured.module';
 import { TextEditorModule } from '../cure-d/text-editor/text-editor.module';
 import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
 
 @NgModule({
     declarations: [
-        ProductionComponent
+        ProductionComponent,
+        LemmatizationPanelComponent,
+        AddTextDialogComponent
     ],
     imports: [
         CommonModule,
@@ -36,6 +43,9 @@ import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
         MatChipsModule,
         MatMenuModule,
         MatSliderModule,
+        MatSelectModule,
+        MatDialogModule,
+        MatDividerModule,
         PdfUploaderModule,
         TextEditorModule,
         FabricCanvasModule

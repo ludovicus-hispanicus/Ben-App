@@ -170,44 +170,6 @@ class KrakenOcrClient(BaseOcrClient):
             }
 
     @staticmethod
-    def segment_image(image_base64: str) -> Dict[str, Any]:
-        """
-        Run line segmentation only (no OCR). Fast, CPU-only, no model needed.
-
-        Returns:
-            Dict with "dimensions" (List[Dimensions]) - one bounding box per detected line
-        """
-        try:
-            from kraken import binarization, pageseg
-
-            image_bytes = base64.b64decode(image_base64)
-            image = Image.open(BytesIO(image_bytes))
-
-            if image.mode == '1':
-                image = image.convert('L')
-            elif image.mode not in ('L', 'RGB'):
-                image = image.convert('RGB')
-
-            logger.info("Segmenting image (detect lines only, no OCR)...")
-            bw_im = binarization.nlbin(image)
-            seg = pageseg.segment(bw_im, text_direction='horizontal-lr')
-            logger.info(f"Detected {len(seg.lines)} line bounding boxes")
-
-            boxes = []
-            for line in seg.lines:
-                x1, y1, x2, y2 = line.bbox
-                boxes.append(Dimensions(x=x1, y=y1, width=x2 - x1, height=y2 - y1))
-
-            return {"dimensions": boxes}
-
-        except ImportError:
-            logger.error("Kraken library not installed")
-            return {"dimensions": [], "error": "Kraken not installed. Run: pip install kraken"}
-        except Exception as e:
-            logger.error(f"Segmentation failed: {e}")
-            return {"dimensions": [], "error": str(e)}
-
-    @staticmethod
     def is_available() -> bool:
         """Check if Kraken is installed and available."""
         try:

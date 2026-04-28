@@ -524,6 +524,60 @@ class PagesHandler:
 
         return None
 
+    # ============== Move Pages ==============
+
+    def move_pages(self, source_project_id: str, target_project_id: str, filenames: List[str]) -> Dict:
+        """Move pages from one project to another. Returns count of moved pages."""
+        source_path = _resolve_project_path(source_project_id)
+        target_path = _resolve_project_path(target_project_id)
+
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source project '{source_project_id}' not found")
+        if not target_path.exists():
+            raise FileNotFoundError(f"Target project '{target_project_id}' not found")
+
+        target_thumbs = target_path / "thumbnails"
+        target_thumbs.mkdir(exist_ok=True)
+
+        next_num = self._next_page_number(target_path)
+        moved = 0
+
+        for fname in filenames:
+            safe_name = Path(fname).name
+            src_file = source_path / safe_name
+            if not src_file.exists() or not src_file.is_file():
+                continue
+
+            # Rename to next page number in target
+            dest_name = f"page_{next_num:03d}.png"
+            dest_file = target_path / dest_name
+            shutil.move(str(src_file), str(dest_file))
+
+            # Move or regenerate thumbnail
+            src_stem = Path(safe_name).stem
+            dest_thumb = target_thumbs / f"page_{next_num:03d}.jpg"
+            src_thumb = source_path / "thumbnails" / f"{src_stem}.jpg"
+            if src_thumb.exists():
+                shutil.move(str(src_thumb), str(dest_thumb))
+            else:
+                self._make_thumbnail(str(dest_file), str(dest_thumb))
+
+            next_num += 1
+            moved += 1
+
+        # Update metadata for both projects
+        for pid, ppath in [(source_project_id, source_path), (target_project_id, target_path)]:
+            meta = _read_metadata(ppath)
+            if meta:
+                meta["page_count"] = len([
+                    p for p in ppath.iterdir()
+                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
+                ])
+                _write_metadata(ppath, meta)
+
+        logger.info(f"Moved {moved} pages from '{source_project_id}' to '{target_project_id}'")
+        return {"moved": moved}
+
     # ============== Delete ==============
 
     def delete_pages(self, project_id: str, filenames: List[str]) -> int:
@@ -560,21 +614,22 @@ class PagesHandler:
         return deleted
 
     def delete_project(self, project_id: str) -> Dict:
-        """Delete a project. Refuses if it has children."""
+        """Delete a project and all its children recursively."""
         project_path = _resolve_project_path(project_id)
         if not project_path.exists():
             return {"deleted": False, "error": "Project not found"}
 
+        # Recursively delete all children first
         children = self.get_children(project_id)
-        if children:
-            return {
-                "deleted": False,
-                "error": f"Cannot delete: folder has {len(children)} subfolder(s). Remove them first."
-            }
+        deleted_children = 0
+        for child in children:
+            result = self.delete_project(child.project_id)
+            if result.get("deleted"):
+                deleted_children += 1
 
         shutil.rmtree(project_path)
-        logger.info(f"Deleted project '{project_id}'")
-        return {"deleted": True}
+        logger.info(f"Deleted project '{project_id}' (including {deleted_children} subfolder(s))")
+        return {"deleted": True, "deleted_children": deleted_children}
 
     # ============== Download ==============
 

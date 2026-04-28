@@ -43,6 +43,7 @@ class BaseSubmissionDto(BaseModel):
     is_fixed: bool = False  # legacy
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
+    is_reviewed: bool = False
     training_targets: Optional[List[str]] = None  # legacy
     uploader: Uploader = Uploader.ADMIN  # recognize this with user id
 
@@ -63,6 +64,7 @@ class CuredSubmissionDto(BaseModel):
     is_fixed: bool = False  # legacy
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
+    is_reviewed: bool = False
     training_targets: Optional[List[str]] = None  # legacy
     image_name: Optional[str] = None
     transliteration_id: Optional[int] = None
@@ -75,7 +77,7 @@ class CuredSubmissionDto(BaseModel):
 class BatchCurateDto(BaseModel):
     text_ids: List[int]
     curate: bool
-    target: str = "both"  # "kraken", "vlm", or "both"
+    target: str = "both"  # "kraken", "vlm", "both", or "reviewed"
 
 
 class TransliterationSubmissionPreview(BaseModel):
@@ -101,6 +103,7 @@ class CuredTransliterationData(BaseModel):
     is_fixed: bool = False  # legacy
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
+    is_reviewed: bool = False
     training_targets: Optional[List[str]] = None  # legacy
     guides: Optional[List[Dict]] = None
 
@@ -128,6 +131,7 @@ class CuredTransliterationData(BaseModel):
             is_fixed=getattr(last, 'is_fixed', False),
             is_curated_kraken=is_kraken,
             is_curated_vlm=is_vlm,
+            is_reviewed=getattr(last, 'is_reviewed', False),
             training_targets=getattr(last, 'training_targets', None),
             guides=getattr(last, 'guides', None)
         )

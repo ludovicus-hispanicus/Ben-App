@@ -111,6 +111,13 @@ export class PagesService {
     return this.http.get(url, { responseType: 'blob' });
   }
 
+  movePages(sourceProjectId: string, targetProjectId: string, filenames: string[]): Observable<any> {
+    return this.http.patch(
+      `${environment.apiUrl}${this.baseUrl}/projects/${sourceProjectId}/pages/move`,
+      { target_project_id: targetProjectId, filenames }
+    );
+  }
+
   deletePages(projectId: string, filenames: string[]): Observable<any> {
     return this.http.request('DELETE',
       `${environment.apiUrl}${this.baseUrl}/projects/${projectId}/pages`,

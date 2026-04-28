@@ -343,7 +343,15 @@
 
     <!-- Image Resolution -->
     <div class="config-section">
-      <div class="section-label">Image Resolution <span class="optional">(reduces tokens)</span></div>
+      <div class="section-label">Target DPI <span class="optional">(downscales to target, reads actual DPI)</span></div>
+      <select [(ngModel)]="targetDpi" class="batch-size-input">
+        <option *ngFor="let opt of targetDpiOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <!-- Image Scale -->
+    <div class="config-section">
+      <div class="section-label">Image Scale <span class="optional">(applied after DPI resize)</span></div>
       <select [(ngModel)]="imageScale" class="batch-size-input">
         <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">{{ opt.label }}</option>
       </select>
@@ -357,6 +365,20 @@
                 class="mode-btn"
                 [class.selected]="boxMode === opt.value"
                 (click)="boxMode = opt.value"
+                [matTooltip]="opt.description">
+          {{ opt.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Tiling Mode -->
+    <div class="config-section">
+      <div class="section-label">Tiling Mode</div>
+      <div class="mode-buttons">
+        <button *ngFor="let opt of tilingModeOptions"
+                class="mode-btn"
+                [class.selected]="tilingMode === opt.value"
+                (click)="tilingMode = opt.value"
                 [matTooltip]="opt.description">
           {{ opt.label }}
         </button>
@@ -419,7 +441,8 @@
             <tr><td>Prompt</td><td>{{ reportStatus.prompt }}</td></tr>
             <tr><td>Images</td><td>{{ reportStatus.processed_images }} / {{ reportStatus.total_images }} processed<span *ngIf="reportStatus.failed_images > 0">, {{ reportStatus.failed_images }} failed</span></td></tr>
             <tr><td>Batch Mode</td><td>{{ reportStatus.batch_size && reportStatus.batch_size < 0 ? 'Dynamic' : 'Fixed (' + (reportStatus.batch_size || 1) + ')' }}</td></tr>
-            <tr *ngIf="reportStatus.image_scale"><td>Image Scale</td><td>{{ reportStatus.image_scale }}</td></tr>
+            <tr *ngIf="reportStatus.target_dpi"><td>Target DPI</td><td>{{ reportStatus.target_dpi }}</td></tr>
+            <tr *ngIf="reportStatus.image_scale && reportStatus.image_scale < 1"><td>Image Scale</td><td>{{ (reportStatus.image_scale * 100) }}%</td></tr>
             <tr *ngIf="reportStatus.correction_rules"><td>Corrections</td><td>{{ reportStatus.correction_rules }}</td></tr>
             <tr><td>Line Boxes</td><td>{{ reportStatus.box_mode === 'none' ? 'None' : reportStatus.box_mode === 'predict' ? 'Predict (Kraken)' : 'Estimate' }}</td></tr>
             <tr *ngIf="reportStatus.created_at"><td>Started</td><td>{{ reportStatus.created_at | date:'short' }}</td></tr>

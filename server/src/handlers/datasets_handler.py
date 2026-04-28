@@ -80,6 +80,12 @@ class DatasetsHandler:
             {"$set": {"name": name}}
         )
 
+    def set_for_production(self, dataset_id: int, for_production: bool):
+        self._collection.update_one(
+            {"dataset_id": int(dataset_id)},
+            {"$set": {"for_production": bool(for_production)}}
+        )
+
     def delete_dataset(self, dataset_id: int) -> Dict:
         """Delete a dataset. Refuses if it has children."""
         children = self.get_children(dataset_id)

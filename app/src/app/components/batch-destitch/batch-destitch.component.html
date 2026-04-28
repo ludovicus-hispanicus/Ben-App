@@ -1,0 +1,254 @@
+<div class="batch-destitch">
+
+  <!-- ====== LEFT PANEL: Batch Configuration ====== -->
+  <div class="config-panel">
+    <div class="panel-header">
+      <mat-icon>grid_view</mat-icon>
+      <h3>Batch Destitch</h3>
+    </div>
+
+    <div class="panel-hint">
+      Split stitched tablet composites into labeled view crops (_01 obverse,
+      _02 reverse, _03 top, _04 bottom, _05 left, _06 right, plus
+      intermediates). Single-view images can be passed through unchanged.
+    </div>
+
+    <!-- Source Folder -->
+    <div class="config-section">
+      <label class="config-label">Source Folder</label>
+
+      <div class="folder-display" *ngIf="sourceFolderPath">
+        <mat-icon>folder</mat-icon>
+        <span [matTooltip]="sourceFolderPath">{{ sourceFolderPath }}</span>
+        <span class="folder-image-count" *ngIf="sourceImageCount">
+          {{ sourceImageCount }} images
+        </span>
+        <button mat-icon-button (click)="clearSource()" matTooltip="Clear">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="sidebar-btn-row" *ngIf="!sourceFolderPath">
+        <button mat-stroked-button class="browse-server-btn"
+                (click)="openFolderPicker('source')">
+          <mat-icon>folder_open</mat-icon> Browse
+        </button>
+      </div>
+    </div>
+
+    <!-- Destination Folder -->
+    <div class="config-section">
+      <label class="config-label">Destination Folder</label>
+
+      <div class="folder-display" *ngIf="destinationFolderPath">
+        <mat-icon>save_alt</mat-icon>
+        <span [matTooltip]="destinationFolderPath">{{ destinationFolderPath }}</span>
+        <button mat-icon-button (click)="clearDestination()" matTooltip="Clear">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="sidebar-btn-row" *ngIf="!destinationFolderPath">
+        <button mat-stroked-button class="browse-server-btn"
+                (click)="openFolderPicker('destination')">
+          <mat-icon>save_alt</mat-icon> Browse
+        </button>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="config-section">
+      <label class="config-label">Options</label>
+
+      <label class="option-row">
+        <input type="checkbox" [(ngModel)]="passthroughNonComposites" />
+        <span>Pass non-composite images through unchanged</span>
+      </label>
+
+      <label class="option-row">
+        <input type="checkbox" [(ngModel)]="includeMasks" />
+        <span>Also emit per-view binary masks (PNG)</span>
+      </label>
+
+      <label class="option-row">
+        <input type="checkbox" [(ngModel)]="overwriteExisting" />
+        <span>Overwrite existing outputs</span>
+      </label>
+    </div>
+
+    <!-- Start button -->
+    <div class="config-section">
+      <button mat-raised-button color="primary"
+              [disabled]="!canStart"
+              (click)="startJob()" class="start-btn">
+        <mat-icon>play_arrow</mat-icon>
+        {{ isStarting ? 'Starting…' : 'Start Batch' }}
+      </button>
+      <div class="error-text" *ngIf="startError">{{ startError }}</div>
+    </div>
+  </div>
+
+  <!-- ====== MIDDLE PANEL: Active Job ====== -->
+  <div class="main-panel">
+    <div class="job-card" *ngIf="activeJob; else noJob">
+      <div class="job-header">
+        <mat-icon>
+          {{ activeJob.status === 'running' ? 'autorenew' :
+             activeJob.status === 'completed' ? 'check_circle' :
+             activeJob.status === 'cancelled' ? 'cancel' :
+             activeJob.status === 'failed' ? 'error' : 'hourglass_empty' }}
+        </mat-icon>
+        <span class="job-status-label" [class]="'status-' + activeJob.status">
+          {{ activeJob.status }}
+        </span>
+        <span class="job-id" matTooltip="{{ activeJob.job_id }}">
+          {{ activeJob.job_id.substring(0, 8) }}
+        </span>
+        <span class="spacer"></span>
+        <button mat-stroked-button color="warn"
+                *ngIf="activeJob.status === 'running'"
+                (click)="cancelJob()">
+          <mat-icon>stop</mat-icon> Cancel
+        </button>
+      </div>
+
+      <div class="job-progress">
+        <mat-progress-bar mode="determinate"
+                          [value]="activeJob.progress_percent"></mat-progress-bar>
+        <div class="progress-label">
+          {{ activeJob.processed_images }} / {{ activeJob.total_images }}
+          ({{ activeJob.progress_percent }}%)
+          <span *ngIf="activeJob.failed_images > 0" class="fail-count">
+            — {{ activeJob.failed_images }} failed
+          </span>
+        </div>
+        <div class="current-file" *ngIf="activeJob.current_filename">
+          Current: <code>{{ activeJob.current_filename }}</code>
+        </div>
+      </div>
+
+      <div class="results-block" *ngIf="activeJob.results?.length">
+        <h4>Results ({{ activeJob.results.length }})</h4>
+        <div class="results-list">
+          <div class="result-row" *ngFor="let r of activeJob.results">
+            <mat-icon [class.pass]="r.status === 'passthrough' || r.status === 'passthrough_exists'"
+                      [class.destitched]="r.status === 'destitched'">
+              {{ r.status === 'destitched' ? 'grid_view' : 'file_copy' }}
+            </mat-icon>
+            <span class="result-input">{{ r.input }}</span>
+            <span class="result-meta">{{ r.status }} — {{ r.output_count }} out</span>
+            <span class="result-codes" *ngIf="r.view_codes?.length">
+              {{ (r.view_codes || []).join(' ') }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="results-block" *ngIf="activeJob.failed_results?.length">
+        <h4>Failures ({{ activeJob.failed_results.length }})</h4>
+        <div class="results-list">
+          <div class="result-row fail" *ngFor="let r of activeJob.failed_results">
+            <mat-icon>error</mat-icon>
+            <span class="result-input">{{ r.input }}</span>
+            <span class="result-meta">{{ r.error }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #noJob>
+      <div class="empty-state">
+        <mat-icon>grid_view</mat-icon>
+        <p>No active job. Pick a source folder and a destination, then press Start.</p>
+      </div>
+    </ng-template>
+  </div>
+
+  <!-- ====== RIGHT PANEL: Recent Jobs ====== -->
+  <div class="jobs-panel">
+    <div class="panel-header">
+      <mat-icon>history</mat-icon>
+      <h3>Recent Jobs</h3>
+    </div>
+    <div class="recent-list">
+      <div *ngFor="let j of recentJobs"
+           class="recent-job"
+           [class.active]="activeJobId === j.job_id"
+           (click)="openRecentJob(j.job_id)">
+        <div class="recent-job-row">
+          <mat-icon>
+            {{ j.status === 'running' ? 'autorenew' :
+               j.status === 'completed' ? 'check_circle' :
+               j.status === 'cancelled' ? 'cancel' :
+               j.status === 'failed' ? 'error' : 'hourglass_empty' }}
+          </mat-icon>
+          <span class="recent-job-id">{{ j.job_id.substring(0, 8) }}</span>
+          <span class="recent-job-count">
+            {{ j.processed_images }}/{{ j.total_images }}
+          </span>
+        </div>
+        <div class="recent-job-src" [matTooltip]="j.source_folder_path">
+          {{ j.source_folder_path }}
+        </div>
+      </div>
+      <div class="empty-recent" *ngIf="!recentJobs.length">
+        No jobs yet.
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Folder Picker Modal ====== -->
+  <div class="folder-picker-modal" *ngIf="showFolderPicker">
+    <div class="folder-picker-backdrop" (click)="closeFolderPicker()"></div>
+    <div class="folder-picker-card">
+      <div class="folder-picker-header">
+        <mat-icon>folder_open</mat-icon>
+        <h3>{{ folderPickerTitle }}</h3>
+        <button mat-icon-button (click)="closeFolderPicker()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="folder-picker-body" *ngIf="folderPickerInfo">
+        <div class="folder-picker-path">
+          <mat-icon>folder_special</mat-icon>
+          <span>{{ folderPickerInfo.path }}</span>
+          <span class="folder-picker-count" *ngIf="folderPickerInfo.image_count">
+            {{ folderPickerInfo.image_count }} images
+          </span>
+        </div>
+        <div class="folder-picker-list">
+          <div class="folder-row"
+               *ngIf="folderPickerInfo.parent"
+               (click)="navigateFolder(folderPickerInfo.parent)">
+            <mat-icon>arrow_upward</mat-icon>
+            <span>.. (parent)</span>
+          </div>
+          <div class="folder-row"
+               *ngFor="let f of folderPickerInfo.folders"
+               (click)="navigateFolder(f.path)">
+            <mat-icon>folder</mat-icon>
+            <span>{{ f.name }}</span>
+            <span class="folder-row-count" *ngIf="f.image_count">
+              {{ f.image_count }} images
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="folder-picker-loading" *ngIf="folderPickerLoading">
+        Loading…
+      </div>
+
+      <div class="folder-picker-footer">
+        <button mat-stroked-button (click)="closeFolderPicker()">Cancel</button>
+        <button mat-raised-button color="primary"
+                [disabled]="!folderPickerInfo"
+                (click)="selectFolder()">
+          Use this folder
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

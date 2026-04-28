@@ -157,6 +157,15 @@ export class ProductionService {
         return this.http.post<ProductionText>(`${environment.apiUrl}${this.baseUrl}/text/${productionId}/regenerate`, {});
     }
 
+    /**
+     * Sync translations: returns only new (not yet synced) translations and records them.
+     */
+    syncTranslations(productionId: number): Observable<{ new_translations: TranslationContent[]; new_count: number; total_synced: number }> {
+        return this.http.post<{ new_translations: TranslationContent[]; new_count: number; total_synced: number }>(
+            `${environment.apiUrl}${this.baseUrl}/text/${productionId}/sync-translations`, {}
+        );
+    }
+
 
     /**
      * Delete a production text.
@@ -232,6 +241,30 @@ export class ProductionService {
             `${environment.apiUrl}${this.baseUrl}/text/${productionId}/mark-exported`,
             {}
         );
+    }
+
+    /**
+     * Import ORACC-style ATF text.
+     * Creates a ProductionText with transliteration + translation and seeds lemmatization.
+     */
+    importOraccAtf(
+        atfText: string,
+        identifierOverride?: string,
+        identifierTypeOverride?: string
+    ): Observable<{
+        production_id: number;
+        identifier: string;
+        identifier_type: string;
+        transliteration_lines: number;
+        translation_lines: number;
+        lemmatization_lines: number;
+        metadata: any;
+    }> {
+        return this.http.post<any>(`${environment.apiUrl}${this.baseUrl}/import-oracc`, {
+            atf_text: atfText,
+            identifier_override: identifierOverride || null,
+            identifier_type_override: identifierTypeOverride || null
+        });
     }
 
     /**

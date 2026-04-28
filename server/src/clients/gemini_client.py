@@ -4,6 +4,7 @@ import base64
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
 from typing import List, Dict, Any, Tuple, Optional
@@ -32,6 +33,8 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 
 
 class GeminiOcrClient(BaseOcrClient):
+    _REQUEST_TIMEOUT = 300  # seconds — abort if Gemini hasn't responded in 5 minutes
+
     def __init__(self, api_key: str, model: str = None):
         # The new SDK uses a Client object
         self.client = genai.Client(api_key=api_key)
@@ -52,10 +55,20 @@ class GeminiOcrClient(BaseOcrClient):
             if self._cancel_event and self._cancel_event.is_set():
                 raise GeminiCancelledError("OCR cancelled")
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_id,
-                    contents=contents,
-                )
+                # Use a thread pool to enforce a timeout on the API call
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self.client.models.generate_content,
+                        model=self.model_id,
+                        contents=contents,
+                    )
+                    try:
+                        response = future.result(timeout=self._REQUEST_TIMEOUT)
+                    except FuturesTimeoutError:
+                        raise TimeoutError(
+                            f"Gemini API call timed out after {self._REQUEST_TIMEOUT}s"
+                            f"{' (' + label + ')' if label else ''}"
+                        )
                 # Track usage
                 try:
                     meta = getattr(response, 'usage_metadata', None)
@@ -174,5 +187,21 @@ class GeminiOcrClient(BaseOcrClient):
         except (GeminiCancelledError, GeminiRateLimitError):
             raise  # let cancellation and rate-limit propagate
         except Exception as e:
+            # If batch has multiple images, retry as individual calls
+            if len(images) > 1:
+                logging.warning(
+                    f"Gemini multi-image OCR failed ({type(e).__name__}: {e}), "
+                    f"retrying {len(images)} images individually"
+                )
+                individual_results = []
+                for img_b64, w, h in images:
+                    try:
+                        individual_results.append(self.ocr_image(img_b64, w, h, prompt))
+                    except (GeminiCancelledError, GeminiRateLimitError):
+                        raise
+                    except Exception as ind_err:
+                        logging.error(f"Gemini individual retry failed: {type(ind_err).__name__}: {ind_err}")
+                        individual_results.append({"lines": [], "dimensions": []})
+                return individual_results
             logging.error(f"Gemini multi-image OCR failed: {type(e).__name__}: {e}")
-            return [{"lines": [], "dimensions": []} for _ in images]
+            return [{"lines": [], "dimensions": []}]

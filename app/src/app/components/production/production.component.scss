@@ -3,6 +3,52 @@
     flex-direction: column;
 }
 
+// Add-linked-page menu (rendered outside component via cdk overlay, so use ::ng-deep)
+::ng-deep .add-linked-menu {
+    .add-linked-header {
+        padding: 8px 16px 4px;
+        font-size: 0.75em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #888;
+    }
+
+    .add-linked-empty {
+        padding: 8px 16px;
+        font-size: 0.85em;
+        color: #999;
+        font-style: italic;
+    }
+
+    .add-linked-custom {
+        display: flex;
+        gap: 6px;
+        padding: 8px 12px;
+        align-items: center;
+
+        input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+            min-width: 120px;
+
+            &:focus {
+                border-color: #1976d2;
+            }
+        }
+
+        button {
+            min-width: auto;
+            padding: 0 12px;
+            line-height: 28px;
+        }
+    }
+}
+
 // ==========================================
 // Dashboard View
 // ==========================================
@@ -179,14 +225,18 @@
 
 .detail-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 8px;
     margin-bottom: 20px;
 
     h3 {
         margin: 0;
         font-size: 16px;
         font-weight: 500;
+    }
+
+    .spacer {
+        flex: 1;
     }
 
     .museum-abbrev-badge {
@@ -826,6 +876,12 @@
         min-height: 0;
     }
 
+    lemmatization-panel {
+        display: block;
+        flex: 1;
+        min-height: 0;
+    }
+
     // Projected toolbar actions inside text-editor's right toolbar
     [toolbar-actions] {
         display: flex;
@@ -937,6 +993,19 @@
             &:hover:not(.active) {
                 background: #faf5ff;
                 color: #7b1fa2;
+            }
+        }
+
+        // Lemmatization button styling
+        &.lemma {
+            &.active {
+                background: #2e7d32;
+                border-color: #2e7d32;
+            }
+
+            &:hover:not(.active) {
+                background: #f1f8e9;
+                color: #2e7d32;
             }
         }
     }
@@ -1737,10 +1806,10 @@
 }
 
 // ==========================================
-// Export Error Overlay
+// Export Overlay
 // ==========================================
 
-.export-error-overlay {
+.export-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -1753,41 +1822,49 @@
     z-index: 1001;
 }
 
-.export-error-dialog {
+.export-dialog {
     background: white;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-    max-width: 600px;
+    max-width: 550px;
     width: 90%;
     max-height: 85vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
 
-    .dialog-header.error-header {
-        background: linear-gradient(135deg, #d32f2f, #c62828);
+    .dialog-header {
+        background: linear-gradient(135deg, #1565c0, #1976d2);
         color: white;
         padding: 20px 24px;
-        border-bottom: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
 
         h3 {
+            margin: 0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
             color: white;
-            font-size: 20px;
-
-            .error-icon {
-                color: white;
-                font-size: 24px;
-                width: 24px;
-                height: 24px;
-            }
         }
 
         button {
             color: white;
+            &:hover { background: rgba(255, 255, 255, 0.1); }
+        }
 
-            &:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
+        &.success-header {
+            background: linear-gradient(135deg, #2e7d32, #388e3c);
+        }
+
+        &.error-header {
+            background: linear-gradient(135deg, #d32f2f, #c62828);
+        }
+
+        &.progress-header {
+            background: linear-gradient(135deg, #e65100, #f57c00);
         }
     }
 
@@ -1795,11 +1872,151 @@
         padding: 24px;
         overflow-y: auto;
 
-        .error-message {
+        .export-field {
+            margin-bottom: 16px;
+
+            label {
+                display: block;
+                font-size: 13px;
+                font-weight: 600;
+                color: #555;
+                margin-bottom: 6px;
+            }
+
+            .export-id-input {
+                width: 100%;
+                padding: 10px 14px;
+                font-size: 16px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                outline: none;
+                box-sizing: border-box;
+                transition: border-color 0.2s;
+
+                &:focus {
+                    border-color: #1976d2;
+                }
+
+                &:disabled {
+                    background: #f5f5f5;
+                    color: #888;
+                }
+            }
+        }
+
+        .export-url-preview {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-bottom: 16px;
+
+            mat-icon {
+                color: #888;
+                font-size: 18px;
+                width: 18px;
+                height: 18px;
+                flex-shrink: 0;
+            }
+
+            .url-link {
+                font-size: 13px;
+                color: #1976d2;
+                text-decoration: none;
+                word-break: break-all;
+
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+        }
+
+        .export-warning {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            background: #fff8e1;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+
+            mat-icon {
+                color: #f57c00;
+                font-size: 20px;
+                width: 20px;
+                height: 20px;
+                flex-shrink: 0;
+            }
+
+            span {
+                font-size: 13px;
+                color: #e65100;
+                line-height: 1.5;
+            }
+        }
+
+        .export-progress {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+
+            .progress-info {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+
+                .progress-label {
+                    font-size: 14px;
+                    color: #555;
+                }
+
+                .progress-time {
+                    font-size: 12px;
+                    color: #999;
+                    font-family: 'Consolas', 'Monaco', monospace;
+                }
+            }
+        }
+
+        .export-success {
             p {
-                margin: 0;
+                margin: 0 0 12px;
                 font-size: 15px;
-                color: #333;
+                color: #2e7d32;
+            }
+
+            .result-link {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 14px;
+                color: #1976d2;
+                text-decoration: none;
+                padding: 8px 14px;
+                background: #e3f2fd;
+                border-radius: 8px;
+
+                &:hover {
+                    background: #bbdefb;
+                }
+
+                mat-icon {
+                    font-size: 18px;
+                    width: 18px;
+                    height: 18px;
+                }
+            }
+        }
+
+        .export-error-result {
+            p {
+                margin: 0 0 12px;
+                font-size: 15px;
+                color: #c62828;
                 line-height: 1.6;
             }
         }
@@ -1808,7 +2025,7 @@
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            margin-top: 16px;
+            margin-top: 12px;
             padding: 14px 16px;
             background: #e3f2fd;
             border-radius: 8px;
@@ -1820,7 +2037,6 @@
                 width: 20px;
                 height: 20px;
                 flex-shrink: 0;
-                margin-top: 2px;
             }
 
             span {
@@ -1831,7 +2047,7 @@
         }
 
         .export-validation-errors {
-            margin-top: 20px;
+            margin-top: 16px;
             padding: 16px;
             background: #fff8f8;
             border-radius: 8px;
@@ -1854,12 +2070,6 @@
                 }
             }
 
-            .error-hint {
-                margin: 0 0 12px;
-                font-size: 13px;
-                color: #666;
-            }
-
             .error-list {
                 margin: 0;
                 padding: 0;
@@ -1878,36 +2088,8 @@
                     font-family: 'Consolas', 'Monaco', monospace;
                     line-height: 1.4;
 
-                    &:last-child {
-                        margin-bottom: 0;
-                    }
+                    &:last-child { margin-bottom: 0; }
                 }
-            }
-        }
-
-        .error-actions-hint {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-top: 16px;
-            padding: 14px 16px;
-            background: #fff8e1;
-            border-radius: 8px;
-            border-left: 4px solid #ffc107;
-
-            mat-icon {
-                color: #f57c00;
-                font-size: 20px;
-                width: 20px;
-                height: 20px;
-                flex-shrink: 0;
-                margin-top: 2px;
-            }
-
-            span {
-                font-size: 13px;
-                color: #e65100;
-                line-height: 1.5;
             }
         }
     }
@@ -1916,11 +2098,12 @@
         padding: 16px 24px;
         border-top: 1px solid #e0e0e0;
         background: #fafafa;
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
 
-        button {
-            mat-icon {
-                margin-right: 8px;
-            }
+        button mat-icon {
+            margin-right: 8px;
         }
     }
 }
@@ -2462,6 +2645,101 @@ mark.search-highlight {
                 font-size: 10px;
                 min-width: 24px;
             }
+        }
+    }
+}
+
+// ORACC ATF Import Dialog
+.import-oracc-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.import-oracc-dialog {
+    background: #1e1e1e;
+    border-radius: 8px;
+    width: 800px;
+    max-width: 90vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+    .import-dialog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid #333;
+
+        h3 {
+            margin: 0;
+            font-size: 16px;
+            color: #e0e0e0;
+        }
+    }
+
+    .import-dialog-body {
+        padding: 20px;
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+
+        .import-hint {
+            color: #aaa;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .import-identifier-row {
+            display: flex;
+            gap: 12px;
+
+            mat-form-field {
+                flex: 1;
+            }
+        }
+
+        .import-textarea {
+            flex: 1;
+            min-height: 350px;
+            background: #111;
+            color: #d4d4d4;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+
+            &:focus {
+                border-color: #666;
+            }
+        }
+    }
+
+    .import-dialog-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 12px 20px;
+        border-top: 1px solid #333;
+
+        .inline-spinner {
+            display: inline-block;
+            margin-right: 8px;
         }
     }
 }

@@ -1317,6 +1317,7 @@ names:
             "metrics": metrics,
             "training_time_seconds": training_time,
             "model_path": str(output_dir / "best.pt"),
+            "actual_epochs": actual_epochs,
         }
 
     # ============== Inference ==============
@@ -1403,10 +1404,20 @@ names:
 
         logger.info(f"YOLO predict: {len(detections)} detections in {processing_time}ms, device={device_used}")
 
+        # Load model metadata to include class colors from training
+        model_classes = []
+        model_dir = MODELS_PATH / model_name
+        metadata_path = model_dir / "metadata.json"
+        if metadata_path.exists():
+            with open(metadata_path) as f:
+                metadata = json.load(f)
+            model_classes = metadata.get("classes", [])
+
         return {
             "success": True,
             "detections": detections,
             "model_used": model_name,
+            "model_classes": model_classes,
             "processing_time_ms": processing_time,
             "image_size": {"width": img_width, "height": img_height},
         }
@@ -1512,7 +1523,7 @@ names:
 
         total_images = len(pages)
 
-        # 2. Load model to get class names
+        # 2. Load model to get class names and colors from model metadata
         from ultralytics import YOLO
         if model_name not in self._model_cache:
             model_path = self.get_model_path(model_name)
@@ -1520,12 +1531,32 @@ names:
         model = self._model_cache[model_name]
         model_classes = [model.names[i] for i in sorted(model.names.keys())]
 
+        # Load model metadata to preserve training colors
+        model_metadata_path = MODELS_PATH / model_name / "metadata.json"
+        model_class_colors = {}
+        if model_metadata_path.exists():
+            with open(model_metadata_path) as f:
+                model_meta = json.load(f)
+            for cls in model_meta.get("classes", []):
+                model_class_colors[cls["name"]] = cls.get("color")
+
         # 3. Create dataset with the model's classes
         self.create_dataset(
             name=dataset_name,
             classes=model_classes,
             description=f"Auto-annotated from '{project.name}' using model '{model_name}'"
         )
+
+        # Overwrite default colors with model's training colors
+        if model_class_colors:
+            ds_metadata_path = DATASETS_PATH / dataset_name / "metadata.json"
+            with open(ds_metadata_path) as f:
+                ds_metadata = json.load(f)
+            for cls in ds_metadata["classes"]:
+                if cls["name"] in model_class_colors and model_class_colors[cls["name"]]:
+                    cls["color"] = model_class_colors[cls["name"]]
+            with open(ds_metadata_path, "w", encoding="utf-8") as f:
+                json.dump(ds_metadata, f, indent=2)
 
         # 4. Decide train/val split
         indices = list(range(total_images))
@@ -1654,10 +1685,10 @@ names:
 
     def export_dataset_snippets_zip(self, dataset_name: str) -> str:
         """
-        Export dataset as cropped snippets organized by page, with a manifest.
+        Export dataset as cropped snippets with page name in filename, flat structure.
 
         Structure:
-            page_001/entry_0.png, page_001/subentry_0.png, ...
+            page_001_entry_0.png, page_001_subentry_0.png, ...
             manifest.json
 
         Returns path to a temp zip file (caller must delete).
@@ -1682,6 +1713,19 @@ names:
         tmp.close()
 
         manifest = []
+        ds_lower = dataset_name.lower()
+
+        # Column-aware sort key matching save_ahw_entries_to_library ordering
+        HEADER_CLASSES = {"guidewords", "pageNumber", "pagenumber"}
+
+        def _is_header(class_name: str) -> bool:
+            return class_name in HEADER_CLASSES or class_name.lower().replace("_", "").replace(" ", "") in HEADER_CLASSES
+
+        def _ann_sort_key(rec):
+            if _is_header(rec["class_name"]):
+                return (0, rec["x_center"])
+            col = 0 if rec["x_center"] < 0.5 else 1
+            return (1, col, rec["y_center"])
 
         with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_DEFLATED) as zf:
             for split in ["train", "val"]:
@@ -1731,7 +1775,8 @@ names:
 
                     page_stem = image_file.stem
 
-                    # Per-class counters for this page
+                    # Build annotation records with pixel coords
+                    page_records = []
                     class_counters = {}
 
                     for ann in annotations:
@@ -1753,29 +1798,60 @@ names:
 
                         crop = img.crop((x0, y0, x1, y1))
 
-                        # Build filename with per-class index
+                        # Per-class index (matches download snippet naming)
                         idx = class_counters.get(cname, 0)
                         class_counters[cname] = idx + 1
-                        snippet_name = f"{page_stem}/{cname}_{idx}.png"
 
-                        # Write crop to zip
-                        buf = BytesIO()
-                        crop.save(buf, format="PNG")
-                        zf.writestr(snippet_name, buf.getvalue())
-
-                        manifest.append({
-                            "snippet": snippet_name,
-                            "page": page_stem,
-                            "split": split,
+                        page_records.append({
                             "class_name": cname,
                             "class_id": cid,
+                            "class_index": idx,
+                            "x_center": ann["x_center"],
+                            "y_center": ann["y_center"],
                             "bbox_px": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
-                            "y_center": round(ann["y_center"], 6),
+                            "crop": crop,
+                            "width": ann["width"],
+                            "height": ann["height"],
                             "width_px": x1 - x0,
                             "height_px": y1 - y0,
                         })
 
                     img.close()
+
+                    # Compute merged_order: column-aware sort matching OCR numbering
+                    sorted_for_merge = sorted(page_records, key=_ann_sort_key)
+                    for merge_idx, rec in enumerate(sorted_for_merge):
+                        rec["merged_order"] = merge_idx + 1
+
+                    # Write crops and manifest entries in original y_center order
+                    for rec in page_records:
+                        cname = rec["class_name"]
+                        idx = rec["class_index"]
+                        snippet_name = f"{ds_lower}-{page_stem}-{idx:03d}-{cname}.png"
+
+                        buf = BytesIO()
+                        rec["crop"].save(buf, format="PNG")
+                        zf.writestr(snippet_name, buf.getvalue())
+
+                        column = "a" if rec["x_center"] < 0.5 else "b"
+
+                        manifest.append({
+                            "snippet": snippet_name,
+                            "page": page_stem,
+                            "column": column,
+                            "merged_order": rec["merged_order"],
+                            "split": split,
+                            "class_name": cname,
+                            "class_id": rec["class_id"],
+                            "class_index": idx,
+                            "bbox_px": rec["bbox_px"],
+                            "x_center": round(rec["x_center"], 6),
+                            "y_center": round(rec["y_center"], 6),
+                            "width": round(rec["width"], 6),
+                            "height": round(rec["height"], 6),
+                            "width_px": rec["width_px"],
+                            "height_px": rec["height_px"],
+                        })
 
             # Write manifest
             zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
@@ -1787,15 +1863,14 @@ names:
         """
         Save dataset snippets directly to the Pages library instead of a ZIP download.
 
-        Preserves the same folder-per-page structure as export_dataset_snippets_zip():
-          parent_project/
-            page_001/   (child project with snippets as page_001.png, page_002.png, ...)
-            page_002/
+        Flat structure with page name in filename (like AHw entries):
+          project/
+            page_001_entry_0.png, page_001_subentry_0.png, ...
             manifest.json
 
-        Each source page becomes a child project containing its cropped snippets
-        in top-to-bottom reading order. The manifest.json maps each snippet back
-        to its class name, bounding box, and source page.
+        All snippets are saved into one project with page name embedded in
+        the filename. The manifest.json maps each snippet back to its class
+        name, bounding box, and source page.
 
         Args:
             dataset_name: Name of the YOLO dataset
@@ -1837,6 +1912,18 @@ names:
 
         manifest = []
         snippet_count = 0
+        ds_lower = dataset_name.lower()
+
+        HEADER_CLASSES = {"guidewords", "pageNumber", "pagenumber"}
+
+        def _is_header(class_name: str) -> bool:
+            return class_name in HEADER_CLASSES or class_name.lower().replace("_", "").replace(" ", "") in HEADER_CLASSES
+
+        def _ann_sort_key(rec):
+            if _is_header(rec["class_name"]):
+                return (0, rec["x_center"])
+            col = 0 if rec["x_center"] < 0.5 else 1
+            return (1, col, rec["y_center"])
 
         for split in ["train", "val"]:
             images_dir = dataset_path / "images" / split
@@ -1884,11 +1971,8 @@ names:
 
                 page_stem = image_file.stem
 
-                # Create a child project for this source page
-                child_resp = pages_handler.create_project(page_stem, parent_id=result_project_id)
-                child_project_id = child_resp.project_id
-
                 class_counters = {}
+                page_records = []
 
                 for ann in annotations:
                     cid = ann["class_id"]
@@ -1911,37 +1995,68 @@ names:
 
                     idx = class_counters.get(cname, 0)
                     class_counters[cname] = idx + 1
-                    snippet_name = f"{cname}_{idx}.png"
 
-                    # Save crop to bytes and upload as page in the child project
-                    buf = BytesIO()
-                    crop.save(buf, format="PNG")
-                    crop_bytes = buf.getvalue()
-
-                    pages_handler.upload_image(crop_bytes, snippet_name, project_id=child_project_id, preserve_name=True)
-                    snippet_count += 1
-
-                    manifest.append({
-                        "snippet": f"{page_stem}/{snippet_name}",
-                        "page": page_stem,
-                        "child_project_id": child_project_id,
-                        "split": split,
+                    page_records.append({
                         "class_name": cname,
                         "class_id": cid,
+                        "class_index": idx,
+                        "x_center": ann["x_center"],
+                        "y_center": ann["y_center"],
                         "bbox_px": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
-                        "y_center": round(ann["y_center"], 6),
+                        "crop": crop,
+                        "width": ann["width"],
+                        "height": ann["height"],
                         "width_px": x1 - x0,
                         "height_px": y1 - y0,
                     })
 
                 img.close()
 
+                # Compute merged_order: column-aware sort matching OCR numbering
+                sorted_for_merge = sorted(page_records, key=_ann_sort_key)
+                for merge_idx, rec in enumerate(sorted_for_merge):
+                    rec["merged_order"] = merge_idx + 1
+
+                # Write crops and manifest entries in original y_center order
+                for rec in page_records:
+                    cname = rec["class_name"]
+                    idx = rec["class_index"]
+                    snippet_name = f"{ds_lower}-{page_stem}-{idx:03d}-{cname}.png"
+
+                    # Save crop to bytes and upload as page in the project
+                    buf = BytesIO()
+                    rec["crop"].save(buf, format="PNG")
+                    crop_bytes = buf.getvalue()
+
+                    pages_handler.upload_image(crop_bytes, snippet_name, project_id=result_project_id, preserve_name=True)
+                    snippet_count += 1
+
+                    column = "a" if rec["x_center"] < 0.5 else "b"
+
+                    manifest.append({
+                        "snippet": snippet_name,
+                        "page": page_stem,
+                        "column": column,
+                        "merged_order": rec["merged_order"],
+                        "split": split,
+                        "class_name": cname,
+                        "class_id": rec["class_id"],
+                        "class_index": idx,
+                        "bbox_px": rec["bbox_px"],
+                        "x_center": round(rec["x_center"], 6),
+                        "y_center": round(rec["y_center"], 6),
+                        "width": round(rec["width"], 6),
+                        "height": round(rec["height"], 6),
+                        "width_px": rec["width_px"],
+                        "height_px": rec["height_px"],
+                    })
+
         # Save manifest.json into the parent project directory
         project_path = _resolve_project_path(result_project_id)
         manifest_path = project_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
-        logger.info(f"Saved {snippet_count} snippets from dataset '{dataset_name}' to library project '{result_project_id}' (folder-per-page)")
+        logger.info(f"Saved {snippet_count} snippets from dataset '{dataset_name}' to library project '{result_project_id}' (flat)")
         return {
             "project_id": result_project_id,
             "name": result_name,
@@ -1951,6 +2066,9 @@ names:
 
     def save_ahw_entries_to_library(self, dataset_name: str, project_id: str = None, project_name: str = None) -> Dict:
         """
+        DEPRECATED: Use save_snippets_to_library instead.
+        Save individual snippets and merge text content after OCR, not before.
+
         Save dataset snippets as merged AHw dictionary entries.
 
         All snippets saved flat into one project (no child folders).
@@ -2074,7 +2192,12 @@ names:
             split = pd["split"]
             page_anns = []
 
-            for ann in pd["annotations"]:
+            # Sort annotations by y_center first (matching download/snippet order)
+            # to assign per-class snippet_index before column-aware resorting.
+            sorted_by_y = sorted(pd["annotations"], key=lambda a: a["y_center"])
+            class_counters = {}
+
+            for ann in sorted_by_y:
                 cname = class_names.get(ann["class_id"], f"class_{ann['class_id']}")
                 cx, cy = ann["x_center"] * img_w, ann["y_center"] * img_h
                 bw, bh = ann["width"] * img_w, ann["height"] * img_h
@@ -2085,12 +2208,21 @@ names:
                 if x1 <= x0 or y1 <= y0:
                     continue
                 crop = img.crop((x0, y0, x1, y1)).copy()
+                column = "a" if ann["x_center"] < 0.5 else "b"
+
+                # snippet_index matches the per-class counter used by
+                # export_dataset_snippets_zip, so entries can be cross-referenced.
+                snippet_idx = class_counters.get(cname, 0)
+                class_counters[cname] = snippet_idx + 1
+
                 page_anns.append({
                     "class_name": cname,
                     "class_id": ann["class_id"],
+                    "snippet_index": snippet_idx,
                     "bbox_px": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
                     "x_center": ann["x_center"],
                     "y_center": ann["y_center"],
+                    "column": column,
                     "crop": crop,
                     "page_stem": page_stem,
                     "split": split,
@@ -2248,10 +2380,19 @@ names:
             pages_handler.upload_image(buf.getvalue(), fname, project_id=result_project_id, preserve_name=True)
             entry_count += 1
 
+            # Column: collect unique columns preserving order (e.g. "a", "ab", "b")
+            seen_cols = []
+            for a in anns:
+                c = a.get("column", "a")
+                if c not in seen_cols:
+                    seen_cols.append(c)
+            entry_column = "".join(seen_cols)
+
             manifest.append({
                 "entry": fname,
                 "pages": item["pages"],
                 "page_stems": item["page_stems"],
+                "column": entry_column,
                 "order_start": first_order,
                 "order_end": last_order,
                 "split": anns[0]["split"],
@@ -2259,7 +2400,9 @@ names:
                 "merged_count": len(anns),
                 "merged_from": [
                     {"class_name": a["class_name"], "order": a["order"],
-                     "page": a["page_num"], "bbox_px": a["bbox_px"]}
+                     "snippet_index": a.get("snippet_index", 0),
+                     "page": a["page_num"], "column": a.get("column", "a"),
+                     "bbox_px": a["bbox_px"]}
                     for a in anns
                 ],
                 "width_px": merged_img.width,

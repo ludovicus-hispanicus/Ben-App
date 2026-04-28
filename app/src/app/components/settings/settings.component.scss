@@ -759,6 +759,141 @@
   }
 }
 
+// === Modules Grid ===
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.module-card {
+  background: #fff;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s, opacity 0.2s;
+
+  &.enabled {
+    border-color: #28a745;
+    background: #f8fff8;
+  }
+
+  &.disabled {
+    border-color: #ccc;
+    opacity: 0.6;
+  }
+
+  &.core {
+    border-color: #1976d2;
+    background: #f0f7ff;
+  }
+
+  .module-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+
+    .module-icon {
+      color: #555;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .module-info {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      strong {
+        font-size: 1.05em;
+        color: #333;
+      }
+
+      .core-badge {
+        background: #1976d2;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.7em;
+        font-weight: 500;
+      }
+
+      .not-installed-badge {
+        background: #888;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.7em;
+        font-weight: 500;
+      }
+    }
+
+    .always-on {
+      color: #888;
+      font-size: 0.8em;
+      font-style: italic;
+    }
+  }
+
+  .module-description {
+    color: #666;
+    font-size: 0.85em;
+    margin: 0;
+  }
+}
+
+// Toggle switch
+.module-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 24px;
+    transition: 0.3s;
+
+    &::before {
+      content: '';
+      position: absolute;
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+  }
+
+  input:checked + .toggle-slider {
+    background-color: #28a745;
+  }
+
+  input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+  }
+}
+
 // === Kraken Trained Models ===
 
 .active-model-info {
@@ -926,4 +1061,128 @@
   margin-top: 20px;
   padding-top: 15px;
   border-top: 1px solid #eee;
+}
+
+// --- eBL Dictionary section ---
+
+.dictionary-status {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.9em;
+
+    & + .status-row {
+      border-top: 1px dashed #eee;
+    }
+  }
+
+  .status-label {
+    min-width: 130px;
+    color: #666;
+  }
+
+  .status-value {
+    color: #333;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-sub {
+    color: #888;
+    font-weight: 400;
+    font-size: 0.9em;
+  }
+
+  .status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccc;
+
+    &.status-available { background: #28a745; }
+    &.status-unavailable { background: #dc3545; }
+  }
+}
+
+.dictionary-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+
+  .dictionary-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dictionary-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+
+    strong { color: #333; }
+  }
+
+  .dictionary-card-meta {
+    color: #888;
+    font-size: 0.8em;
+  }
+
+  .dictionary-card-description {
+    color: #666;
+    font-size: 0.85em;
+    margin: 0;
+  }
+
+  .dictionary-card-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #eee;
+  }
+
+  .download-progress {
+    .progress-bar {
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 4px;
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #007bff, #00c6ff);
+        transition: width 0.3s ease;
+      }
+    }
+
+    .progress-text {
+      font-size: 0.75em;
+      color: #666;
+    }
+  }
+
+  .warn-text {
+    color: #b8860b;
+    font-size: 0.8em;
+  }
 }

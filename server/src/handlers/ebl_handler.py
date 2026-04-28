@@ -62,8 +62,21 @@ class EblHandler:
                 with open(self.CONFIG_FILE, 'r') as f:
                     config = json.load(f)
                     self.api_url = config.get('api_url')
-                    self.access_token = config.get('access_token')
-                    self.refresh_token = config.get('refresh_token')
+                    raw_token = config.get('access_token')
+                    # Handle wrapped OAuth response or extract JWT
+                    if raw_token:
+                        # Extract JWT if the value contains a wrapped response
+                        import re
+                        jwt_match = re.search(r'(eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)', raw_token)
+                        if jwt_match:
+                            self.access_token = jwt_match.group(1)
+                        else:
+                            self.access_token = raw_token
+                        # Also try to extract refresh token from wrapped response
+                        rt_match = re.search(r'"refresh_token"\s*:\s*"(v1\.[^"]+)"', raw_token)
+                        if rt_match:
+                            self.refresh_token = rt_match.group(1)
+                    self.refresh_token = self.refresh_token or config.get('refresh_token')
                     self.auth_method = config.get('auth_method')
                     logging.info(f"eBL config loaded from file (auth_method={self.auth_method})")
                     return
@@ -559,7 +572,7 @@ class EblHandler:
             logging.info(f"Calling eBL API: {self.api_url}{endpoint}")
             payload = {"transliteration": atf_text}
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=600.0) as client:
                 response = await client.post(
                     f"{self.api_url}{endpoint}",
                     headers={
@@ -846,7 +859,8 @@ class EblHandler:
         fragment_number: str,
         atf_text: str,
         notes: Optional[str] = None,
-        introduction: Optional[str] = None
+        introduction: Optional[str] = None,
+        skip_validation: bool = False
     ) -> Dict[str, Any]:
         """
         Export transliteration to eBL.
@@ -868,6 +882,8 @@ class EblHandler:
         token_info = self.get_token_info()
         logging.info(f"[eBL EXPORT] Token exp: {token_info.get('exp')}, scopes: {token_info.get('scope', 'N/A')}, auth_method: {self.auth_method}")
         logging.info(f"[eBL EXPORT] Token expired: {self.is_token_expired()}, token length: {len(self.access_token or '')}")
+        logging.info(f"[eBL EXPORT] Token starts with: {(self.access_token or '')[:30]}")
+        logging.info(f"[eBL EXPORT] Token ends with: {(self.access_token or '')[-30:]}")
 
         # Refresh token if expired
         if self.is_token_expired():
@@ -882,8 +898,12 @@ class EblHandler:
                 }
             logging.info("[eBL EXPORT] Token refreshed successfully")
 
-        # First validate the ATF
-        validation = await self.validate_atf(atf_text, fragment_number)
+        # First validate the ATF (unless already validated by frontend)
+        if skip_validation:
+            logging.info("[eBL EXPORT] Skipping local validation (already done by frontend)")
+            validation = {"valid": True}
+        else:
+            validation = await self.validate_atf(atf_text, fragment_number)
         if not validation["valid"]:
             # Use error_strings (human-readable) not errors (dicts)
             error_messages = validation.get('error_strings', [str(e) for e in validation.get('errors', [])])
@@ -917,7 +937,8 @@ class EblHandler:
                 payload["introduction"] = introduction
 
             # Make the request - eBL will perform full validation including sign database
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # Large texts can take several minutes for eBL to validate
+            async with httpx.AsyncClient(timeout=600.0) as client:
                 response = await client.post(
                     f"{self.api_url}{endpoint}",
                     headers={
@@ -952,7 +973,6 @@ class EblHandler:
                             line_num = err.get("lineNumber", 0)
                             desc = err.get("description", str(err))
                             col = None
-                            # Try to detect exact column for bracket errors
                             if line_num > 0 and line_num <= len(atf_lines):
                                 col = self._detect_error_column(atf_lines[line_num - 1], desc)
                             validation_errors.append({
@@ -1041,9 +1061,11 @@ class EblHandler:
                     }
 
         except httpx.RequestError as e:
+            logging.error(f"[eBL EXPORT] Network error ({type(e).__name__}): {e}")
+            logging.error(f"[eBL EXPORT] Target URL: {self.api_url}{endpoint}")
             return {
                 "success": False,
-                "message": f"Network error: Could not connect to eBL API",
+                "message": f"Network error: {type(e).__name__} - {e}",
                 "fragment_url": None,
                 "error_code": "NETWORK_ERROR",
                 "help": "Check your internet connection and eBL API URL."

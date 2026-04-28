@@ -10,3 +10,4 @@ class Dimensions(BaseModel):
     height: float
     width: float
     index: Optional[Index] = None
+    view_code: Optional[str] = None

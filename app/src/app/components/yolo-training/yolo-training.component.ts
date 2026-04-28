@@ -132,6 +132,7 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
   predictConfidence: number = 0.25;
   predictIou: number = 0.45;
   predictDetections: Detection[] = [];
+  predictModelClasses: YoloClass[] = [];
   predictProcessingTime: number = 0;
   predictModelUsed: string = '';
   isPredicting: boolean = false;
@@ -1059,6 +1060,7 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: (response) => {
         this.predictDetections = response.detections;
+        this.predictModelClasses = response.model_classes || [];
         this.predictProcessingTime = response.processing_time_ms;
         this.predictModelUsed = response.model_used;
         this.isPredicting = false;
@@ -1292,13 +1294,19 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
     this.predictImageUrl = null;
     this.predictImageElement = null;
     this.predictDetections = [];
+    this.predictModelClasses = [];
     this.extractedDetections = [];
     this.predictProcessingTime = 0;
     this.predictModelUsed = '';
   }
 
   getDetectionClassColor(className: string): string {
-    return getClassColor(className);
+    // Use the prediction model's classes (which preserve training colors) first,
+    // then fall back to the selected dataset's classes
+    const classes = this.predictModelClasses.length > 0
+      ? this.predictModelClasses
+      : (this.selectedDataset?.classes || this.annotationClasses);
+    return getClassColor(className, classes);
   }
 
   private drawPredictCanvas(): void {

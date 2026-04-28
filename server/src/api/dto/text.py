@@ -63,6 +63,7 @@ class NewTextPreviewDto(BaseModel):
     is_curated: bool = False
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
+    is_reviewed: bool = False
     lines_count: int = 0
     dataset_id: Optional[int] = None
     image_size: Optional[int] = None  # file size in bytes
@@ -72,6 +73,7 @@ class NewTextPreviewDto(BaseModel):
         latest_trans_id = None
         is_curated_kraken = False
         is_curated_vlm = False
+        is_reviewed = False
         lines_count = 0
         if new_text.transliterations:
             latest_trans_id = new_text.transliterations[-1].transliteration_id
@@ -87,6 +89,8 @@ class NewTextPreviewDto(BaseModel):
                         is_curated_kraken = True
                     if getattr(latest_edit, 'is_curated_vlm', False):
                         is_curated_vlm = True
+                    if getattr(latest_edit, 'is_reviewed', False):
+                        is_reviewed = True
                     # Legacy: derive from is_fixed + training_targets
                     if not is_curated_kraken and not is_curated_vlm and getattr(latest_edit, 'is_fixed', False):
                         targets = getattr(latest_edit, 'training_targets', None) or []
@@ -133,6 +137,7 @@ class NewTextPreviewDto(BaseModel):
             is_curated=is_curated,
             is_curated_kraken=is_curated_kraken,
             is_curated_vlm=is_curated_vlm,
+            is_reviewed=is_reviewed,
             lines_count=lines_count,
             dataset_id=getattr(new_text, 'dataset_id', None),
             image_size=image_size,

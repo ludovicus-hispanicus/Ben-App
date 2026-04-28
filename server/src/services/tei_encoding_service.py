@@ -151,7 +151,7 @@ class TeiEncodingService:
             from google.genai import types
 
             client = genai.Client(api_key=api_key)
-            model_id = model or "gemini-2.0-flash"
+            model_id = model or "gemini-2.5-flash-lite"
 
             response = client.models.generate_content(
                 model=model_id,

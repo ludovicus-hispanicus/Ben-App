@@ -1,0 +1,549 @@
+<div class="segmentation-container">
+
+  <div class="header">
+    <h1>Segmentation</h1>
+  </div>
+
+  <!-- Navigation Tabs (mirrors CuReD layout) -->
+  <div class="nav-tabs">
+    <button [class.active]="viewMode === SegmentationViewMode.Datasets"
+            (click)="setViewMode(SegmentationViewMode.Datasets)">
+      <mat-icon>edit_document</mat-icon> Datasets
+    </button>
+    <button [class.active]="viewMode === SegmentationViewMode.Models"
+            (click)="setViewMode(SegmentationViewMode.Models)">
+      <mat-icon>model_training</mat-icon> Models
+    </button>
+    <button [class.active]="viewMode === SegmentationViewMode.Training"
+            (click)="setViewMode(SegmentationViewMode.Training)">
+      <mat-icon>fitness_center</mat-icon> Training
+    </button>
+    <button [class.active]="viewMode === SegmentationViewMode.Batch"
+            (click)="setViewMode(SegmentationViewMode.Batch)">
+      <mat-icon>batch_prediction</mat-icon> Batch
+    </button>
+    <button [class.active]="viewMode === SegmentationViewMode.Export"
+            (click)="setViewMode(SegmentationViewMode.Export)">
+      <mat-icon>publish</mat-icon> Export
+    </button>
+  </div>
+
+  <!-- ====== DATASETS (CuReD-style sidebar + main) ====== -->
+  <div class="view-content" *ngIf="viewMode === SegmentationViewMode.Datasets">
+    <div class="seg-dashboard">
+
+      <!-- LEFT: Sidebar (mirrors CuReD) -->
+      <div class="seg-sidebar">
+
+        <!-- Create dataset -->
+        <div class="create-dataset-row">
+          <input [(ngModel)]="newDatasetName" placeholder="New dataset..."
+                 (keyup.enter)="createDataset()" class="folder-name-input" />
+          <button mat-raised-button color="primary" (click)="createDataset()"
+                  [disabled]="!newDatasetName.trim() || !newDatasetPath.trim()">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
+
+        <!-- Captured-path chip (filled by drop / Server / Folder) -->
+        <div class="path-chip" *ngIf="newDatasetPath">
+          <mat-icon>folder</mat-icon>
+          <span [matTooltip]="newDatasetPath">{{ newDatasetPath }}</span>
+          <button mat-icon-button class="path-chip-clear" (click)="clearCapturedPath()" matTooltip="Clear">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <div class="create-error" *ngIf="createError">{{ createError }}</div>
+
+        <!-- Auto-Annotate button (mirrors Layout Detection sidebar) -->
+        <button mat-stroked-button color="accent" class="auto-annotate-btn"
+                (click)="showAutoAnnotateForm()"
+                [disabled]="datasets.length === 0"
+                matTooltip="Run a model on a dataset to create a pre-annotated dataset">
+          <mat-icon>auto_fix_high</mat-icon> Auto-Annotate
+        </button>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Upload zone -->
+        <div class="sidebar-upload"
+             (dragover)="onDragOver($event)"
+             (dragleave)="onDragLeave($event)"
+             (drop)="onDrop($event)"
+             [class.drag-over]="isDragOver"
+             (click)="uploadFolder.click()">
+          <mat-icon>cloud_upload</mat-icon>
+          <span>Drop folder or click</span>
+          <span class="file-types">images folder</span>
+        </div>
+
+        <div class="sidebar-btn-row">
+          <button mat-stroked-button class="browse-server-btn" (click)="openFolderPicker()">
+            <mat-icon>folder_open</mat-icon> Server
+          </button>
+          <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+                  matTooltip="Pick a local folder of images">
+            <mat-icon>snippet_folder</mat-icon> Folder
+          </button>
+          <input #uploadFolder (change)="handleFolderInput($event)" type="file"
+                 webkitdirectory directory multiple style="display:none"/>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Mini stats -->
+        <div class="training-mini-stats">
+          <div class="mini-stat">
+            <span class="mini-stat-value">{{ totalImages }}</span>
+            <span class="mini-stat-label">Images</span>
+          </div>
+          <div class="mini-stat-separator">/</div>
+          <div class="mini-stat">
+            <span class="mini-stat-value">{{ datasets.length }}</span>
+            <span class="mini-stat-label">Datasets</span>
+          </div>
+        </div>
+
+        <div class="training-recs">
+          <span class="rec-hint"><strong>{{ totalDestitched }}</strong> images destitched this session</span>
+          <span class="rec-hint" *ngIf="datasetsWithErrors > 0"><strong>{{ datasetsWithErrors }}</strong> dataset(s) with folder errors</span>
+        </div>
+
+        <!-- Per-dataset breakdown -->
+        <div class="dataset-stats-breakdown" *ngIf="datasets.length > 0">
+          <div class="dataset-stat-row" *ngFor="let d of datasets">
+            <span class="dataset-stat-name">{{ d.name }}</span>
+            <span class="dataset-stat-values" *ngIf="d.image_count !== undefined && !d.loading">
+              {{ d.image_count }} images
+            </span>
+            <span class="dataset-stat-values loading" *ngIf="d.loading">…</span>
+            <span class="dataset-stat-values err" *ngIf="d.error && !d.loading" [matTooltip]="d.error">!</span>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <!-- Active Models -->
+        <div class="active-models-section">
+          <div class="active-models-header">Active Models</div>
+
+          <div class="models-group">
+            <div class="models-group-label">Destitch (local)</div>
+            <div class="model-item">View splitter</div>
+          </div>
+
+          <div class="models-group">
+            <div class="models-group-label">Line segmentation</div>
+            <div class="model-item placeholder">— none yet —</div>
+          </div>
+
+          <div class="models-group">
+            <div class="models-group-label">View classifier</div>
+            <div class="model-item placeholder">— none yet —</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Main panel (grid, drill-down, or auto-annotate form) -->
+      <div class="seg-main">
+
+        <!-- ===== AUTO-ANNOTATE FORM (mirrors yolo-training) ===== -->
+        <div class="auto-annotate-panel main-panel" *ngIf="autoAnnotateFormVisible">
+          <div class="detail-header">
+            <h3>Auto-Annotate from Model</h3>
+            <span class="header-spacer"></span>
+            <button mat-icon-button (click)="hideAutoAnnotateForm()" matTooltip="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <p class="auto-annotate-description">
+            Run a segmentation model on every image in a source dataset to produce a pre-annotated
+            dataset (cropped views or masks). Review and correct the predictions, then use the
+            corrected dataset to train a better model.
+          </p>
+
+          <!-- Source dataset -->
+          <mat-form-field appearance="outline">
+            <mat-label>Source dataset</mat-label>
+            <mat-select [(ngModel)]="autoAnnotateSourceDatasetId" (selectionChange)="onAutoAnnotateSourceChange()">
+              <mat-option *ngFor="let d of datasets" [value]="d.id">
+                {{ d.name }}<span *ngIf="d.image_count !== undefined"> — {{ d.image_count }} images</span>
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <!-- Model -->
+          <mat-form-field appearance="outline">
+            <mat-label>Model</mat-label>
+            <mat-select [(ngModel)]="autoAnnotateModelId">
+              <mat-optgroup label="Destitch">
+                <mat-option *ngFor="let m of autoAnnotateModels"
+                            [value]="m.id"
+                            [disabled]="!m.available"
+                            [hidden]="m.group !== 'destitch'">
+                  {{ m.label }}
+                </mat-option>
+              </mat-optgroup>
+              <mat-optgroup label="Line segmentation">
+                <mat-option *ngFor="let m of autoAnnotateModels"
+                            [value]="m.id"
+                            [disabled]="!m.available"
+                            [hidden]="m.group !== 'line-segmentation'">
+                  {{ m.label }}
+                </mat-option>
+              </mat-optgroup>
+              <mat-optgroup label="View classifier">
+                <mat-option *ngFor="let m of autoAnnotateModels"
+                            [value]="m.id"
+                            [disabled]="!m.available"
+                            [hidden]="m.group !== 'view-classifier'">
+                  {{ m.label }}
+                </mat-option>
+              </mat-optgroup>
+            </mat-select>
+          </mat-form-field>
+
+          <!-- New dataset name -->
+          <mat-form-field appearance="outline">
+            <mat-label>New dataset name</mat-label>
+            <input matInput [(ngModel)]="autoAnnotateDatasetName" placeholder="e.g., si_test_destitched">
+          </mat-form-field>
+
+          <!-- Destination folder -->
+          <mat-form-field appearance="outline">
+            <mat-label>Destination folder (server path)</mat-label>
+            <input matInput [(ngModel)]="autoAnnotateDestPath" placeholder="C:/path/to/output">
+          </mat-form-field>
+
+          <!-- Confidence Slider -->
+          <div class="slider-field">
+            <label>Confidence: {{ autoAnnotateConfidence | number:'1.2-2' }}</label>
+            <input type="range" min="0.05" max="0.95" step="0.05"
+                   [(ngModel)]="autoAnnotateConfidence">
+          </div>
+
+          <!-- Options (destitch) -->
+          <div class="auto-annotate-options" *ngIf="autoAnnotateModelId === 'destitch'">
+            <label class="option-row">
+              <input type="checkbox" [(ngModel)]="autoAnnotatePassthrough" />
+              <span>Pass non-composite images through unchanged</span>
+            </label>
+            <label class="option-row">
+              <input type="checkbox" [(ngModel)]="autoAnnotateIncludeMasks" />
+              <span>Also emit per-view binary masks (PNG)</span>
+            </label>
+            <label class="option-row">
+              <input type="checkbox" [(ngModel)]="autoAnnotateOverwrite" />
+              <span>Overwrite existing outputs</span>
+            </label>
+          </div>
+
+          <!-- Start button -->
+          <button mat-raised-button color="primary" class="auto-annotate-start" (click)="startAutoAnnotate()"
+                  [disabled]="isAutoAnnotating || !autoAnnotateSourceDatasetId || !autoAnnotateModelId
+                              || !autoAnnotateDatasetName.trim() || !autoAnnotateDestPath.trim()">
+            <mat-icon>{{ isAutoAnnotating ? 'hourglass_empty' : 'auto_fix_high' }}</mat-icon>
+            {{ isAutoAnnotating ? 'Annotating...' : 'Start Auto-Annotation' }}
+          </button>
+
+          <!-- Progress -->
+          <div class="auto-annotate-progress" *ngIf="autoAnnotateStatus">
+            <mat-progress-bar mode="determinate" [value]="autoAnnotateStatus.progress_percent">
+            </mat-progress-bar>
+            <div class="progress-stats">
+              <span>{{ autoAnnotateStatus.processed_images }} / {{ autoAnnotateStatus.total_images }} images</span>
+              <span *ngIf="autoAnnotateStatus.failed_images">{{ autoAnnotateStatus.failed_images }} failed</span>
+              <span class="status-tag" [class]="'status-' + autoAnnotateStatus.status">{{ autoAnnotateStatus.status }}</span>
+            </div>
+
+            <button mat-raised-button color="accent" class="open-result-btn"
+                    *ngIf="autoAnnotateStatus.status === 'completed'"
+                    (click)="openAutoAnnotatedDataset()">
+              <mat-icon>folder_open</mat-icon> Open result dataset
+            </button>
+
+            <div class="error-message" *ngIf="autoAnnotateStatus.error">
+              <mat-icon>error</mat-icon> {{ autoAnnotateStatus.error }}
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Dataset cards / list view ===== -->
+        <div *ngIf="showDatasetList && !autoAnnotateFormVisible" class="main-panel">
+          <div class="dataset-toolbar" *ngIf="datasets.length > 0">
+            <div class="dataset-search-box">
+              <mat-icon class="dataset-search-icon">search</mat-icon>
+              <input [(ngModel)]="datasetSearchQuery" placeholder="Search datasets..." class="dataset-search-input" />
+              <button *ngIf="datasetSearchQuery" mat-icon-button class="dataset-search-clear" (click)="clearDatasetSearch()">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            <span class="dataset-toolbar-count">{{ filteredDatasets.length }} dataset{{ filteredDatasets.length === 1 ? '' : 's' }}</span>
+
+            <span class="dataset-toolbar-spacer"></span>
+
+            <div class="view-toggle">
+              <button [class.active-view]="datasetViewMode === 'grid'" (click)="datasetViewMode = 'grid'" matTooltip="Grid view">
+                <mat-icon>grid_view</mat-icon>
+              </button>
+              <button [class.active-view]="datasetViewMode === 'list'" (click)="datasetViewMode = 'list'" matTooltip="List view">
+                <mat-icon>view_list</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- Grid view -->
+          <div class="dataset-grid" *ngIf="datasetViewMode === 'grid'">
+            <div *ngFor="let dataset of filteredDatasets"
+                 class="dataset-card"
+                 (dblclick)="openDataset(dataset)"
+                 (click)="openDataset(dataset)">
+              <mat-icon class="dataset-icon">folder</mat-icon>
+              <button class="dataset-delete-btn" (click)="deleteDataset(dataset, $event)" matTooltip="Delete dataset">
+                <mat-icon>close</mat-icon>
+              </button>
+              <div class="dataset-info">
+                <span class="dataset-name">{{ dataset.name }}</span>
+                <span class="dataset-meta" *ngIf="dataset.image_count !== undefined && !dataset.loading">
+                  {{ dataset.image_count }} images
+                </span>
+                <span class="dataset-meta loading" *ngIf="dataset.loading">loading…</span>
+                <span class="dataset-meta err" *ngIf="dataset.error && !dataset.loading" [matTooltip]="dataset.error">! folder unreachable</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- List view -->
+          <div class="dataset-details-list" *ngIf="datasetViewMode === 'list'">
+            <div class="dataset-details-header">
+              <span class="ds-col-icon"></span>
+              <span class="ds-col-name">Name</span>
+              <span class="ds-col-path">Folder</span>
+              <span class="ds-col-images">Images</span>
+              <span class="ds-col-actions"></span>
+            </div>
+            <div *ngFor="let dataset of filteredDatasets"
+                 class="dataset-details-row"
+                 (click)="openDataset(dataset)">
+              <span class="ds-col-icon">
+                <mat-icon class="dataset-icon">folder</mat-icon>
+              </span>
+              <span class="ds-col-name">{{ dataset.name }}</span>
+              <span class="ds-col-path" [matTooltip]="dataset.source_folder">{{ dataset.source_folder }}</span>
+              <span class="ds-col-images">
+                <ng-container *ngIf="!dataset.loading">{{ dataset.image_count ?? '—' }}</ng-container>
+                <ng-container *ngIf="dataset.loading">…</ng-container>
+              </span>
+              <span class="ds-col-actions">
+                <button mat-icon-button color="warn" (click)="deleteDataset(dataset, $event)" matTooltip="Delete dataset">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </span>
+            </div>
+          </div>
+
+          <div class="empty-list" *ngIf="datasets.length === 0">
+            <mat-icon>folder_open</mat-icon>
+            <p>No datasets yet</p>
+            <span>Create one from the sidebar</span>
+          </div>
+        </div>
+
+        <!-- ===== Drill-down: a single dataset's images ===== -->
+        <div *ngIf="!showDatasetList && selectedDataset && !autoAnnotateFormVisible" class="main-panel">
+          <div class="text-list-header">
+            <button mat-icon-button (click)="backToDatasets()" matTooltip="Back to datasets">
+              <mat-icon>arrow_back</mat-icon>
+            </button>
+            <h3>{{ selectedDataset.name }}</h3>
+            <span class="item-count" *ngIf="selectedDataset.image_count !== undefined">
+              {{ selectedDataset.image_count }} images
+            </span>
+            <span class="header-spacer"></span>
+
+            <!-- Mirrors yolo-training's "Annotate Images" — opens line-segmentation canvas -->
+            <button mat-raised-button color="primary" class="annotations-btn"
+                    (click)="openAnnotationCanvas(selectedDataset)"
+                    [disabled]="!selectedDataset.image_count">
+              <mat-icon>edit</mat-icon> Annotations
+            </button>
+
+            <button mat-icon-button color="warn" (click)="deleteDataset(selectedDataset, $event)" matTooltip="Delete dataset">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+
+          <div class="ds-detail-path" matTooltip="{{ selectedDataset.source_folder }}">
+            <mat-icon>folder_open</mat-icon> {{ selectedDataset.source_folder }}
+          </div>
+          <div class="ds-detail-error" *ngIf="selectedDataset.error">{{ selectedDataset.error }}</div>
+
+          <!-- ===== Summary panel (mirrors yolo-training detail) ===== -->
+          <div class="ds-summary">
+            <!-- Stats grid -->
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="stat-value">{{ selectedDataset.image_count ?? 0 }}</div>
+                <div class="stat-label">Images</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">{{ destitchedCountFor(selectedDataset) }}</div>
+                <div class="stat-label">Destitched</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">{{ annotatedCountFor(selectedDataset) }}</div>
+                <div class="stat-label">Annotated</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">{{ totalViewCountFor(selectedDataset) }}</div>
+                <div class="stat-label">View crops</div>
+              </div>
+            </div>
+
+            <!-- Training readiness -->
+            <div class="readiness-section"
+                 [class.ready]="isReadyForTraining(selectedDataset)"
+                 [class.not-ready]="!isReadyForTraining(selectedDataset)">
+              <mat-icon>{{ isReadyForTraining(selectedDataset) ? 'check_circle' : 'error' }}</mat-icon>
+              <span>
+                {{ isReadyForTraining(selectedDataset)
+                    ? 'Ready for line-segmentation training'
+                    : 'Not ready — needs more annotated images' }}
+              </span>
+            </div>
+
+            <!-- Issues / recommendations -->
+            <div class="issues-list" *ngIf="datasetIssues(selectedDataset).length > 0">
+              <div class="issue-item recommendation" *ngFor="let issue of datasetIssues(selectedDataset)">
+                <mat-icon>lightbulb</mat-icon> {{ issue }}
+              </div>
+            </div>
+
+            <!-- View distribution (only when something is destitched) -->
+            <div class="class-distribution" *ngIf="totalViewCountFor(selectedDataset) > 0">
+              <h4>Destitch view distribution</h4>
+              <div class="class-bar" *ngFor="let cls of viewDistributionFor(selectedDataset)">
+                <span class="class-name" [style.color]="cls.color">{{ cls.name }}</span>
+                <div class="bar-container">
+                  <div class="bar-fill"
+                       [style.width.%]="(cls.count / totalViewCountFor(selectedDataset)) * 100"
+                       [style.background-color]="cls.color">
+                  </div>
+                </div>
+                <span class="class-count">{{ cls.count }}</span>
+              </div>
+            </div>
+
+            <!-- Metadata footer -->
+            <div class="ds-meta-footer">
+              <span *ngIf="selectedDataset.created_at">Created {{ selectedDataset.created_at | date:'mediumDate' }}</span>
+              <span *ngIf="selectedDataset.updated_at"> · Updated {{ selectedDataset.updated_at | date:'mediumDate' }}</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MODELS (placeholder) ====== -->
+  <div class="view-content" *ngIf="viewMode === SegmentationViewMode.Models">
+    <div class="placeholder-pane">
+      <mat-icon>model_training</mat-icon>
+      <h2>Models</h2>
+      <p>
+        Manage trained segmentation models, run inference on new tablets, and
+        export models for use elsewhere in BEn-app.
+      </p>
+      <span class="placeholder-tag">Coming soon</span>
+    </div>
+  </div>
+
+  <!-- ====== TRAINING (placeholder) ====== -->
+  <div class="view-content" *ngIf="viewMode === SegmentationViewMode.Training">
+    <div class="placeholder-pane">
+      <mat-icon>fitness_center</mat-icon>
+      <h2>Training</h2>
+      <p>
+        Train segmentation and view-classification models on the ground-truth
+        data prepared by the Batch and Annotation tools.
+      </p>
+      <span class="placeholder-tag">Coming soon</span>
+    </div>
+  </div>
+
+  <!-- ====== BATCH (live) ====== -->
+  <div class="view-content" *ngIf="viewMode === SegmentationViewMode.Batch">
+    <app-batch-destitch></app-batch-destitch>
+  </div>
+
+  <!-- ====== EXPORT (placeholder) ====== -->
+  <div class="view-content" *ngIf="viewMode === SegmentationViewMode.Export">
+    <div class="placeholder-pane">
+      <mat-icon>publish</mat-icon>
+      <h2>Export</h2>
+      <p>
+        Export labeled crops, masks, and annotation files in formats ready
+        for downstream training pipelines (COCO, YOLO, custom JSON).
+      </p>
+      <span class="placeholder-tag">Coming soon</span>
+    </div>
+  </div>
+
+  <!-- ====== Folder Picker Modal ====== -->
+  <div class="folder-picker-modal" *ngIf="showFolderPicker">
+    <div class="folder-picker-backdrop" (click)="closeFolderPicker()"></div>
+    <div class="folder-picker-card">
+      <div class="folder-picker-header">
+        <mat-icon>folder_open</mat-icon>
+        <h3>Select dataset folder</h3>
+        <button mat-icon-button (click)="closeFolderPicker()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <div class="folder-picker-body" *ngIf="folderPickerInfo">
+        <div class="folder-picker-path">
+          <mat-icon>folder_special</mat-icon>
+          <span>{{ folderPickerInfo.path }}</span>
+          <span class="folder-picker-count" *ngIf="folderPickerInfo.image_count">
+            {{ folderPickerInfo.image_count }} images
+          </span>
+        </div>
+        <div class="folder-picker-list">
+          <div class="folder-row"
+               *ngIf="folderPickerInfo.parent"
+               (click)="navigateFolder(folderPickerInfo.parent)">
+            <mat-icon>arrow_upward</mat-icon>
+            <span>.. (parent)</span>
+          </div>
+          <div class="folder-row"
+               *ngFor="let f of folderPickerInfo.folders"
+               (click)="navigateFolder(f.path)">
+            <mat-icon>folder</mat-icon>
+            <span>{{ f.name }}</span>
+            <span class="folder-row-count" *ngIf="f.image_count">
+              {{ f.image_count }} images
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="folder-picker-loading" *ngIf="folderPickerLoading">
+        Loading…
+      </div>
+
+      <div class="folder-picker-footer">
+        <button mat-stroked-button (click)="closeFolderPicker()">Cancel</button>
+        <button mat-raised-button color="primary"
+                [disabled]="!folderPickerInfo"
+                (click)="selectPickedFolder()">
+          Use this folder
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>

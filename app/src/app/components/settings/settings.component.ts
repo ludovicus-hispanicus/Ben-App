@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { ReplacementMappingsService, ReplacementMapping } from 'src/app/services/replacement-mappings.service';
+import { ModuleService, ModuleConfig, APP_MODULES } from 'src/app/services/module.service';
+import { EblService, EblStatus } from 'src/app/services/ebl.service';
 
 interface OcrPrompt {
   key: string;
@@ -26,6 +28,21 @@ interface KrakenModel {
   path: string;
   size_mb: number;
   created: string;
+}
+
+interface DictionaryStatus {
+  downloaded: boolean;
+  word_count: number;
+  last_updated: string;
+  index_size: number;
+  sign_count: number;
+  logogram_count: number;
+}
+
+interface DictionaryProgress {
+  downloading: boolean;
+  progress: number;
+  total: number;
 }
 
 @Component({
@@ -117,6 +134,24 @@ export class SettingsComponent implements OnInit, OnDestroy {
   newMappingCategory: string = 'Custom';
   private mappingsSubscription: Subscription;
 
+  // Modules
+  appModules: ModuleConfig[] = APP_MODULES;
+  moduleStates: Record<string, boolean> = {};
+  savingModules = false;
+
+  // Dictionary
+  dictionaryStatus: DictionaryStatus | null = null;
+  loadingDictionaryStatus = false;
+  downloadingWords = false;
+  downloadingSigns = false;
+  rebuildingWordsIndex = false;
+  rebuildingSignsIndex = false;
+  wordsProgress: DictionaryProgress | null = null;
+  dictionaryError: string | null = null;
+  eblStatus: EblStatus | null = null;
+  private wordsProgressTimer: ReturnType<typeof setInterval> | null = null;
+  private eblStatusSub: Subscription | null = null;
+
   // Kraken Models
   krakenModels: KrakenModel[] = [];
   loadingKrakenModels = false;
@@ -127,6 +162,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
   constructor(
     private http: HttpClient,
     private mappingsService: ReplacementMappingsService,
+    private moduleService: ModuleService,
+    private eblService: EblService,
     private ngZone: NgZone,
     private cdr: ChangeDetectorRef
   ) { }
@@ -143,10 +180,21 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.loadRecommendedModels();
     this.loadKrakenModels();
     this.loadAppSettings();
+    this.loadDictionaryStatus();
+
+    // Load module states
+    this.moduleService.enabledModules$.subscribe(modules => {
+      this.moduleStates = { ...modules };
+    });
 
     // Subscribe to mappings changes
     this.mappingsSubscription = this.mappingsService.mappings$.subscribe(() => {
       this.mappingCategories = this.mappingsService.getCategories();
+    });
+
+    // Track eBL connection (words download requires auth)
+    this.eblStatusSub = this.eblService.status$.subscribe(status => {
+      this.eblStatus = status;
     });
   }
 
@@ -154,6 +202,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (this.mappingsSubscription) {
       this.mappingsSubscription.unsubscribe();
     }
+    if (this.eblStatusSub) {
+      this.eblStatusSub.unsubscribe();
+    }
+    this.stopWordsProgressPolling();
   }
 
   loadGpuStatus(): void {
@@ -625,6 +677,158 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (!isoDate) return 'Unknown';
     const date = new Date(isoDate);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // --- Module Management ---
+
+  toggleModule(moduleId: string): void {
+    this.moduleStates[moduleId] = !this.moduleStates[moduleId];
+  }
+
+  saveModules(): void {
+    this.savingModules = true;
+    this.moduleService.updateModules(this.moduleStates).subscribe({
+      next: () => { this.savingModules = false; },
+      error: () => {
+        this.savingModules = false;
+        alert('Failed to save module settings');
+      }
+    });
+  }
+
+  // --- eBL Dictionary ---
+
+  loadDictionaryStatus(): void {
+    this.loadingDictionaryStatus = true;
+    this.dictionaryError = null;
+    this.http.get<DictionaryStatus>(`${environment.apiUrl}/lemmatization/dictionary/status`)
+      .subscribe({
+        next: (status) => {
+          this.dictionaryStatus = status;
+          this.loadingDictionaryStatus = false;
+        },
+        error: (err) => {
+          this.dictionaryStatus = null;
+          this.loadingDictionaryStatus = false;
+          this.dictionaryError = err?.error?.detail || 'Failed to load dictionary status';
+        }
+      });
+  }
+
+  get eblConnected(): boolean {
+    return !!this.eblStatus?.connected;
+  }
+
+  downloadWords(): void {
+    if (this.downloadingWords) return;
+    this.downloadingWords = true;
+    this.dictionaryError = null;
+    this.wordsProgress = { downloading: true, progress: 0, total: 0 };
+    this.startWordsProgressPolling();
+
+    this.http.post<any>(`${environment.apiUrl}/lemmatization/dictionary/download`, {})
+      .subscribe({
+        next: () => {
+          this.downloadingWords = false;
+          this.stopWordsProgressPolling();
+          this.wordsProgress = null;
+          this.loadDictionaryStatus();
+        },
+        error: (err) => {
+          this.downloadingWords = false;
+          this.stopWordsProgressPolling();
+          this.wordsProgress = null;
+          this.dictionaryError = err?.error?.detail || 'Word download failed';
+        }
+      });
+  }
+
+  downloadSigns(): void {
+    if (this.downloadingSigns) return;
+    this.downloadingSigns = true;
+    this.dictionaryError = null;
+
+    this.http.post<any>(`${environment.apiUrl}/lemmatization/signs/download`, {})
+      .subscribe({
+        next: (result) => {
+          this.downloadingSigns = false;
+          if (result?.status === 'error') {
+            this.dictionaryError = result.error || 'Sign download failed';
+          }
+          this.loadDictionaryStatus();
+        },
+        error: (err) => {
+          this.downloadingSigns = false;
+          this.dictionaryError = err?.error?.detail || 'Sign download failed';
+        }
+      });
+  }
+
+  rebuildWordsIndex(): void {
+    if (this.rebuildingWordsIndex) return;
+    this.rebuildingWordsIndex = true;
+    this.http.post<any>(`${environment.apiUrl}/lemmatization/dictionary/rebuild-index`, {})
+      .subscribe({
+        next: () => {
+          this.rebuildingWordsIndex = false;
+          this.loadDictionaryStatus();
+        },
+        error: (err) => {
+          this.rebuildingWordsIndex = false;
+          this.dictionaryError = err?.error?.detail || 'Rebuild failed';
+        }
+      });
+  }
+
+  rebuildSignsIndex(): void {
+    if (this.rebuildingSignsIndex) return;
+    this.rebuildingSignsIndex = true;
+    this.http.post<any>(`${environment.apiUrl}/lemmatization/signs/rebuild-index`, {})
+      .subscribe({
+        next: () => {
+          this.rebuildingSignsIndex = false;
+          this.loadDictionaryStatus();
+        },
+        error: (err) => {
+          this.rebuildingSignsIndex = false;
+          this.dictionaryError = err?.error?.detail || 'Rebuild failed';
+        }
+      });
+  }
+
+  formatLastUpdated(iso: string): string {
+    if (!iso) return 'Never';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  get wordsPercent(): number {
+    if (!this.wordsProgress || !this.wordsProgress.total) return 0;
+    return Math.min(100, Math.round((this.wordsProgress.progress / this.wordsProgress.total) * 100));
+  }
+
+  private startWordsProgressPolling(): void {
+    this.stopWordsProgressPolling();
+    this.wordsProgressTimer = setInterval(() => {
+      this.http.get<DictionaryProgress>(`${environment.apiUrl}/lemmatization/dictionary/download/progress`)
+        .subscribe({
+          next: (p) => {
+            this.ngZone.run(() => {
+              this.wordsProgress = p;
+              this.cdr.detectChanges();
+            });
+          },
+          error: () => { /* ignore transient errors */ }
+        });
+    }, 1500);
+  }
+
+  private stopWordsProgressPolling(): void {
+    if (this.wordsProgressTimer) {
+      clearInterval(this.wordsProgressTimer);
+      this.wordsProgressTimer = null;
+    }
   }
 
 }

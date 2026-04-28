@@ -1,0 +1,60 @@
+<h2 mat-dialog-title>Add a new text</h2>
+<div mat-dialog-content class="add-text-dialog-content">
+  <p class="atd-target">
+    Will be saved under <strong>{{ data.identifier }}</strong>
+    <span class="atd-type-chip">{{ data.identifierType }}</span>
+  </p>
+
+  <!-- Step 1: Source -->
+  <div class="atd-section">
+    <div class="atd-section-label">1. Image source</div>
+    <div class="atd-choice-row">
+      <button class="atd-choice" type="button" [class.selected]="source === 'local'" (click)="source = 'local'">
+        <mat-icon>cloud_upload</mat-icon>
+        <span>From computer</span>
+      </button>
+      <button class="atd-choice" type="button" [class.selected]="source === 'server'" (click)="source = 'server'">
+        <mat-icon>folder_open</mat-icon>
+        <span>From server</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: OCR or just image -->
+  <div class="atd-section">
+    <div class="atd-section-label">2. Run OCR?</div>
+    <div class="atd-choice-row">
+      <button class="atd-choice" type="button" [class.selected]="useOcr" (click)="useOcr = true">
+        <mat-icon>document_scanner</mat-icon>
+        <span>Yes — OCR the image</span>
+        <small>Pick model & generate text</small>
+      </button>
+      <button class="atd-choice" type="button" [class.selected]="!useOcr" (click)="useOcr = false">
+        <mat-icon>image</mat-icon>
+        <span>No — just attach</span>
+        <small>Image only, no text</small>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 3: Label -->
+  <div class="atd-section">
+    <div class="atd-section-label">3. Label</div>
+    <div class="atd-existing-labels" *ngIf="data.existingLabels.length > 0">
+      <button *ngFor="let lbl of data.existingLabels" type="button"
+              class="atd-label-chip" [class.selected]="label === lbl"
+              (click)="pickExisting(lbl)">
+        {{ lbl }}
+      </button>
+    </div>
+    <input type="text" [(ngModel)]="label" placeholder="Or type a custom label..."
+           class="atd-label-input"/>
+  </div>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button (click)="onCancel()">Cancel</button>
+  <button mat-raised-button color="primary" (click)="onConfirm()" [disabled]="!isValid()">
+    {{ useOcr ? 'Continue to OCR' : 'Attach image' }}
+  </button>
+</div>

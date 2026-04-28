@@ -17,7 +17,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { HttpClient } from '@angular/common/http';
 import { ImageBrowserDialogComponent } from '../common/image-browser-dialog/image-browser-dialog.component';
 import { SelectedPage } from '../../models/pages';
+import { AddTextDialogComponent, AddTextDialogResult } from '../common/add-text-dialog/add-text-dialog.component';
 import { PagesService } from '../../services/pages.service';
+import { LinkedPageService } from '../../services/linked-page.service';
 
 type ViewMode = 'dashboard' | 'editor';
 
@@ -292,7 +294,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
     currentProductionText: ProductionText | null = null;
     currentSources: SourceTextContent[] = [];
     currentTranslations: TranslationContent[] = [];
-    editorMode: 'transliteration' | 'translation' = 'transliteration';
+    editorMode: 'transliteration' | 'translation' | 'lemmatization' = 'transliteration';
+    usePrimeSections: boolean = true;
     selectedSourceIndex: number = 0;
     editorContent: string = '';
     translationContent: string = '';
@@ -315,12 +318,20 @@ export class ProductionComponent implements OnInit, OnDestroy {
     isPullingFromEbl: boolean = false;
     isSavingEblConfig: boolean = false;
     validationResult: ValidationResult | null = null;
-    // Export error overlay
+    // Export overlay
+    showExportOverlay: boolean = false;
+    exportFragmentId: string = '';
+    exportStatus: 'ready' | 'validating' | 'exporting' | 'success' | 'error' = 'ready';
+    exportResultMessage: string = '';
+    exportResultUrl: string = '';
+    exportErrorHelp: string = '';
+    exportValidationErrors: string[] = [];
+    exportElapsedSeconds: number = 0;
+    private exportTimerInterval: any = null;
+    // Export error overlay (legacy, kept for handleExportError)
     showExportErrorOverlay: boolean = false;
     exportErrorTitle: string = '';
     exportErrorMessage: string = '';
-    exportErrorHelp: string = '';
-    exportValidationErrors: string[] = [];
     eblConfig: EblConfig = {
         api_url: 'https://www.ebl.lmu.de/api',
         access_token: ''
@@ -337,7 +348,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     private eblStatusSubscription: Subscription | null = null;
 
     // Live validation
-    liveValidationEnabled: boolean = true;
+    liveValidationEnabled: boolean = false;
     private validationSubject = new Subject<string>();
     private validationSubscription: Subscription | null = null;
 
@@ -365,6 +376,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     // Text Editor
     @ViewChild('textEditor') textEditor: TextEditorComponent;
     @ViewChild('sourceCanvas') sourceCanvas: FabricCanvasComponent;
+    @ViewChild('imageFileInput') imageFileInputRef: any;
+    // When the user picks "From computer + No OCR" via the Add dialog, we stash the
+    // chosen label here so handleImageFileInput can pass it through to addImageAsSource.
+    private pendingNoOcrLabel: string | null = null;
     canvasTypeViewOnly = CanvasType.SingleSelection;
     CanvasMode = CanvasMode;
     sourceImageDataUrls: Map<number, string> = new Map();
@@ -394,6 +409,13 @@ export class ProductionComponent implements OnInit, OnDestroy {
     atfHelpSearchQuery: string = '';
     atfHelpSections: AtfHelpSection[] = ATF_HELP_CONTENT;
 
+    // ORACC ATF Import
+    showImportOraccDialog: boolean = false;
+    importOraccAtfText: string = '';
+    importIdentifierOverride: string = '';
+    importIdentifierTypeOverride: string = '';
+    isImportingOracc: boolean = false;
+
     constructor(
         private productionService: ProductionService,
         private datasetService: DatasetService,
@@ -405,7 +427,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
         private eblService: EblService,
         private dialog: MatDialog,
         private http: HttpClient,
-        private pagesService: PagesService
+        private pagesService: PagesService,
+        private linkedPageService: LinkedPageService
     ) {}
 
     @HostListener('window:beforeunload', ['$event'])
@@ -587,6 +610,27 @@ export class ProductionComponent implements OnInit, OnDestroy {
             default:
                 return null;
         }
+    }
+
+    /**
+     * Loads groupedTexts (and recomputes availableLabels) if not already loaded.
+     * Called when entering editor view directly so the Add-text dialog has labels.
+     */
+    private ensureGroupedTextsLoaded(): void {
+        if (this.groupedTexts && this.groupedTexts.length > 0) {
+            // Already loaded — just recompute labels in case of staleness
+            this.computeAvailableLabels();
+            return;
+        }
+        this.productionService.getGroupedData().subscribe({
+            next: (data) => {
+                this.groupedTexts = data;
+                this.computeAvailableLabels();
+            },
+            error: (err) => {
+                console.error('Failed to load grouped data for labels:', err);
+            }
+        });
     }
 
     computeAvailableLabels(): void {
@@ -950,6 +994,185 @@ export class ProductionComponent implements OnInit, OnDestroy {
         });
     }
 
+    /**
+     * Single entry point for adding a new linked page. Opens a wizard that asks
+     * for source (local/server), OCR yes/no, and label. Then either:
+     *  - With OCR  → navigates to CuReD pre-filled, auto-opens the source picker
+     *  - Without OCR → attaches the image as a SourceTextContent of this production text
+     */
+    openAddTextDialog(): void {
+        if (!this.currentIdentifier || !this.currentIdentifierType) {
+            this.notificationService.showError('No identifier loaded');
+            return;
+        }
+        const dialogRef = this.dialog.open(AddTextDialogComponent, {
+            data: {
+                identifier: this.currentIdentifier,
+                identifierType: this.currentIdentifierType,
+                existingLabels: this.availableLabels || []
+            },
+            width: 'auto'
+        });
+        dialogRef.afterClosed().subscribe((result: AddTextDialogResult | null) => {
+            if (!result) return;
+            this.handleAddTextChoice(result);
+        });
+    }
+
+    private handleAddTextChoice(result: AddTextDialogResult): void {
+        // OCR path: pick the file FIRST in production (so the user stays in this view
+        // for cancellation), then hand the File to CuReD via LinkedPageService and
+        // navigate. CuReD lands directly on stage 2 — no dashboard, no source picker.
+        if (result.useOcr) {
+            // Remember the chosen source so CuReD's "Add another" can re-open the same picker.
+            this.linkedPageService.lastSource = result.source;
+            if (result.source === 'local') {
+                this.pickLocalFileForOcr(result.label);
+            } else {
+                this.pickServerImageForOcr(result.label);
+            }
+            return;
+        }
+        // Image-only path → attach to the current production text as a source
+        if (result.source === 'local') {
+            this.pendingNoOcrLabel = result.label;
+            // Reuse the existing hidden file input
+            this.imageFileInputRef?.nativeElement.click();
+        } else {
+            this.openServerBrowserForLabel(result.label);
+        }
+    }
+
+    private pickLocalFileForOcr(label: string): void {
+        // Build a one-shot hidden input so we don't conflict with the existing imageFileInput
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.pdf,.png,.jpg,.jpeg';
+        input.style.display = 'none';
+        input.onchange = () => {
+            const file = input.files && input.files[0];
+            input.remove();
+            if (!file) return;
+            this.handOffOcrFile(file, label);
+        };
+        document.body.appendChild(input);
+        input.click();
+    }
+
+    private pickServerImageForOcr(label: string): void {
+        const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
+            width: '1000px', height: '720px'
+        });
+        dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
+            if (!result || result.length === 0) return;
+            const page = result[0];
+            this.http.get(page.image_url, { responseType: 'blob' }).subscribe(blob => {
+                const file = new File([blob], page.filename, { type: 'image/png' });
+                this.handOffOcrFile(file, label);
+            });
+        });
+    }
+
+    private handOffOcrFile(file: File, label: string): void {
+        // Stash the File and the parent dataset id so CuReD can save the new text
+        // into the same folder as the existing sources (instead of "Unassigned").
+        this.linkedPageService.setPendingFile(file);
+        this.linkedPageService.linkedDatasetId = this.findCurrentDatasetId();
+        this.router.navigate(['/cured'], {
+            queryParams: {
+                linkedIdentifier: this.currentIdentifier,
+                linkedType: this.currentIdentifierType,
+                linkedLabel: label
+            }
+        });
+    }
+
+    /**
+     * Look up the dataset that holds the existing sources for the current production
+     * text. Returns the first non-null dataset_id from the parts of the matching group,
+     * or null if no group/parts have one.
+     */
+    private findCurrentDatasetId(): number | null {
+        if (!this.groupedTexts || !this.currentIdentifier) return null;
+        const group = this.groupedTexts.find(g =>
+            g.identifier === this.currentIdentifier &&
+            g.identifier_type === this.currentIdentifierType
+        );
+        if (!group) return null;
+        for (const part of group.parts) {
+            if (part.dataset_id != null) return part.dataset_id;
+        }
+        return null;
+    }
+
+    // Internal handoff: server-browser variant that tags the chosen image with the dialog label
+    private openServerBrowserForLabel(label: string): void {
+        const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
+            width: '1000px', height: '720px'
+        });
+        dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
+            if (!result || result.length === 0) return;
+            const page = result[0];
+            this.http.get(page.image_url, { responseType: 'blob' }).subscribe(blob => {
+                const file = new File([blob], page.filename, { type: 'image/png' });
+                this.addImageAsSource(file, label);
+            });
+        });
+    }
+
+    importOraccAtf(): void {
+        if (!this.importOraccAtfText?.trim()) return;
+        this.isImportingOracc = true;
+
+        this.productionService.importOraccAtf(
+            this.importOraccAtfText,
+            this.importIdentifierOverride || undefined,
+            this.importIdentifierTypeOverride || undefined
+        ).subscribe({
+            next: (result) => {
+                this.isImportingOracc = false;
+                this.showImportOraccDialog = false;
+
+                const msg = `Imported: ${result.transliteration_lines} transliteration lines, ` +
+                    `${result.translation_lines} translation lines, ` +
+                    `${result.lemmatization_lines} lemmatized lines`;
+                this.notificationService.showSuccess(msg);
+
+                // Open the editor directly — fetch just the production text,
+                // skip the expensive source scan (imported texts have no training sources)
+                this.productionService.getProductionText(result.production_id).subscribe({
+                    next: (prodText) => {
+                        this.viewMode = 'editor';
+                        this.currentProductionText = prodText;
+                        this.currentIdentifier = prodText.identifier;
+                        this.currentIdentifierType = prodText.identifier_type;
+                        this.editorContent = prodText.content;
+                        this.translationContent = prodText.translation_content || '';
+                        this.currentSources = [];
+                        this.currentTranslations = [];
+                        this.hasUnsavedChanges = false;
+                        this.isLoading = false;
+
+                        // Clear import form
+                        this.importOraccAtfText = '';
+                        this.importIdentifierOverride = '';
+                        this.importIdentifierTypeOverride = '';
+                    },
+                    error: (err) => {
+                        console.error('Failed to load imported text:', err);
+                        this.notificationService.showError('Import succeeded but failed to open editor');
+                    }
+                });
+            },
+            error: (err) => {
+                this.isImportingOracc = false;
+                const detail = err.error?.detail || 'Import failed';
+                console.error('ORACC ATF import failed:', err);
+                this.notificationService.showError(detail);
+            }
+        });
+    }
+
     // ==========================================
     // Editor Methods
     // ==========================================
@@ -992,6 +1215,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
         // Clear pulled eBL content when opening a new text
         this.pulledIntroduction = '';
         this.pulledNotes = '';
+
+        // The Add-text dialog needs availableLabels (computed from groupedTexts).
+        // Load grouped data in parallel — without it the label chips are empty when
+        // the user enters this view directly via ?identifier= rather than the dashboard.
+        this.ensureGroupedTextsLoaded();
 
         // Load sources from training data (separated into transliterations and translations)
         this.productionService.getSourcesByIdentifier(identifier).subscribe({
@@ -1071,8 +1299,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     loadSources(productionId: number, savedTranslationContent?: string): void {
+        console.log('[loadSources] Starting for production', productionId);
         this.productionService.getProductionSources(productionId).subscribe({
             next: (response) => {
+                console.log('[loadSources] Got response:', response.sources.length, 'sources,', response.translations.length, 'translations');
                 // Sources are transliterations (with images)
                 this.currentSources = response.sources;
                 this.sortSources();
@@ -1083,22 +1313,25 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 this.selectedSourceIndex = 0;
                 this.uploadedImageIds.clear();
                 this.pendingImageUploads = [];
+                console.log('[loadSources] About to loadSourceImages, sources:', this.currentSources.length);
                 this.loadSourceImages();
-                // Also load uploaded images from the production text
+                console.log('[loadSources] About to loadUploadedImages');
                 this.loadUploadedImages();
                 // Load saved annotations from localStorage
                 this.loadGuidesFromStorage();
                 this.loadRotationsFromStorage();
                 this.isLoading = false;
+                console.log('[loadSources] Done, isLoading=false');
             },
             error: (err) => {
-                console.error('Failed to load sources:', err);
+                console.error('[loadSources] Failed:', err);
                 this.isLoading = false;
             }
         });
     }
 
     private loadUploadedImages(): void {
+        console.log('[loadUploadedImages] uploaded_images:', this.currentProductionText?.uploaded_images?.length ?? 'none');
         if (!this.currentProductionText?.uploaded_images) {
             return;
         }
@@ -1142,11 +1375,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     loadSourceImages(): void {
         this.sourceImageDataUrls.clear();
+        console.log('[loadSourceImages] Loading images for', this.currentSources.length, 'sources');
         this.currentSources.forEach((source, index) => {
             // Skip uploaded images (text_id === -1), they are loaded separately
             if (source.text_id === -1) {
+                console.log('[loadSourceImages] Skipping uploaded image at index', index);
                 return;
             }
+            console.log('[loadSourceImages] Fetching image for source', index, 'text_id:', source.text_id, 'trans_id:', source.transliteration_id);
             this.curedService.getImage(source.text_id, source.transliteration_id).subscribe({
                 next: (blob) => {
                     const reader = new FileReader();
@@ -1585,7 +1821,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     /**
      * Set the editor mode (transliteration or translation).
      */
-    setEditorMode(mode: 'transliteration' | 'translation'): void {
+    setEditorMode(mode: 'transliteration' | 'translation' | 'lemmatization'): void {
         this.editorMode = mode;
     }
 
@@ -1593,7 +1829,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
      * Check if translations are available.
      */
     hasTranslations(): boolean {
-        return this.currentTranslations && this.currentTranslations.length > 0;
+        return (this.currentTranslations && this.currentTranslations.length > 0)
+            || (this.translationContent && this.translationContent.trim().length > 0);
     }
 
     /**
@@ -1607,9 +1844,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
         const parts: string[] = [];
         for (const trans of this.currentTranslations) {
-            if (trans.part) {
-                parts.push(`# Part ${trans.part}`);
-            }
+            parts.push(`# Part ${trans.part || '?'}`);
             parts.push(...trans.lines);
             parts.push('');
         }
@@ -1640,6 +1875,50 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Fetch only new translations (tracked by backend) and append them.
+     */
+    syncTranslations(): void {
+        if (!this.currentProductionText) return;
+        this.productionService.syncTranslations(this.currentProductionText.production_id).subscribe({
+            next: (result) => {
+                if (result.new_count === 0) {
+                    this.notificationService.showInfo('No new translations found');
+                    return;
+                }
+
+                // Append new translations at the end
+                const newParts: string[] = [];
+                for (const trans of result.new_translations) {
+                    newParts.push(`# Part ${trans.part || '?'}`);
+                    newParts.push(...trans.lines);
+                    newParts.push('');
+                }
+                const appendText = newParts.join('\n').trim();
+
+                if (this.translationContent.trim()) {
+                    this.translationContent = this.translationContent.trim() + '\n\n' + appendText;
+                } else {
+                    this.translationContent = appendText;
+                }
+
+                // Update currentTranslations count for the line count display
+                this.currentTranslations = [
+                    ...this.currentTranslations,
+                    ...result.new_translations
+                ];
+
+                this.hasUnsavedChanges = true;
+                this.notificationService.showSuccess(
+                    `Added ${result.new_count} new translation(s)`
+                );
+            },
+            error: () => {
+                this.notificationService.showError('Failed to sync translations');
+            }
+        });
+    }
+
+    /**
      * Insert translation lines into the transliteration using eBL ATF format.
      *
      * eBL format:
@@ -1649,6 +1928,54 @@ export class ProductionComponent implements OnInit, OnDestroy {
      * Translation source lines can have formats like:
      *   "1 Translation text" or "1-2 Translation text" or "#tr.en: 1-2 Translation text"
      */
+    /**
+     * Add $N section numbers before each translation entry.
+     * Counter resets per part (lines starting with "# Part").
+     * A translation entry is detected by a line starting with a number.
+     */
+    numberTranslationSections(): void {
+        if (!this.translationContent || this.translationContent.trim() === '') {
+            this.notificationService.showWarning('No translation content to number');
+            return;
+        }
+
+        const lines = this.translationContent.split('\n');
+        const result: string[] = [];
+        let counter = 0;
+        // Regex: line starts with a number (possibly with prime/letter suffix),
+        // optionally followed by dash and another number, then optional period, then space
+        const entryPattern = /^\d+[ʼ'ʹ]?[a-cv]?(\s*[–\-−]\s*\d+[ʼ'ʹ]?[a-cv]?)?\.?\s/;
+
+        for (const line of lines) {
+            // Reset counter only on part headers, not on section markers (@reverse etc.)
+            if (line.startsWith('# Part')) {
+                counter = 0;
+            }
+            // Pass through section markers without resetting
+            if (line.startsWith('@')) {
+                result.push(line);
+                continue;
+            }
+
+            // Skip existing $N lines
+            if (/^\$\d+/.test(line)) {
+                continue;
+            }
+
+            if (entryPattern.test(line.trim())) {
+                counter++;
+                const prime = this.usePrimeSections ? '′' : '';
+                result.push(`$${counter}${prime}`);
+            }
+
+            result.push(line);
+        }
+
+        this.translationContent = result.join('\n');
+        this.hasUnsavedChanges = true;
+        this.notificationService.showSuccess('Added section numbers');
+    }
+
     insertTranslation(): void {
         if (!this.translationContent || this.translationContent.trim() === '') {
             this.notificationService.showWarning('No translation content to insert');
@@ -1663,24 +1990,64 @@ export class ProductionComponent implements OnInit, OnDestroy {
         const translitLines = this.editorContent.split('\n');
         const rawTransLines = this.translationContent.split('\n');
 
-        // 1. Build a map from displayed line label (e.g. "1'", "13'", "2") to transliteration array index.
-        //    The label is what appears at the start of each line: number + optional prime.
+        // 1. Build a map from displayed line label to transliteration array index.
+        //    Key formats (tried in priority order during lookup):
+        //      "section:col:label" — section + column qualified (e.g., "obverse:1:2'")
+        //      "section:label"    — section qualified (e.g., "obverse:1", "reverse:1")
+        //      "col:label"        — column qualified (e.g., "1:2'", "2:3")
+        //      "label"            — plain (first occurrence wins, backward compat)
         const translitLabelToIndex: Map<string, number> = new Map();
         let currentSection = '';
+        let currentColumn = 0;
         for (let i = 0; i < translitLines.length; i++) {
             const trimmed = translitLines[i].trim().toLowerCase();
-            const secMatch = trimmed.match(/^[\$@](reverse|obverse|left|right|top|bottom|edge|seal|column)/);
+            const secMatch = trimmed.match(/^[@](reverse|obverse|left|right|top|bottom|edge|seal)/);
             if (secMatch) {
                 currentSection = secMatch[1];
+                // Don't reset column — columns are numbered sequentially across surfaces
                 continue;
             }
-            // Extract line label: "1'." or "1." or "16" at start of line (use trimmed for whitespace tolerance)
-            const lineMatch = trimmed.match(/^(\d+'?)\.\s/);
+            // Track column numbers
+            const colMatch = trimmed.match(/^@column\s+(\d+)/);
+            if (colMatch) {
+                currentColumn = parseInt(colMatch[1]);
+                continue;
+            }
+            // Extract line label: "1'." or "1." or "#5." (commented) at start of line
+            const lineMatch = trimmed.match(/^#?(\d+'?[a-c]?)\.\s/);
             if (lineMatch) {
-                const label = lineMatch[1]; // e.g. "1'", "13'", "2"
+                const label = lineMatch[1]; // e.g. "1'", "13'", "2", "2a"
+                // Store section-qualified key (always, even if section is empty)
+                if (currentSection) {
+                    if (currentColumn > 0) {
+                        translitLabelToIndex.set(`${currentSection}:${currentColumn}:${label}`, i);
+                    }
+                    translitLabelToIndex.set(`${currentSection}:${label}`, i);
+                }
+                // Store with column qualifier
+                if (currentColumn > 0) {
+                    translitLabelToIndex.set(`${currentColumn}:${label}`, i);
+                }
+                // Also store plain label (first occurrence wins for backward compat)
                 if (!translitLabelToIndex.has(label)) {
                     translitLabelToIndex.set(label, i);
                 }
+            }
+        }
+
+        // Build column → surface map (e.g., 1 → 'o', 3 → 'r')
+        // and line-index → surface map (every translit line i → its current surface).
+        const columnToSurface: Map<number, string> = new Map();
+        const indexToSurface: Map<number, string> = new Map();
+        {
+            let surface = '';
+            for (let i = 0; i < translitLines.length; i++) {
+                const t = translitLines[i].trim().toLowerCase();
+                const sm = t.match(/^@(obverse|reverse|left|right|top|bottom|edge|seal)/);
+                if (sm) { surface = sm[1]; continue; }
+                const cm = t.match(/^@column\s+(\d+)/);
+                if (cm) { columnToSurface.set(parseInt(cm[1]), surface); continue; }
+                indexToSurface.set(i, surface);
             }
         }
 
@@ -1692,13 +2059,28 @@ export class ProductionComponent implements OnInit, OnDestroy {
             isRange: boolean;
         }[] = [];
 
+        // Track $N section markers from translation content
+        let pendingSectionMarker: string | null = null;
+        // Track current section in translation content for section-qualified matching
+        let transSection = '';
+
         for (const rawLine of rawTransLines) {
             const trimmed = rawLine.trim();
             if (trimmed === '' || trimmed.startsWith('# ')) continue;
 
-            // Skip section markers in translation (they're for readability, we use line labels)
-            const sectionMatch = trimmed.match(/^@(reverse|obverse|left|right|top|bottom|edge)/i);
-            if (sectionMatch) continue;
+            // Capture $N or $N′ markers to associate with the next translation entry
+            const sectionNumMatch = trimmed.match(/^\$(\d+[′']?)$/);
+            if (sectionNumMatch) {
+                pendingSectionMarker = sectionNumMatch[1]; // e.g. "1′" or "3"
+                continue;
+            }
+
+            // Track section markers in translation content for section-qualified matching
+            const sectionMatch = trimmed.match(/^@(reverse|obverse|left|right|top|bottom|edge|colophon|catchline)/i);
+            if (sectionMatch) {
+                transSection = sectionMatch[1].toLowerCase();
+                continue;
+            }
 
             // Split line if it contains embedded ranges
             const subLines = this.splitEmbeddedRanges(trimmed);
@@ -1706,7 +2088,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
             for (const subLine of subLines) {
                 const parsed = this.parseTranslationLineByLabel(subLine);
                 if (parsed) {
+                    (parsed as any).sectionMarker = pendingSectionMarker;
+                    (parsed as any).section = transSection;
                     parsedTranslations.push(parsed);
+                    pendingSectionMarker = null; // consumed
                 }
             }
         }
@@ -1717,32 +2102,111 @@ export class ProductionComponent implements OnInit, OnDestroy {
         }
 
         // 3. Build map: transliteration line index → translations to insert after it
+        //    Also track which translit indices get a § section marker before them.
         const translationsAfterIndex: Map<number, string[]> = new Map();
+        const sectionAtIndex: Map<number, string> = new Map(); // translit index → section marker text
+
+        // Check if this is a multi-column text
+        const hasMultipleColumns = currentColumn > 1;
+
+        // Helper to look up a label in the map, with optional section context
+        const lookupLabel = (label: string, section?: string): number | undefined => {
+            // Try section + column qualified first (e.g., "obverse:1:2'")
+            if (section && label.includes(':')) {
+                const idx = translitLabelToIndex.get(`${section}:${label}`);
+                if (idx !== undefined) return idx;
+            }
+            // Try section qualified (e.g., "obverse:1")
+            if (section && !label.includes(':')) {
+                const idx = translitLabelToIndex.get(`${section}:${label}`);
+                if (idx !== undefined) return idx;
+                // Fuzzy: translation has "4" but transliteration has "4a" —
+                // try appending letter suffixes within the same section
+                for (const suffix of ['a', 'b', 'c']) {
+                    const fuzzyIdx = translitLabelToIndex.get(`${section}:${label}${suffix}`);
+                    if (fuzzyIdx !== undefined) return fuzzyIdx;
+                }
+                // Section was specified but no match found — do NOT fall back
+                // to a different section's line
+                return undefined;
+            }
+            // No section context — try exact (column-qualified) (e.g., "1:2'")
+            let idx = translitLabelToIndex.get(label);
+            if (idx !== undefined) return idx;
+            // Only fall back to plain label if:
+            // 1. The label has NO column qualifier, AND
+            // 2. The text does NOT have multiple columns (to prevent cross-column mismatches)
+            if (!label.includes(':') && !hasMultipleColumns) {
+                return translitLabelToIndex.get(label);
+            }
+            return undefined;
+        };
+
+        const matchedStartLabels = new Set<string>();
 
         for (const parsed of parsedTranslations) {
-            const insertAfterIndex = translitLabelToIndex.get(parsed.startLabel);
+            const section = (parsed as any).section || '';
+            // Always insert after the START (first) line of the entry
+            let insertAfterIndex = lookupLabel(parsed.startLabel, section);
+            console.log(`[insertTranslation] parsed: section=${section} start=${parsed.startLabel} end=${parsed.endLabel} => idx=${insertAfterIndex} text=${parsed.cleanedText.substring(0, 40)}`);
             if (insertAfterIndex === undefined) continue;
+
+            matchedStartLabels.add(section ? `${section}:${parsed.startLabel}` : parsed.startLabel);
 
             if (!translationsAfterIndex.has(insertAfterIndex)) {
                 translationsAfterIndex.set(insertAfterIndex, []);
             }
 
-            // Determine end label's section prefix for eBL format
+            // Use the $N marker from the translation content if present
+            const marker = (parsed as any).sectionMarker;
+            if (marker && !sectionAtIndex.has(insertAfterIndex)) {
+                sectionAtIndex.set(insertAfterIndex, marker);
+            }
+
+            // Build eBL-format translation line with full scope: #tr.en.(o i 6'):
             let formattedLine: string;
-            if (parsed.isRange) {
-                const endSectionPrefix = this.getSectionPrefixForLabel(parsed.endLabel, translitLines);
-                formattedLine = `#tr.en.(${endSectionPrefix}${parsed.endLabel}): ${parsed.cleanedText}`;
+            // Get the end label info for the scope
+            const endCol = parsed.endLabel.includes(':') ? parseInt(parsed.endLabel.split(':')[0]) : 0;
+            const endLine = parsed.endLabel.includes(':') ? parsed.endLabel.split(':')[1] : parsed.endLabel;
+            const startCol = parsed.startLabel.includes(':') ? parseInt(parsed.startLabel.split(':')[0]) : 0;
+
+            // Build scope prefix: surface abbreviation + column roman numeral + line number
+            const ARABIC_TO_ROMAN: { [key: number]: string } = {1:'i',2:'ii',3:'iii',4:'iv',5:'v',6:'vi',7:'vii',8:'viii'};
+            const SURFACE_ABBREV: { [key: string]: string } = {
+                'obverse': 'o', 'reverse': 'r', 'left': 'le', 'right': 'ri',
+                'top': 't', 'bottom': 'b', 'edge': 'e', 'seal': 's',
+            };
+
+            if (parsed.isRange && endCol > 0) {
+                // Cross-column range: surface + column + line
+                const surface = columnToSurface.get(endCol) || indexToSurface.get(insertAfterIndex) || '';
+                const surfaceAbbr = SURFACE_ABBREV[surface] || '';
+                const colRoman = ARABIC_TO_ROMAN[endCol] || '';
+                const scope = [surfaceAbbr, colRoman, endLine].filter(Boolean).join(' ');
+                formattedLine = `#tr.en.(${scope}): ${parsed.cleanedText}`;
+            } else if (parsed.isRange) {
+                // Plain range (e.g., 41-43): surface + end line (e.g., "o 43")
+                const surface = indexToSurface.get(insertAfterIndex) || '';
+                const surfaceAbbr = SURFACE_ABBREV[surface] || '';
+                const scope = [surfaceAbbr, endLine].filter(Boolean).join(' ');
+                formattedLine = `#tr.en.(${scope}): ${parsed.cleanedText}`;
             } else {
+                // Single line: no scope needed — placement after the line is the scope
                 formattedLine = `#tr.en: ${parsed.cleanedText}`;
             }
             translationsAfterIndex.get(insertAfterIndex)!.push(formattedLine);
         }
 
-        // 4. Create merged content with translations interleaved
+        // 4. Create merged content with translations interleaved and § section markers
         const mergedLines: string[] = [];
         let insertedCount = 0;
 
         for (let i = 0; i < translitLines.length; i++) {
+            // Insert § section marker before the first translit line of each entry
+            if (sectionAtIndex.has(i)) {
+                mergedLines.push('');
+                mergedLines.push(`$ (§${sectionAtIndex.get(i)})`);
+            }
             mergedLines.push(translitLines[i]);
             if (translationsAfterIndex.has(i)) {
                 for (const transLine of translationsAfterIndex.get(i)!) {
@@ -1753,11 +2217,23 @@ export class ProductionComponent implements OnInit, OnDestroy {
         }
 
         // 5. Append any unmatched translations at the end
+        const SURFACE_ABBREV_FALLBACK: { [key: string]: string } = {
+            'obverse': 'o', 'reverse': 'r', 'left': 'le', 'right': 'ri',
+            'top': 't', 'bottom': 'b', 'edge': 'e', 'seal': 's',
+        };
         for (const parsed of parsedTranslations) {
-            if (!translitLabelToIndex.has(parsed.startLabel)) {
-                const formattedLine = parsed.isRange
-                    ? `#tr.en.(${parsed.endLabel}): ${parsed.cleanedText}`
-                    : `#tr.en: ${parsed.cleanedText}`;
+            const section = (parsed as any).section || '';
+            const matchKey = section ? `${section}:${parsed.startLabel}` : parsed.startLabel;
+            if (!matchedStartLabels.has(matchKey)) {
+                const plainEnd = parsed.endLabel.includes(':') ? parsed.endLabel.split(':')[1] : parsed.endLabel;
+                let formattedLine: string;
+                if (parsed.isRange) {
+                    const surfaceAbbr = SURFACE_ABBREV_FALLBACK[section] || '';
+                    const scope = [surfaceAbbr, plainEnd].filter(Boolean).join(' ');
+                    formattedLine = `#tr.en.(${scope}): ${parsed.cleanedText}`;
+                } else {
+                    formattedLine = `#tr.en: ${parsed.cleanedText}`;
+                }
                 mergedLines.push(formattedLine);
                 insertedCount++;
             }
@@ -1772,25 +2248,103 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.notificationService.showSuccess(`Inserted ${insertedCount} translation lines`);
     }
 
+    removeTranslations(): void {
+        if (!this.editorContent || this.editorContent.trim() === '') {
+            this.notificationService.showWarning('No content to strip translations from');
+            return;
+        }
+
+        const lines = this.editorContent.split('\n');
+        const result: string[] = [];
+        let removedCount = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+
+            // Remove #tr.XX: lines (e.g., #tr.en:, #tr.de:, #tr.en.(o i 6'):)
+            if (/^#tr\.\w+/.test(trimmed)) {
+                removedCount++;
+                continue;
+            }
+
+            // Remove $ (§N) section markers inserted by insertTranslation
+            if (/^\$\s*\(§\d+[′']?\)$/.test(trimmed)) {
+                // Also remove the blank line before the marker if present
+                if (result.length > 0 && result[result.length - 1].trim() === '') {
+                    result.pop();
+                }
+                removedCount++;
+                continue;
+            }
+
+            // Remove #note: lines that may have been inserted
+            if (/^#note:/.test(trimmed)) {
+                removedCount++;
+                continue;
+            }
+
+            result.push(lines[i]);
+        }
+
+        if (removedCount === 0) {
+            this.notificationService.showInfo('No translation lines found to remove');
+            return;
+        }
+
+        this.editorContent = result.join('\n');
+        this.hasUnsavedChanges = true;
+        this.notificationService.showSuccess(`Removed ${removedCount} translation/annotation lines`);
+    }
+
     /**
      * Parse a translation line by its label (e.g., "2'–4'", "13'–2", "3-4").
      * Returns start/end labels as strings preserving primes.
      */
+    // Normalize prime characters: ′ (U+2032), ʹ (U+02B9), ' (U+2019) → ' (U+0027)
+    private static normalizePrime(s: string): string {
+        return s.replace(/[\u2032\u02B9\u2019]/g, "'");
+    }
+
+    // Roman numeral to Arabic mapping
+    private static ROMAN_TO_ARABIC: { [key: string]: number } = {
+        'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'v': 5, 'vi': 6,
+        'vii': 7, 'viii': 8, 'ix': 9, 'x': 10,
+    };
+
     private parseTranslationLineByLabel(line: string): { startLabel: string; endLabel: string; cleanedText: string; isRange: boolean } | null {
-        // Remove #tr.XX: prefix if present
-        let text = line;
+        // Normalize prime characters
+        let text = ProductionComponent.normalizePrime(line);
         const trMatch = line.match(/^#tr\.\w+(?:\.\([^)]+\))?:\s*/);
         if (trMatch) {
             text = line.substring(trMatch[0].length);
         }
 
-        // Match: "1'–2" or "13'–2" or "3-4" or "1'." or "3" etc.
-        // startNum + optional prime + optional (dash/endash + endNum + optional prime) + optional period + space + text
-        const numMatch = text.match(/^(\d+'?)(?:[–\-](\d+'?))?\.?\s+(.*)$/);
+        // Match column-prefixed format: "i 2'-6' text" or "i 24'-ii 2 text" (cross-column)
+        // Pattern: roman start_num [dash optional_space optional_roman optional_space end_num] text
+        const colMatch = text.match(
+            /^(i{1,4}|iv|vi{0,3})\s+(\d+'?)(?:[–\-]\s*(?:(i{1,4}|iv|vi{0,3})\s+)?(\d+'?))?\.?\s+(.*)$/
+        );
+        if (colMatch) {
+            const startCol = ProductionComponent.ROMAN_TO_ARABIC[colMatch[1]] || 0;
+            const startNum = colMatch[2];
+            const endCol = colMatch[3] ? (ProductionComponent.ROMAN_TO_ARABIC[colMatch[3]] || startCol) : startCol;
+            const endNum = colMatch[4] || startNum;
+            const cleanedText = colMatch[5];
+
+            // Build column-qualified labels
+            const startLabel = startCol > 0 ? `${startCol}:${startNum}` : startNum;
+            const endLabel = endCol > 0 ? `${endCol}:${endNum}` : endNum;
+            const isRange = startLabel !== endLabel;
+
+            return { startLabel, endLabel, cleanedText, isRange };
+        }
+
+        // Fallback: plain format "1'–2" or "13'–2" or "3-4" or "2a." or "2a-2b" etc.
+        const numMatch = text.match(/^(\d+'?[a-c]?)(?:[–\-](\d+'?[a-c]?))?\.?\s+(.*)$/);
         if (!numMatch) return null;
 
-        const startLabel = numMatch[1];  // e.g. "2'", "13'", "3"
-        const endLabel = numMatch[2] || startLabel;  // e.g. "4'", "2", "4"
+        const startLabel = numMatch[1];
+        const endLabel = numMatch[2] || startLabel;
         const cleanedText = numMatch[3];
         const isRange = startLabel !== endLabel;
 
@@ -1827,9 +2381,13 @@ export class ProductionComponent implements OnInit, OnDestroy {
      * Only splits on en-dash ranges (N–M) to avoid false positives with hyphens in text.
      */
     private splitEmbeddedRanges(line: string): string[] {
-        // Split before embedded range patterns: digit(s) + optional prime + en-dash + digit(s)
-        // preceded by whitespace. Use lookahead to keep the range in the result.
-        const parts = line.split(/\s+(?=\d+'?\u2013\d+'?\.?\s)/);
+        // If the line starts with a Roman numeral column prefix, don't split —
+        // it's a single column-prefixed translation
+        if (/^(i{1,4}|iv|vi{0,3})\s+\d/.test(line.trim())) {
+            return [line];
+        }
+        // Split before embedded range patterns: "N'–M'" or "Na–Nb" preceded by whitespace
+        const parts = line.split(/\s+(?=\d+'?[a-c]?[–\u2013\-]\d+'?[a-c]?\.?\s)/);
         return parts.filter(p => p.trim().length > 0);
     }
 
@@ -2144,125 +2702,140 @@ export class ProductionComponent implements OnInit, OnDestroy {
             return;
         }
 
-        // Confirmation dialog to prevent accidental exports
-        const confirmMessage = `Export to eBL?\n\nThis will upload the transliteration for "${this.currentIdentifier}" to the eBL platform.\n\n⚠️ WARNING: This will OVERWRITE any existing content on eBL for this fragment, including changes made by other users.\n\nContinue?`;
-        if (!confirm(confirmMessage)) {
+        // Open export overlay instead of browser confirm
+        this.exportFragmentId = this.currentIdentifier;
+        this.exportStatus = 'ready';
+        this.exportResultMessage = '';
+        this.exportResultUrl = '';
+        this.exportErrorHelp = '';
+        this.exportValidationErrors = [];
+        this.showExportOverlay = true;
+    }
+
+    getExportPreviewUrl(): string {
+        if (!this.exportFragmentId) return '';
+        return `https://www.ebl.lmu.de/fragmentarium/${this.exportFragmentId.trim()}`;
+    }
+
+    confirmExport(): void {
+        if (!this.exportFragmentId.trim()) {
+            this.notificationService.showWarning('Fragment ID cannot be empty');
             return;
         }
 
-        // First validate
+        // Step 1: Local validation
+        this.exportStatus = 'validating';
         this.isExporting = true;
-        this.eblService.exportToEbl(
-            this.currentIdentifier,
-            this.editorContent
-        ).subscribe({
-            next: (result) => {
-                this.isExporting = false;
-                if (result.success) {
-                    this.notificationService.showSuccess(result.message);
+        this.startExportTimer();
 
-                    // Mark production text as exported
-                    if (this.currentProductionText?.production_id) {
-                        this.productionService.markExported(this.currentProductionText.production_id).subscribe({
-                            next: () => {
-                                console.log('Production text marked as exported');
-                            },
-                            error: (err) => {
-                                console.warn('Failed to mark as exported:', err);
-                            }
-                        });
-                    }
+        this.eblService.validateAtf(this.editorContent, this.exportFragmentId).subscribe({
+            next: (validationResult) => {
+                if (!validationResult.valid) {
+                    // Local validation failed
+                    this.stopExportTimer();
+                    this.isExporting = false;
+                    this.exportStatus = 'error';
+                    this.exportResultMessage = `Local validation found ${validationResult.errors?.length || 0} error(s)`;
+                    this.exportValidationErrors = validationResult.error_strings || [];
 
-                    if (result.fragment_url) {
-                        // Optionally open the fragment in a new tab
-                        if (confirm(`Export successful! Open ${result.fragment_url} in eBL?`)) {
-                            window.open(result.fragment_url, '_blank');
-                        }
+                    if (validationResult.errors?.length > 0) {
+                        this.validationResult = validationResult;
                     }
-                } else {
-                    // Show detailed error message based on error code
-                    this.handleExportError(result);
+                    return;
                 }
+
+                // Step 2: Upload to eBL (skip local validation since we just did it)
+                this.exportStatus = 'exporting';
+                this.eblService.exportToEbl(
+                    this.exportFragmentId,
+                    this.editorContent,
+                    undefined,
+                    true // skip_validation
+                ).subscribe({
+                    next: (result) => {
+                        this.stopExportTimer();
+                        this.isExporting = false;
+                        if (result.success) {
+                            this.exportStatus = 'success';
+                            this.exportResultMessage = `${result.message} (${this.exportElapsedSeconds}s)`;
+                            this.exportResultUrl = result.fragment_url || this.getExportPreviewUrl();
+                            this.notificationService.showSuccess(result.message);
+
+                            if (this.currentProductionText?.production_id) {
+                                this.productionService.markExported(this.currentProductionText.production_id).subscribe();
+                            }
+                        } else {
+                            this.exportStatus = 'error';
+                            this.exportResultMessage = result.message || 'Export failed';
+                            this.exportErrorHelp = result.help || '';
+                            this.exportValidationErrors = result.validation_errors || [];
+
+                            if (result.validation_errors?.length > 0) {
+                                const errors = result.validation_details
+                                    ? result.validation_details.map((d: any) => ({ line: d.line || 0, column: d.column || undefined, message: d.message }))
+                                    : result.validation_errors.map((err: string, idx: number) => ({ line: idx + 1, message: err }));
+                                this.validationResult = {
+                                    valid: false,
+                                    errors: errors,
+                                    error_strings: result.validation_errors,
+                                    warnings: [],
+                                    parsed_lines: 0,
+                                    validation_source: 'ebl_api'
+                                };
+                            }
+                        }
+                    },
+                    error: (err) => {
+                        this.stopExportTimer();
+                        console.error('Export failed:', err);
+                        this.isExporting = false;
+                        this.exportStatus = 'error';
+                        this.exportResultMessage = 'Network error — the eBL server may be unreachable';
+                    }
+                });
             },
             error: (err) => {
-                console.error('Export failed:', err);
-                this.notificationService.showError('Export to eBL failed: Network error');
+                this.stopExportTimer();
+                console.error('Validation failed:', err);
                 this.isExporting = false;
+                this.exportStatus = 'error';
+                this.exportResultMessage = 'Local validation failed — unable to check ATF';
             }
         });
+    }
+
+    private startExportTimer(): void {
+        this.exportElapsedSeconds = 0;
+        this.exportTimerInterval = setInterval(() => {
+            this.exportElapsedSeconds++;
+        }, 1000);
+    }
+
+    private stopExportTimer(): void {
+        if (this.exportTimerInterval) {
+            clearInterval(this.exportTimerInterval);
+            this.exportTimerInterval = null;
+        }
+    }
+
+    closeExportOverlay(): void {
+        this.showExportOverlay = false;
+        // Don't stop the timer — export continues in background
+        // Timer is stopped when the response arrives
+    }
+
+    openExportResultInEbl(): void {
+        if (this.exportResultUrl) {
+            window.open(this.exportResultUrl, '_blank');
+        }
     }
 
     /**
      * Handle export errors with appropriate UI feedback
      */
-    private handleExportError(result: any): void {
-        let errorTitle = 'Export Failed';
-
-        // Add error code badge if available
-        if (result.error_code) {
-            switch (result.error_code) {
-                case 'NO_PERMISSION':
-                    errorTitle = '403 - No Write Permission';
-                    break;
-                case 'TOKEN_EXPIRED':
-                    errorTitle = '401 - Token Expired';
-                    break;
-                case 'NOT_FOUND':
-                    errorTitle = '404 - Fragment Not Found';
-                    break;
-                case 'VALIDATION_ERROR':
-                    errorTitle = '422 - Validation Error';
-                    break;
-                case 'NETWORK_ERROR':
-                    errorTitle = 'Network Error';
-                    break;
-                case 'API_ERROR':
-                    errorTitle = `API Error (${result.status_code || 'Unknown'})`;
-                    break;
-            }
-        }
-
-        // Store error details for overlay
-        this.exportErrorTitle = errorTitle;
-        this.exportErrorMessage = result.message || 'An error occurred during export';
-        this.exportErrorHelp = result.help || '';
-        this.exportValidationErrors = result.validation_errors || [];
-
-        // Show the error overlay
-        this.showExportErrorOverlay = true;
-
-        // If there are validation errors, also update the live validation panel
-        if (result.validation_errors && result.validation_errors.length > 0) {
-            // Use structured validation_details if available (has accurate line numbers)
-            const errors = result.validation_details
-                ? result.validation_details.map((d: any) => ({ line: d.line || 0, column: d.column || undefined, message: d.message }))
-                : result.validation_errors.map((err: string, idx: number) => ({ line: idx + 1, message: err }));
-
-            this.validationResult = {
-                valid: false,
-                errors: errors,
-                error_strings: result.validation_errors,
-                warnings: [],
-                parsed_lines: 0,
-                validation_source: 'ebl_api'
-            };
-            // Enable live validation panel to show the errors
-            this.liveValidationEnabled = true;
-        }
-
-        // Also show notification
-        this.notificationService.showError(errorTitle);
-    }
-
-    /**
-     * Close the export error overlay
-     */
+    /** @deprecated — kept for any remaining references */
     closeExportErrorOverlay(): void {
         this.showExportErrorOverlay = false;
-        this.exportErrorTitle = '';
-        this.exportErrorMessage = '';
-        this.exportErrorHelp = '';
-        this.exportValidationErrors = [];
     }
 
     openEblSettings(): void {
@@ -2418,7 +2991,6 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     closeValidationResults(): void {
         this.showValidationResults = false;
-        this.validationResult = null;
     }
 
     getValidationSourceLabel(): string {
@@ -2502,11 +3074,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     private processUploadedFile(file: File): void {
         const fileName = file.name.toLowerCase();
+        // Consume any label set by the Add-text dialog (no-OCR + local path)
+        const label = this.pendingNoOcrLabel;
+        this.pendingNoOcrLabel = null;
 
         if (fileName.endsWith('.pdf')) {
             this.loadPDFFile(file);
         } else if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
-            this.addImageAsSource(file);
+            this.addImageAsSource(file, label || undefined);
         } else {
             this.notificationService.showError('Unsupported file type. Please use PDF, PNG, or JPG.');
         }
@@ -2622,9 +3197,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
         });
     }
 
-    private addImageAsSource(file: File): void {
+    private addImageAsSource(file: File, customLabel?: string): void {
         const newIndex = this.currentSources.length;
-        const label = `Uploaded ${this.getNextUploadedImageNumber()}`;
+        const label = (customLabel && customLabel.trim())
+            ? customLabel.trim()
+            : `Uploaded ${this.getNextUploadedImageNumber()}`;
 
         // Add to sources
         const newSource: SourceTextContent = {

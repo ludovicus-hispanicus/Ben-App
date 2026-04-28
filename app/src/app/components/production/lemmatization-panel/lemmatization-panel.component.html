@@ -1,0 +1,232 @@
+<div class="lemmatization-panel">
+    <!-- Toolbar -->
+    <div class="lemma-toolbar">
+        <div class="toolbar-left">
+            <span class="lemma-stats" *ngIf="tokenizedText">
+                {{ getLemmatizedCount() }}/{{ getTotalLemmatizableCount() }} lemmatized
+            </span>
+            <span class="sync-warning" *ngIf="needsSync">
+                <mat-icon class="warning-icon">warning</mat-icon>
+                Text changed
+            </span>
+        </div>
+        <div class="toolbar-actions">
+            <button class="toolbar-btn" (click)="tokenize()" [disabled]="isTokenizing"
+                    matTooltip="Sync with transliteration text">
+                <mat-icon [class.spinning]="isTokenizing">sync</mat-icon>
+                <span>Sync</span>
+            </button>
+
+            <button class="toolbar-btn" (click)="aiSuggest()" [disabled]="isAiSuggesting || !productionId"
+                    matTooltip="Get AI-powered lemma suggestions">
+                <mat-icon [class.spinning]="isAiSuggesting">auto_awesome</mat-icon>
+                <span>AI Suggest</span>
+            </button>
+
+            <button class="toolbar-btn" (click)="save()" [disabled]="isSaving || !lemmatization"
+                    matTooltip="Save lemmatization">
+                <mat-icon>save</mat-icon>
+                <span>Save</span>
+            </button>
+
+            <button class="toolbar-btn" (click)="exportToEbl()"
+                    [disabled]="isExporting || !fragmentNumber || !lemmatization"
+                    matTooltip="Export lemmatization to eBL">
+                <mat-icon>cloud_upload</mat-icon>
+                <span>Export</span>
+            </button>
+
+            <button class="toolbar-btn danger" (click)="clearAll()" [disabled]="!lemmatization"
+                    matTooltip="Clear all lemma assignments">
+                <mat-icon>clear_all</mat-icon>
+            </button>
+        </div>
+    </div>
+
+    <!-- Dictionary status banner -->
+    <div class="dict-banner" *ngIf="dictionaryStatus && !dictionaryStatus.downloaded">
+        <mat-icon>menu_book</mat-icon>
+        <span>eBL dictionary not downloaded.</span>
+        <button class="toolbar-btn small" (click)="downloadDictionary()" [disabled]="isDownloadingDict">
+            <mat-icon [class.spinning]="isDownloadingDict">download</mat-icon>
+            {{ isDownloadingDict ? 'Downloading...' : 'Download Now' }}
+        </button>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" *ngIf="notification" [class]="'notification ' + notificationType">
+        {{ notification }}
+    </div>
+
+    <!-- Loading state -->
+    <div class="loading" *ngIf="isTokenizing">
+        <mat-spinner diameter="24"></mat-spinner>
+        <span>Tokenizing...</span>
+    </div>
+
+    <!-- Token lines -->
+    <div class="lemma-lines" *ngIf="tokenizedText && !isTokenizing">
+        <ng-container *ngFor="let line of tokenizedText.lines; let lineIdx = index">
+            <!-- Text lines -->
+            <div class="lemma-line" *ngIf="line.line_type === 'text'">
+                <span class="line-number">{{ line.line_number }}</span>
+                <div class="token-chips">
+                    <span *ngFor="let token of line.tokens; let tokenIdx = index"
+                          class="token-chip"
+                          [class.assigned]="getTokenStatus(line, tokenIdx) === 'assigned'"
+                          [class.suggestion]="getTokenStatus(line, tokenIdx) === 'suggestion'"
+                          [class.atf_suggestion]="getTokenStatus(line, tokenIdx) === 'atf_suggestion'"
+                          [class.ambiguous]="getTokenStatus(line, tokenIdx) === 'ambiguous'"
+                          [class.unmatched]="getTokenStatus(line, tokenIdx) === 'unmatched'"
+                          [class.skip]="getTokenStatus(line, tokenIdx) === 'skip'"
+                          [class.selected]="selectedToken === token"
+                          (click)="onTokenClick($event, line, token, lineIdx, tokenIdx)"
+                          [matTooltip]="getTokenLemma(line, tokenIdx) || token.cleaned">
+                        <span class="token-text">{{ token.raw }}</span>
+                        <span class="token-lemma" *ngIf="getTokenLemma(line, tokenIdx)">
+                            {{ getTokenLemma(line, tokenIdx) }}
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Structure/state lines (display only) -->
+            <div class="lemma-line meta" *ngIf="line.line_type === 'structure' || line.line_type === 'state'">
+                <span class="meta-text">{{ line.raw_text }}</span>
+            </div>
+        </ng-container>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" *ngIf="!tokenizedText && !isTokenizing">
+        <mat-icon>spellcheck</mat-icon>
+        <p>No text to lemmatize. Switch to the Transliteration tab and enter some ATF text first.</p>
+    </div>
+</div>
+
+<!-- Token popup (positioned absolute) -->
+<div class="token-popup" *ngIf="popupVisible && selectedToken"
+     [style.left.px]="popupX" [style.top.px]="popupY"
+     (clickOutside)="closePopup()">
+    <div class="popup-header">
+        <span class="popup-token">{{ selectedToken.raw }}</span>
+        <span class="popup-cleaned">{{ selectedToken.cleaned }}</span>
+        <span class="popup-complex" *ngIf="selectedToken.is_complex">
+            Complex: +{{ selectedToken.detected_suffix }}
+        </span>
+        <span class="popup-enclitic" *ngIf="selectedToken.detected_enclitic">
+            Enclitic: -{{ selectedToken.detected_enclitic }}
+        </span>
+        <button class="popup-close" (click)="closePopup()">
+            <mat-icon>close</mat-icon>
+        </button>
+    </div>
+
+    <!-- ATF import suggestion -->
+    <div class="popup-section atf-suggestion-section" *ngIf="getAtfSuggestion(selectedLine, selectedTokenIdx) as atfSug">
+        <div class="popup-label">
+            <span class="atf-import-badge">ATF import</span>
+            Suggestion:
+        </div>
+        <div class="atf-suggestion-content">
+            <div class="atf-suggestion-row">
+                <span class="atf-english">"{{ atfSug.oracc_guideword }}"</span>
+                <span class="atf-pos" *ngIf="atfSug.oracc_pos">[{{ atfSug.oracc_pos }}]</span>
+            </div>
+            <div class="atf-suggestion-row akkadian" *ngIf="atfSug.oracc_citation">
+                <span class="atf-citation">{{ atfSug.oracc_citation }}</span>
+            </div>
+            <div class="atf-suggestion-row" *ngIf="atfSug.unique_lemma.length > 0">
+                <span class="atf-resolved">{{ atfSug.unique_lemma[0] }}</span>
+            </div>
+            <div class="atf-suggestion-actions">
+                <button class="atf-accept-btn" (click)="acceptAtfSuggestion()">
+                    <mat-icon>check</mat-icon> Accept
+                </button>
+                <button class="atf-reject-btn" (click)="clearLemma()">
+                    <mat-icon>close</mat-icon> Reject
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current assignment (for complex tokens, show both lemmas) -->
+    <div class="popup-section" *ngIf="getTokenLemma(selectedLine, selectedTokenIdx) && !getAtfSuggestion(selectedLine, selectedTokenIdx)">
+        <div class="popup-label">Current assignment:</div>
+        <div class="current-lemmas">
+            <span *ngFor="let lid of getTokenLemma(selectedLine, selectedTokenIdx).split(', ')" class="assigned-lemma">
+                {{ lid }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Unified candidates with morph info -->
+    <div class="popup-section" *ngIf="candidateEntries.length > 0">
+        <div class="popup-label">{{ selectedToken.is_complex ? 'Base word:' : 'Candidates:' }}</div>
+        <div *ngFor="let entry of candidateEntries" class="candidate-entry" (click)="assignLemma(entry.word_id)">
+            <span class="candidate-id">{{ entry.word_id }}</span>
+            <span class="candidate-morph" *ngIf="getMorphForCandidate(entry.word_id) as morph">
+                {{ morph }}
+            </span>
+            <span class="candidate-pos" *ngIf="!getMorphForCandidate(entry.word_id)">{{ entry.pos.join(', ') }}</span>
+            <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+        </div>
+    </div>
+
+    <!-- Suffix section (for complex tokens) -->
+    <div class="popup-section suffix-section" *ngIf="selectedToken.is_complex">
+        <div class="popup-label">Suffix: -{{ selectedToken.detected_suffix }}</div>
+        <div class="suffix-current">
+            <span class="suffix-lemma-badge">{{ selectedToken.suffix_lemma }}</span>
+            <span class="suffix-info">
+                {{ getSuffixDescription(selectedToken.detected_suffix) }}
+            </span>
+        </div>
+        <div class="suffix-alternatives">
+            <div *ngFor="let alt of getSuffixAlternatives(selectedToken.detected_suffix)"
+                 class="candidate-entry suffix-alt"
+                 (click)="assignLemma(alt.lemma_id, true)">
+                <span class="candidate-id">{{ alt.lemma_id }}</span>
+                <span class="candidate-meaning">{{ alt.description }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="popup-section" *ngIf="selectedToken.lemma_candidates.length === 0 && candidateEntries.length === 0">
+        <div class="popup-label no-match">No dictionary match</div>
+    </div>
+
+    <!-- Manual search -->
+    <div class="popup-section search-section">
+        <div class="search-row">
+            <input type="text" [(ngModel)]="wordSearchQuery" placeholder="Search dictionary..."
+                   (keyup.enter)="searchDictionary()" class="search-input" />
+            <button class="search-btn" (click)="searchDictionary()" [disabled]="isSearching">
+                <mat-icon>search</mat-icon>
+            </button>
+        </div>
+        <div *ngFor="let entry of searchResults" class="candidate-entry" (click)="assignLemma(entry.word_id)">
+            <span class="candidate-id">{{ entry.word_id }}</span>
+            <span class="candidate-pos">{{ entry.pos.join(', ') }}</span>
+            <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+        </div>
+    </div>
+
+    <!-- Mark as complex (add suffix manually) -->
+    <div class="popup-section suffix-add-section" *ngIf="!selectedToken.is_complex">
+        <div class="popup-label">Add suffix:</div>
+        <div class="suffix-options">
+            <span *ngFor="let suf of getAllSuffixOptions()" class="suffix-option-btn"
+                  (click)="markAsComplex(suf.suffix, suf.lemma_id)">
+                -{{ suf.suffix }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Clear button -->
+    <div class="popup-footer">
+        <button class="popup-action" (click)="clearLemma()">
+            <mat-icon>close</mat-icon> No lemma
+        </button>
+    </div>
+</div>

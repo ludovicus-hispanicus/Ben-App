@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatIconModule } from '@angular/material/icon';
 import { SettingsComponent } from './settings.component';
 
 @NgModule({
@@ -13,7 +14,8 @@ import { SettingsComponent } from './settings.component';
     CommonModule,
     FormsModule,
     HttpClientModule,
-    MatTabsModule
+    MatTabsModule,
+    MatIconModule
   ],
   exports: [
     SettingsComponent

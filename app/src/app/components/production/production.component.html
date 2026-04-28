@@ -160,6 +160,11 @@
                     <div class="detail-header">
                         <h3>Texts</h3>
                         <span class="items-count">{{ filteredGroups.length }} texts</span>
+                        <span class="spacer"></span>
+                        <button mat-stroked-button (click)="showImportOraccDialog = true" matTooltip="Import ORACC ATF text">
+                            <mat-icon>upload_file</mat-icon>
+                            Import ATF
+                        </button>
                     </div>
                     <div class="museum-items-grid" *ngIf="filteredGroups.length > 0">
                         <div class="grid-item" *ngFor="let group of filteredGroups"
@@ -230,11 +235,11 @@
             <!-- eBL Integration -->
             <div class="ebl-actions">
                 <button mat-stroked-button
-                        (click)="toggleLiveValidation()"
-                        [class.active]="liveValidationEnabled"
-                        matTooltip="Toggle live ATF validation">
-                    <mat-icon>{{ liveValidationEnabled ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-                    Live
+                        (click)="validateAtf()"
+                        [disabled]="isValidating || !editorContent?.trim()"
+                        matTooltip="Validate ATF text">
+                    <mat-icon>{{ isValidating ? 'hourglass_empty' : 'spellcheck' }}</mat-icon>
+                    {{ isValidating ? 'Validating...' : 'Validate' }}
                 </button>
                 <button mat-stroked-button
                         (click)="pullFromEbl()"
@@ -290,6 +295,11 @@
                 <div class="source-canvas-wrapper">
                     <!-- Left Toolbar -->
                     <div class="visualizer-toolbar">
+                        <button class="tool-btn" (click)="openAddTextDialog()"
+                                matTooltip="Add a new linked page (image + optional OCR)">
+                            <mat-icon>playlist_add</mat-icon>
+                        </button>
+                        <div class="toolbar-divider"></div>
                         <button class="tool-btn" [class.active]="sourceCanvas?.selectedMode === CanvasMode.Pan"
                                 (click)="sourceCanvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan">
                             <mat-icon>pan_tool</mat-icon>
@@ -355,13 +365,13 @@
                     </div>
 
                     <div class="source-canvas-container">
-                        <fabric-canvas #sourceCanvas
+                        <fabric-canvas #sourceCanvas *ngIf="currentSources.length > 0"
                             [canvasType]="canvasTypeViewOnly"
                             [isLoading]="!sourceImageDataUrls.has(selectedSourceIndex)"
                             (imageRotated)="onSourceImageRotated($event)"
                             (guidesChanged)="onGuidesChanged($event)">
                         </fabric-canvas>
-                        <div class="no-image" *ngIf="!sourceImageDataUrls.has(selectedSourceIndex) && !isLoading">
+                        <div class="no-image" *ngIf="currentSources.length === 0 || (!sourceImageDataUrls.has(selectedSourceIndex) && !isLoading)">
                             <mat-icon>image_not_supported</mat-icon>
                             <span>No image available</span>
                         </div>
@@ -383,7 +393,7 @@
             <!-- Text editor on the right -->
             <div class="text-panel" [style.width.%]="100 - leftPanelWidth">
                 <!-- Editor Mode Toggle -->
-                <div class="editor-mode-toggle" *ngIf="hasTranslations()">
+                <div class="editor-mode-toggle" *ngIf="hasTranslations() || currentProductionText">
                     <button class="mode-btn"
                             [class.active]="editorMode === 'transliteration'"
                             (click)="setEditorMode('transliteration')">
@@ -397,6 +407,12 @@
                         <mat-icon>translate</mat-icon>
                         <span>Translation</span>
                         <span class="line-count">{{ getTranslationLineCount() }}</span>
+                    </button>
+                    <button class="mode-btn lemma"
+                            [class.active]="editorMode === 'lemmatization'"
+                            (click)="setEditorMode('lemmatization')">
+                        <mat-icon>spellcheck</mat-icon>
+                        <span>Lemmatization</span>
                     </button>
                     <span class="validation-status-inline" *ngIf="validationResult && editorMode === 'transliteration'">
                         <mat-icon *ngIf="isValidating" class="btn-icon spinning">sync</mat-icon>
@@ -435,15 +451,13 @@
                         <button class="rt-btn" (click)="exportContent()" matTooltip="Export">
                             <mat-icon>download</mat-icon>
                         </button>
-                        <button class="rt-btn" (click)="imageFileInput.click()" matTooltip="Add image">
-                            <mat-icon>add_photo_alternate</mat-icon>
-                        </button>
-                        <button class="rt-btn" (click)="browseServerImages()" matTooltip="Browse server images">
-                            <mat-icon>folder_open</mat-icon>
-                        </button>
                         <button class="rt-btn" *ngIf="hasTranslations()" (click)="insertTranslation()"
                                 matTooltip="Insert translation">
                             <mat-icon>merge_type</mat-icon>
+                        </button>
+                        <button class="rt-btn" (click)="removeTranslations()"
+                                matTooltip="Remove translations from transliteration">
+                            <mat-icon>remove_circle_outline</mat-icon>
                         </button>
                     </div>
                 </text-editor>
@@ -456,7 +470,28 @@
                     [canEdit]="true"
                     [disableNormalization]="true"
                     (textContentChanged)="onTranslationContentChange($event)">
+                    <div toolbar-actions>
+                        <div class="rt-divider"></div>
+                        <button class="rt-btn" (click)="syncTranslations()" matTooltip="Sync translations from sources">
+                            <mat-icon>sync</mat-icon>
+                        </button>
+                        <button class="rt-btn" (click)="usePrimeSections = !usePrimeSections"
+                                [matTooltip]="usePrimeSections ? 'Currently $1′ — click for $1' : 'Currently $1 — click for $1′'">
+                            <span style="font-weight: bold; font-size: 12px;">{{ usePrimeSections ? "$1'" : '$1' }}</span>
+                        </button>
+                        <button class="rt-btn" (click)="numberTranslationSections()" matTooltip="Add $N section numbers">
+                            <mat-icon>format_list_numbered</mat-icon>
+                        </button>
+                    </div>
                 </text-editor>
+
+                <!-- Lemmatization Panel -->
+                <lemmatization-panel
+                    *ngIf="editorMode === 'lemmatization'"
+                    [atfText]="editorContent"
+                    [productionId]="currentProductionText?.production_id || 0"
+                    [fragmentNumber]="currentIdentifier">
+                </lemmatization-panel>
 
                 <!-- eBL Content Panel (shows intro/notes from eBL when pulled) -->
                 <div class="live-validation-panel" *ngIf="(pulledIntroduction || pulledNotes) && editorMode === 'transliteration'" [style.height.px]="validationPanelHeight">
@@ -631,47 +666,92 @@
     </div>
 
     <!-- Export Error Overlay -->
-    <div class="export-error-overlay" *ngIf="showExportErrorOverlay" (click)="closeExportErrorOverlay()">
-        <div class="export-error-dialog" (click)="$event.stopPropagation()">
-            <div class="dialog-header error-header">
+    <div class="export-overlay" *ngIf="showExportOverlay" (click)="closeExportOverlay()">
+        <div class="export-dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header" [class.success-header]="exportStatus === 'success'" [class.error-header]="exportStatus === 'error'" [class.progress-header]="exportStatus === 'validating' || exportStatus === 'exporting'">
                 <h3>
-                    <mat-icon class="error-icon">error</mat-icon>
-                    {{ exportErrorTitle }}
+                    <mat-icon>{{ exportStatus === 'success' ? 'check_circle' : exportStatus === 'error' ? 'error' : exportStatus === 'validating' ? 'spellcheck' : exportStatus === 'exporting' ? 'cloud_upload' : 'cloud_upload' }}</mat-icon>
+                    {{ exportStatus === 'success' ? 'Export Successful' : exportStatus === 'error' ? 'Export Failed' : exportStatus === 'validating' ? 'Validating...' : exportStatus === 'exporting' ? 'Uploading...' : 'Export to eBL' }}
                 </h3>
-                <button mat-icon-button (click)="closeExportErrorOverlay()">
+                <button mat-icon-button (click)="closeExportOverlay()">
                     <mat-icon>close</mat-icon>
                 </button>
             </div>
             <div class="dialog-content">
-                <div class="error-message">
-                    <p>{{ exportErrorMessage }}</p>
+                <!-- Fragment ID input -->
+                <div class="export-field">
+                    <label>Fragment ID</label>
+                    <input type="text" [(ngModel)]="exportFragmentId"
+                           [disabled]="exportStatus === 'exporting' || exportStatus === 'success'"
+                           placeholder="e.g. MS.3000 or CUSAS-18.22"
+                           class="export-id-input">
                 </div>
 
-                <div class="error-help" *ngIf="exportErrorHelp">
-                    <mat-icon>help_outline</mat-icon>
-                    <span>{{ exportErrorHelp }}</span>
+                <!-- Live URL preview -->
+                <div class="export-url-preview" *ngIf="exportFragmentId">
+                    <mat-icon>link</mat-icon>
+                    <a [href]="getExportPreviewUrl()" target="_blank" class="url-link">{{ getExportPreviewUrl() }}</a>
                 </div>
 
-                <div class="export-validation-errors" *ngIf="exportValidationErrors.length > 0">
-                    <h4>
-                        <mat-icon>warning</mat-icon>
-                        Validation Errors ({{ exportValidationErrors.length }})
-                    </h4>
-                    <p class="error-hint">These errors must be fixed before the text can be exported to eBL:</p>
-                    <ul class="error-list">
-                        <li *ngFor="let err of exportValidationErrors">{{ err }}</li>
-                    </ul>
+                <!-- Warning -->
+                <div class="export-warning" *ngIf="exportStatus === 'ready'">
+                    <mat-icon>warning</mat-icon>
+                    <span>This will OVERWRITE any existing content on eBL for this fragment.</span>
                 </div>
 
-                <div class="error-actions-hint" *ngIf="exportValidationErrors.length > 0">
-                    <mat-icon>lightbulb</mat-icon>
-                    <span>The errors have been added to the Live Validation panel below the editor for easy reference while editing.</span>
+                <!-- Progress -->
+                <div class="export-progress" *ngIf="exportStatus === 'validating' || exportStatus === 'exporting'">
+                    <mat-spinner diameter="24"></mat-spinner>
+                    <div class="progress-info">
+                        <span class="progress-label">{{ exportStatus === 'validating' ? 'Validating ATF...' : 'Uploading to eBL...' }}</span>
+                        <span class="progress-time">{{ exportElapsedSeconds }}s</span>
+                    </div>
+                </div>
+
+                <!-- Success result -->
+                <div class="export-success" *ngIf="exportStatus === 'success'">
+                    <p>{{ exportResultMessage }}</p>
+                    <a *ngIf="exportResultUrl" [href]="exportResultUrl" target="_blank" class="url-link result-link">
+                        <mat-icon>open_in_new</mat-icon>
+                        Open in eBL
+                    </a>
+                </div>
+
+                <!-- Error result -->
+                <div class="export-error-result" *ngIf="exportStatus === 'error'">
+                    <p>{{ exportResultMessage }}</p>
+
+                    <div class="error-help" *ngIf="exportErrorHelp">
+                        <mat-icon>help_outline</mat-icon>
+                        <span>{{ exportErrorHelp }}</span>
+                    </div>
+
+                    <div class="export-validation-errors" *ngIf="exportValidationErrors.length > 0">
+                        <h4>
+                            <mat-icon>warning</mat-icon>
+                            Validation Errors ({{ exportValidationErrors.length }})
+                        </h4>
+                        <ul class="error-list">
+                            <li *ngFor="let err of exportValidationErrors">{{ err }}</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             <div class="dialog-actions">
-                <button mat-raised-button color="primary" (click)="closeExportErrorOverlay()">
-                    <mat-icon>edit</mat-icon>
-                    Fix Errors
+                <button mat-stroked-button (click)="closeExportOverlay()">
+                    {{ exportStatus === 'success' ? 'Close' : 'Cancel' }}
+                </button>
+                <button mat-raised-button color="primary"
+                        *ngIf="exportStatus === 'ready'"
+                        (click)="confirmExport()">
+                    <mat-icon>cloud_upload</mat-icon>
+                    Export
+                </button>
+                <button mat-raised-button color="primary"
+                        *ngIf="exportStatus === 'error'"
+                        (click)="exportStatus = 'ready'">
+                    <mat-icon>refresh</mat-icon>
+                    Try Again
                 </button>
             </div>
         </div>
@@ -829,4 +909,46 @@
         </div>
     </div>
     <div class="drawer-backdrop" *ngIf="showAtfHelp" (click)="toggleAtfHelp()"></div>
+
+    <!-- ORACC ATF Import Dialog -->
+    <div class="import-oracc-overlay" *ngIf="showImportOraccDialog">
+        <div class="import-oracc-dialog">
+            <div class="import-dialog-header">
+                <h3>Import ORACC ATF</h3>
+                <button mat-icon-button (click)="showImportOraccDialog = false">
+                    <mat-icon>close</mat-icon>
+                </button>
+            </div>
+            <div class="import-dialog-body">
+                <p class="import-hint">Paste an ORACC-style ATF text. Transliteration, translation, and lemmatization (#lem) will be separated and stored automatically.</p>
+                <div class="import-identifier-row">
+                    <mat-form-field appearance="outline">
+                        <mat-label>Identifier (auto-detected from header)</mat-label>
+                        <input matInput [(ngModel)]="importIdentifierOverride" placeholder="e.g. P363689">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline">
+                        <mat-label>Type</mat-label>
+                        <mat-select [(ngModel)]="importIdentifierTypeOverride">
+                            <mat-option value="">Auto-detect</mat-option>
+                            <mat-option value="p_number">P-number</mat-option>
+                            <mat-option value="museum">Museum</mat-option>
+                            <mat-option value="publication">Publication</mat-option>
+                        </mat-select>
+                    </mat-form-field>
+                </div>
+                <textarea class="import-textarea"
+                          [(ngModel)]="importOraccAtfText"
+                          placeholder="&P363689 = TCL 06, 16&#10;#project: cams/gkab&#10;#atf: lang akk-x-stdbab&#10;..."></textarea>
+            </div>
+            <div class="import-dialog-footer">
+                <button mat-stroked-button (click)="showImportOraccDialog = false">Cancel</button>
+                <button mat-raised-button color="primary"
+                        [disabled]="!importOraccAtfText?.trim() || isImportingOracc"
+                        (click)="importOraccAtf()">
+                    <mat-spinner *ngIf="isImportingOracc" diameter="18" class="inline-spinner"></mat-spinner>
+                    {{ isImportingOracc ? 'Importing...' : 'Import' }}
+                </button>
+            </div>
+        </div>
+    </div>
 </div>

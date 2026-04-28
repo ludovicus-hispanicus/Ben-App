@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil, switchMap } from 'rxjs/operators';
 
@@ -235,7 +236,8 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     private yoloService: YoloTrainingService,
     private notification: NotificationService,
     private datasetService: DatasetService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private route: ActivatedRoute
   ) {}
 
   onProductionViewModeChange(mode: string): void {
@@ -261,6 +263,17 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     // Poll for training status updates
     this.startTrainingStatusPolling();
+
+    // Switch the embedded view based on URL hints from cross-component navigation:
+    // - linkedIdentifier (production "Add linked page") → switch to Datasets so <cured> renders
+    // - view=production (cured Finish button) → switch back to Export so <app-production> renders
+    this.route.queryParams.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      if (params['linkedIdentifier'] && this.ocrViewMode !== OcrViewMode.Datasets) {
+        this.ocrViewMode = OcrViewMode.Datasets;
+      } else if (params['view'] === 'production' && this.ocrViewMode !== OcrViewMode.Export) {
+        this.ocrViewMode = OcrViewMode.Export;
+      }
+    });
   }
 
   ngAfterViewChecked(): void {

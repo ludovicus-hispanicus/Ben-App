@@ -2,7 +2,7 @@ import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, OnIni
 import { MatMenuTrigger } from '@angular/material/menu';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
 import { PDFDocumentProxy } from 'ng2-pdf-viewer';
-import { Dimensions, Index, Letter, LetterHover, RectData, TeiEntryResult } from 'src/app/models/letter';
+import { Dimensions, Index, Letter, LetterHover, RectData } from 'src/app/models/letter';
 import { CuredService, TranslationLookupResult } from 'src/app/services/cured.service';
 import { NotificationService } from 'src/app/services/notification.service';
 import { CanvasMode, CanvasType, FabricCanvasComponent } from '../fabric-canvas/fabric-canvas.component';
@@ -22,7 +22,8 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from 'src/app/auth/auth.service';
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { ToolbarService } from 'src/app/services/toolbar.service';
 import { AtfConverterService } from 'src/app/services/atf-converter.service';
 import { TextService } from 'src/app/services/text.service';
@@ -31,6 +32,7 @@ import { TextPreview, DatasetPreview, GuideLineData } from 'src/app/models/cured
 import { GuideLineService } from 'src/app/services/guide-line.service';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ProductionService, KwicResult } from 'src/app/services/production.service';
+import { LinkedPageService } from 'src/app/services/linked-page.service';
 
 export interface ModelInfo {
   name: string;
@@ -111,7 +113,24 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   private ocrCropArea: { left: number; top: number; width: number; height: number } | null = null;
   // Reference to the selection box kept on canvas after OCR (non-interactive)
   private ocrSelectionBox: Rect | null = null;
+  // Append-mode state: when true, generateLines() merges new results into the existing transliteration
+  // instead of replacing it. Used by enterReOcrMode() to re-OCR a region without losing prior lines.
+  public appendingOcr: boolean = false;
+  private existingLinesSnapshot: Letter[] | null = null;
+  private existingBoxesSnapshot: Rect[] = [];
+  // Most recent box manually drawn in stage 5 — promoted to the OCR target when the
+  // user clicks re-OCR after drawing (instead of being treated as a line bounding box).
+  private lastManualBoxStage5: Rect | null = null;
+
+  // Linked-page mode: when true, CuReD was opened from production with a pre-filled
+  // identifier + label. After saving, show Finish/Add-another buttons.
+  public linkedMode: boolean = false;
+  public linkedIdentifierValue: string = '';
+  public linkedIdentifierType: string = '';
+  public linkedLabel: string = '';
+  public linkedSavedThisSession: boolean = false;
   public isCurated: boolean = false;
+  public isReviewed: boolean = false;
 
   public goToPage: number = 1;
   public uploadedImageBlob: File = null;
@@ -131,10 +150,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public highlightQuery: string = null;
   public isDragOver: boolean = false;
 
-  // TEI Lex-0 validation
-  public teiValidationResults: TeiEntryResult[] = null;
-  public selectedTeiEntry: TeiEntryResult = null;
-  public showTeiValidation: boolean = false;
 
   private popStateSub: { unsubscribe: () => void } = null;
   private suppressPopState: boolean = false;
@@ -159,6 +174,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public sortColumn: string = 'last_modified';
   public sortDirection: 'asc' | 'desc' = 'desc';
   public textViewMode: 'grid' | 'list' = 'list';
+  public datasetViewMode: 'grid' | 'list' = 'grid';
 
   // Text list pagination
   public textsPage: number = 0;
@@ -191,6 +207,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Dataset card selection & inline rename
   public selectedDatasetCard: DatasetPreview | null = null;
+
+  // Multi-selection for batch dataset operations
+  public selectedDatasets: Set<number> = new Set();
+  public lastSelectedDatasetIndex: number = -1;
   public editingDataset: DatasetPreview | null = null;
   public editingDatasetName: string = '';
   private datasetRenameTimer: any = null;
@@ -267,9 +287,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   // Available sub-models for each API provider
   public apiSubModels: { [key: string]: Array<{value: string; label: string; description: string}> } = {
     'gemini_vision': [
-      { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Fast, free tier' },
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
-      { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite', description: 'Latest multimodal' },
+      { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite', description: 'Fast multimodal' },
       { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Most capable' },
     ],
     'claude_vision': [
@@ -339,42 +358,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public ocrPromptModes: Array<{value: string; label: string; description: string}> = [
     { value: 'plain', label: 'Plain', description: 'Simple text extraction' },
     { value: 'markdown', label: 'Markdown', description: 'Formatted with markdown' },
-    { value: 'dictionary', label: 'Dictionary', description: 'Akkadian dictionary entries' },
+    { value: 'dictionary', label: 'Dictionary', description: 'AHw dictionary entries' },
+    { value: 'cad', label: 'CAD', description: 'Chicago Assyrian Dictionary entries (two-column layout)' },
     { value: 'ahw_refentry', label: 'AHw RefEntry', description: 'AHw cross-reference entries (plain text, special chars)' },
-    { value: 'tei_lex0', label: 'TEI Lex-0', description: 'Two-stage: OCR → TEI XML encoding (with XSD validation)' },
   ];
 
-  // TEI encoding model selection (Stage 2 of the two-stage pipeline)
-  public selectedTeiModel: string = 'gemini';
-  public teiApiKey: string = '';
-  public teiEncodingModels: Array<{value: string; label: string; provider: string; model: string; needsApiKey: boolean; description: string}> = [
-    { value: 'gemini', label: 'Gemini Flash-Lite', provider: 'gemini', model: 'gemini-3.1-flash-lite-preview', needsApiKey: true, description: 'Fast, free tier' },
-    { value: 'gemini_pro', label: 'Gemini Pro', provider: 'gemini', model: 'gemini-3.1-pro-preview', needsApiKey: true, description: 'Most capable' },
-    { value: 'claude_haiku', label: 'Claude Haiku', provider: 'anthropic', model: 'claude-haiku-4-5-20251001', needsApiKey: true, description: 'Fast, cheap' },
-    { value: 'claude_sonnet', label: 'Claude Sonnet', provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', needsApiKey: true, description: 'Balanced' },
-    { value: 'gpt4o_mini', label: 'GPT-4o Mini', provider: 'openai', model: 'gpt-4o-mini', needsApiKey: true, description: 'Fast, cheap' },
-    { value: 'qwen3_8b', label: 'Qwen3 8B (local)', provider: 'ollama', model: 'qwen3:8b', needsApiKey: false, description: 'Local, 6GB' },
-    { value: 'llama3_8b', label: 'Llama 3.1 8B (local)', provider: 'ollama', model: 'llama3.1:8b', needsApiKey: false, description: 'Local, 5GB' },
-  ];
-
-  get selectedTeiModelInfo() {
-    return this.teiEncodingModels.find(m => m.value === this.selectedTeiModel);
-  }
-
-  get teiModelNeedsApiKey(): boolean {
-    return this.selectedTeiModelInfo?.needsApiKey ?? false;
-  }
-
-  onTeiModelChange(): void {
-    // Load saved API key for this TEI model
-    this.teiApiKey = localStorage.getItem('tei_api_key_' + this.selectedTeiModel) || '';
-  }
-
-  saveTeiApiKey(): void {
-    if (this.teiApiKey && this.selectedTeiModel) {
-      localStorage.setItem('tei_api_key_' + this.selectedTeiModel, this.teiApiKey);
-    }
-  }
   public ocrModelCategories: Array<{
     name: string;
     models: Array<{value: string; label: string; description?: string; trained?: boolean}>;
@@ -519,6 +507,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Generate lines from image - uses selected box if available, otherwise full image
   generateLines() {
+    // In append (re-OCR) mode, require a box so users don't accidentally re-OCR the whole page
+    if (this.appendingOcr && !this.selectedBox) {
+      this.notificationService.showError("Draw a box on the region you want to re-OCR (Add mode is active in the toolbar)");
+      return;
+    }
+
     this.toolbarService.setLoading(true);
     this.isLoading = true;
 
@@ -545,8 +539,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       });
       // Store crop area so Detect Lines can use the same region
       this.ocrCropArea = { left: box.left, top: box.top, width: box.getScaledWidth(), height: box.getScaledHeight() };
-      // Replace uploadedImageBlob with the cropped image for correct training data
-      this.uploadedImageBlob = this.dataUrlToFile(imageData, 'cropped-region.png');
+      // Replace uploadedImageBlob with the cropped image for correct training data —
+      // but in re-OCR (append) mode keep the original full-page image, since we're only
+      // augmenting an existing transliteration and don't want to overwrite the page on save.
+      if (!this.appendingOcr) {
+        this.uploadedImageBlob = this.dataUrlToFile(imageData, 'cropped-region.png');
+      }
     } else {
       // Use full image
       imageData = bgImage.toDataURL({});
@@ -558,42 +556,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       localStorage.setItem('ocr_api_key_' + this.selectedOcrModel, this.apiKey);
     }
 
-    // Save TEI API key if provided
-    if (this.teiApiKey && this.teiModelNeedsApiKey) {
-      this.saveTeiApiKey();
-    }
-
-    // Build TEI options for two-stage pipeline
-    const teiOptions = this.selectedOcrPrompt === 'tei_lex0' && this.selectedTeiModelInfo
-      ? {
-          teiModel: this.selectedTeiModelInfo.model,
-          teiProvider: this.selectedTeiModelInfo.provider,
-          teiApiKey: this.teiApiKey || undefined
-        }
-      : undefined;
-
-    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, teiOptions, this.correctionRules || undefined, this.boxMode || undefined).subscribe(data => {
+    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, this.correctionRules || undefined, this.boxMode || undefined).subscribe(data => {
       if (data.lines.length == 0) {
         this.notificationService.showWarning("AI failed to parse the image, please try again", 20000);
         this.isLoading = false;
         this.toolbarService.setLoading(false);
         return;
-      }
-
-      // Capture TEI validation results if present
-      if (data.validation_results && data.validation_results.length > 0) {
-        this.teiValidationResults = data.validation_results;
-        this.showTeiValidation = true;
-        const validCount = data.validation_results.filter(e => e.status === 'valid').length;
-        const errorCount = data.validation_results.filter(e => e.status === 'error').length;
-        if (errorCount > 0) {
-          this.notificationService.showWarning(`TEI Validation: ${validCount} valid, ${errorCount} errors out of ${data.validation_results.length} entries`, 10000);
-        } else {
-          this.notificationService.showSuccess(`TEI Validation: All ${validCount} entries valid`);
-        }
-      } else {
-        this.teiValidationResults = null;
-        this.showTeiValidation = false;
       }
 
       // Set stage to 5 FIRST so lineEditor gets rendered
@@ -626,8 +594,236 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.updateToolbarButtons();
         this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode, this.canvas.guideMode];
         this.canvas.changeMode(CanvasMode.Pan);
+
+        // Append-mode merge: combine the snapshot taken before re-OCR with the new results
+        if (this.appendingOcr) {
+          const existingLines = this.existingLinesSnapshot || [];
+          const existingBoxes = this.existingBoxesSnapshot || [];
+          // Restore interactivity on the previously-muted existing boxes
+          for (const b of existingBoxes) {
+            b.set({ selectable: true, evented: true, opacity: 1 });
+          }
+          const merged = [...existingLines, ...this.lines];
+          this.lines = this.addIndexes(merged);
+          if (this.lineEditor) {
+            this.lineEditor.setLines(this.lines);
+          }
+          this.boundingBoxes = [...existingBoxes, ...this.boundingBoxes];
+          this.updateBoundingBoxesIndexes();
+          this.canvas.getCanvas().renderAll();
+          this.appendingOcr = false;
+          this.existingLinesSnapshot = null;
+          this.existingBoxesSnapshot = [];
+          this.hasUnsavedChanges = true;
+          this.notificationService.showSuccess(`Appended ${data.lines.length} new line(s)`);
+        }
+
+        // Mark as unsaved so Save button is enabled for new OCR results
+        if (!this.textId) {
+          this.hasUnsavedChanges = true;
+        }
       }, 50);
     });
+  }
+
+  // Switch from the editor (stage ≥5) back to the model-picker panel (stage 2) so
+  // the user can draw a box and run OCR on a region. New lines/boxes are appended
+  // to the current transliteration instead of replacing it.
+  enterReOcrMode() {
+    if (this.stage < 5) {
+      this.notificationService.showError('Re-OCR is only available in the editor');
+      return;
+    }
+    // If the user just drew a box in stage 5, treat it as the OCR target instead of
+    // snapshotting it as an existing line box.
+    let promotedBox: Rect | null = null;
+    if (this.lastManualBoxStage5 && this.boundingBoxes.includes(this.lastManualBoxStage5)) {
+      promotedBox = this.lastManualBoxStage5;
+      this.boundingBoxes = this.boundingBoxes.filter(b => b !== promotedBox);
+      this.updateBoundingBoxesIndexes();
+    }
+    this.lastManualBoxStage5 = null;
+
+    this.existingLinesSnapshot = this.lines ? [...this.lines] : [];
+    this.existingBoxesSnapshot = [...this.boundingBoxes];
+    // Existing line boxes would intercept draw clicks and prevent a new selection box
+    // from being created — make them non-interactive (and visually muted) until merge.
+    for (const b of this.existingBoxesSnapshot) {
+      b.set({ selectable: false, evented: false, opacity: 0.35 });
+    }
+    this.canvas.getCanvas().discardActiveObject();
+
+    this.appendingOcr = true;
+    this.ocrCropArea = null;
+    if (promotedBox) {
+      // Make the drawn box editable and active as the selection
+      promotedBox.set({ selectable: true, evented: true, hasControls: true, hasBorders: true, lockRotation: true, opacity: 1 });
+      this.canvas.getCanvas().setActiveObject(promotedBox);
+      this.selectedBox = promotedBox;
+    } else {
+      this.selectedBox = null;
+    }
+    this.canvas.getCanvas().renderAll();
+
+    this.stage = 2;
+    this.updateUrl();
+    this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
+    this.canvas.changeMode(CanvasMode.Add);
+    this.updateToolbarButtons();
+    if (promotedBox) {
+      this.notificationService.showInfo('Using your drawn box as the OCR region. Pick a model and Generate.');
+    } else {
+      this.notificationService.showInfo('Draw a box, pick a model, then Generate. Existing boxes are dimmed.');
+    }
+  }
+
+  // Pre-fill the museum/P/publication identifier and label fields based on linkedMode params,
+  // so the save dialog opens with the parent text's identifier already populated.
+  private applyLinkedPrefill() {
+    if (!this.linkedMode) return;
+    const value = this.linkedIdentifierValue;
+    if (this.linkedIdentifierType === 'museum') {
+      const parsed = this.parseIdentifierValue(value);
+      this.currentMuseumName = parsed.name;
+      this.currentMuseumNumber = parsed.number;
+      this.currentPNumber = '';
+      this.currentPublicationNumber = '';
+    } else if (this.linkedIdentifierType === 'p_number') {
+      this.currentMuseumName = '';
+      this.currentMuseumNumber = 0;
+      this.currentPNumber = value;
+      this.currentPublicationNumber = '';
+    } else if (this.linkedIdentifierType === 'publication') {
+      this.currentMuseumName = '';
+      this.currentMuseumNumber = 0;
+      this.currentPNumber = '';
+      this.currentPublicationNumber = value;
+    }
+    this.currentLabel = this.linkedLabel || '';
+  }
+
+  // Reset CuReD to the upload state for adding another linked page (keeps linked params intact).
+  addAnotherLinkedPage() {
+    // Set isLoading FIRST so the linked-source-picker (or any stale stage-0 UI) cannot
+    // render between resetting state and opening the chosen picker.
+    this.isLoading = true;
+    this.resetToCleanState();
+    this.applyLinkedPrefill();
+    this.linkedSavedThisSession = false;
+    this.stage = 0;
+    this.updateUrl();
+    // Reuse the source choice from the original Add-text dialog — open that picker
+    // directly instead of showing the source-picker card again.
+    const lastSource = this.linkedPageService.lastSource;
+    if (lastSource === 'server') {
+      this.openLinkedServerPicker();
+    } else if (lastSource === 'local') {
+      this.openLinkedLocalPicker();
+    } else {
+      // No remembered source — show the source-picker card for manual choice
+      this.isLoading = false;
+    }
+  }
+
+  // Server browser variant for the Add-another flow — manages isLoading so the
+  // source-picker card doesn't briefly flash before the dialog opens.
+  private openLinkedServerPicker(): void {
+    this.isLoading = true;
+    const dialogRef = this.dialog.open(ImageBrowserDialogComponent, {
+      width: '1000px', height: '720px'
+    });
+    dialogRef.afterClosed().subscribe((result: SelectedPage[] | null) => {
+      if (!result || result.length === 0) {
+        // Cancelled — drop back to the source-picker card
+        this.isLoading = false;
+        return;
+      }
+      const page = result[0];
+      this.http.get(page.image_url, { responseType: 'blob' }).subscribe(blob => {
+        const file = new File([blob], page.filename, { type: 'image/png' });
+        this.processFile(file);  // loadImage handles isLoading=false on read
+      });
+    });
+  }
+
+  // Local file variant for the Add-another flow.
+  private openLinkedLocalPicker(): void {
+    this.isLoading = true;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.png,.jpg,.jpeg';
+    input.style.display = 'none';
+    let resolved = false;
+    input.onchange = () => {
+      resolved = true;
+      const file = input.files && input.files[0];
+      input.remove();
+      if (file) {
+        this.processFile(file);  // loadImage handles isLoading=false
+      } else {
+        this.isLoading = false;
+      }
+    };
+    // Detect cancel (no native event) by listening for window focus return —
+    // when the OS file dialog closes without a selection, focus comes back here.
+    const onFocus = () => {
+      setTimeout(() => {
+        if (!resolved) {
+          window.removeEventListener('focus', onFocus);
+          input.remove();
+          this.isLoading = false;
+        }
+      }, 300);
+    };
+    window.addEventListener('focus', onFocus, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  // Finish linked-page session and return to the production view.
+  finishLinkedSession() {
+    if (this.hasUnsavedChanges) {
+      if (!confirm('You have unsaved changes. Discard them and finish?')) {
+        return;
+      }
+    }
+    const id = this.linkedIdentifierValue;
+    const type = this.linkedIdentifierType;
+    this.linkedMode = false;
+    this.linkedSavedThisSession = false;
+    this.hasUnsavedChanges = false;
+    // Open the parent group in production. The `view=production` flag tells the parent
+    // training component to switch its embedded view back to the production panel.
+    this.router.navigate(['/cured'], {
+      queryParams: { identifier: id, type: type, view: 'production' }
+    });
+  }
+
+  // Cancel an in-progress re-OCR session and return to the editor with the original lines/boxes intact.
+  cancelReOcrMode() {
+    // Restore the muted existing boxes so they're interactive again in the editor
+    for (const b of this.existingBoxesSnapshot) {
+      b.set({ selectable: true, evented: true, opacity: 1 });
+    }
+    this.canvas.getCanvas().renderAll();
+    this.appendingOcr = false;
+    this.existingLinesSnapshot = null;
+    this.existingBoxesSnapshot = [];
+    if (this.selectedBox) {
+      this.canvas.getCanvas().remove(this.selectedBox);
+      this.selectedBox = null;
+    }
+    this.ocrCropArea = null;
+    this.stage = 5;
+    this.updateUrl();
+    this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode, this.canvas.guideMode];
+    this.canvas.changeMode(CanvasMode.Pan);
+    setTimeout(() => {
+      if (this.lineEditor && this.lines) {
+        this.lineEditor.setLines(this.lines);
+      }
+      this.updateToolbarButtons();
+    }, 50);
   }
 
   constructor(
@@ -645,6 +841,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     private location: Location,
     private http: HttpClient,
     private productionService: ProductionService,
+    private linkedPageService: LinkedPageService,
     public guideLineService: GuideLineService) {
     // set some stuff
     // this.stage = 5;
@@ -726,6 +923,53 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     const viewOnly = params['viewOnly'] === 'true';
     const query = params['query'];
 
+    // Linked-page mode (opened from production with a pre-filled identifier + label)
+    const linkedIdentifier = params['linkedIdentifier'];
+    const linkedType = params['linkedType'];
+    const linkedLabel = params['linkedLabel'];
+    if (linkedIdentifier && linkedType) {
+      // Always enter linkedMode so the source-picker shows (or the pending file is
+      // consumed). updateUrl will keep linkedIdentifier in the URL while we have
+      // no saved text yet, so refresh resumes the flow instead of dropping the
+      // user on the dashboard.
+      this.linkedMode = true;
+      this.linkedIdentifierValue = linkedIdentifier;
+      this.linkedIdentifierType = linkedType;
+      this.linkedLabel = linkedLabel || '';
+      this.linkedSavedThisSession = false;
+      this.applyLinkedPrefill();
+
+      if (this.linkedPageService.hasPendingFile()) {
+        // First-time entry with a pre-picked file from production.
+        const pendingFile = this.linkedPageService.consumePendingFile();
+        if (pendingFile) {
+          // Hide the source-picker flash by entering a loading state immediately;
+          // loadImage will reset isLoading once the FileReader resolves.
+          this.isLoading = true;
+          setTimeout(() => this.processFile(pendingFile), 100);
+        }
+      }
+      // No pending file → the source-picker stays visible (or auto-trigger via
+      // lastSource has already opened a dialog). Either way, the URL keeps the
+      // linkedIdentifier so refresh re-enters this state.
+      this.updateUrl(true);
+      return; // Don't fall through to dashboard reset
+    } else if (this.linkedMode && !textId) {
+      // We were in linkedMode but the user back-navigated to a URL with no
+      // linked params and no text id. Route them out of the flow back to
+      // production rather than showing the source picker again.
+      this.linkedMode = false;
+      this.linkedSavedThisSession = false;
+      const id = this.linkedIdentifierValue;
+      const type = this.linkedIdentifierType;
+      if (id && type) {
+        this.router.navigate(['/cured'], {
+          queryParams: { identifier: id, type: type, view: 'production' }
+        });
+        return;
+      }
+    }
+
     this.highlightQuery = query || null;
 
     if (textId && transId) {
@@ -750,6 +994,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.currentLabel = '';
       this.currentPart = '';
       this.isCurated = false;
+      this.isReviewed = false;
       this.hasUnsavedChanges = false;
       this.ocrCropArea = null;
 
@@ -765,6 +1010,14 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.textId = +textId;
       this.loadTextMetadata();
       this.stage = 0;
+    } else if (this.linkedMode) {
+      // Linked-page mode landing — keep prefilled identifier/label intact, do NOT
+      // wipe state. Stay on stage 0 so the linked-source-picker (or auto-trigger)
+      // can prompt for the image source. After file pick, processFile takes us to stage 2.
+      if (this.stage !== 5) {
+        this.stage = 0;
+      }
+      this.loadDatasets();
     } else {
       // Dashboard
       this.resetToCleanState();
@@ -795,11 +1048,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private updateUrl(replace: boolean = false) {
     let path = '/cured';
+    const params = new URLSearchParams();
 
     // For editor stage with a loaded transliteration, add query params for deep linking
     if ((this.stage === 2 || this.stage === 4 || this.stage === 5) &&
         this.isLoadedFromServer && this.textId != null && this.transliterationId != null) {
-      const params = new URLSearchParams();
       params.set('textId', String(this.textId));
       params.set('transId', String(this.transliterationId));
       if (this.viewOnly) {
@@ -808,7 +1061,25 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.highlightQuery) {
         params.set('query', this.highlightQuery);
       }
-      path += '?' + params.toString();
+    } else if (this.linkedMode && this.linkedIdentifierValue && this.linkedIdentifierType) {
+      // No saved text yet but we're mid linked-page flow — keep the linked context
+      // in the URL so refresh resumes the picker instead of falling to the dashboard.
+      params.set('linkedIdentifier', this.linkedIdentifierValue);
+      params.set('linkedType', this.linkedIdentifierType);
+      if (this.linkedLabel) {
+        params.set('linkedLabel', this.linkedLabel);
+      }
+    }
+
+    const qs = params.toString();
+    if (qs) {
+      path += '?' + qs;
+    }
+
+    // While in linked-page mode, force replaceState so we don't push a chain of
+    // history entries the user has to back through to escape the flow.
+    if (this.linkedMode) {
+      replace = true;
     }
 
     this.suppressPopState = true;
@@ -831,6 +1102,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.takeTransId = null;
     this.isLoadedFromServer = false;
     this.isCurated = false;
+    this.isReviewed = false;
     this.viewOnly = false;
     this.lines = null;
     this.boundingBoxes = [];
@@ -990,7 +1262,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private createTextAndSaveWithLabelAndPart(identifiers: any, label: string, part: string) {
-    const projectId = this.selectedDataset?.dataset_id || null;
+    let projectId = this.selectedDataset?.dataset_id || null;
+    // In linked mode, fall back to the dataset of the parent production text so
+    // the new linked page lives alongside its siblings instead of in "Unassigned".
+    if (projectId == null && this.linkedMode && this.linkedPageService.linkedDatasetId != null) {
+      projectId = this.linkedPageService.linkedDatasetId;
+    }
     this.textService.create(identifiers, [], projectId).subscribe(textId => {
       this.textId = textId;
       this.doSaveWithLabelAndPart(false, label, part);
@@ -1044,11 +1321,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const guides = this.canvas ? this.canvas.getGuides() : [];
     console.log('[Save] guides:', guides.length, 'imageName:', imageName);
-    this.curedService.createSubmission(this.textId, this.transliterationId, lines, dimensions, imageName, isKraken, isVlm, guides).subscribe(result => {
+    this.curedService.createSubmission(this.textId, this.transliterationId, lines, dimensions, imageName, isKraken, isVlm, guides, this.isReviewed).subscribe(result => {
       if (this.hasPendingPages) {
         this.notificationService.showSuccess(
           `Saved (${this.currentPageIndex + 1}/${this.batchTotal}). Click "Next" for the next image.`
         );
+      } else if (this.linkedMode) {
+        this.notificationService.showSuccess("Saved to the parent dataset");
       } else if (!this.selectedDataset) {
         this.notificationService.showInfo("Saved to Unassigned (no dataset selected)");
       } else {
@@ -1059,6 +1338,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.isSaving = false;
       this.hasUnsavedChanges = false;
       this.uploadedImageBlob = null;  // Clear so it doesn't re-upload on next save
+      // The text now exists on the server — flip the flag so updateUrl() puts
+      // ?textId=N&transId=M in the URL. Without this, refresh/back lands on the
+      // dataset dashboard because there's no params to anchor the saved state.
+      this.isLoadedFromServer = true;
+      this.updateUrl();
+      // In linked-page mode, surface Finish / Add-another after a successful save
+      if (this.linkedMode) {
+        this.linkedSavedThisSession = true;
+      }
 
       // Update label if provided
       if (label && this.textId) {
@@ -1136,6 +1424,21 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.doSave(true, 'both');
   }
 
+  toggleReviewed() {
+    if (this.textId == null) {
+      this.notificationService.showError('Please save first before marking as reviewed');
+      return;
+    }
+    const newState = !this.isReviewed;
+    this.curedService.batchCurate([this.textId], newState, 'reviewed').subscribe({
+      next: () => {
+        this.isReviewed = newState;
+        this.notificationService.showSuccess(newState ? 'Marked as reviewed' : 'Review mark removed');
+      },
+      error: () => this.notificationService.showError('Failed to toggle review status')
+    });
+  }
+
   deleteCurrentEntry() {
     if (!confirm('Delete this text entry and all its transliterations? This cannot be undone.')) {
       return;
@@ -1188,6 +1491,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.curedService.loadTransliteration(this.textId, this.transliterationId).subscribe(data => {
       this.processTransliteration(data.lines, data.boxes, true);
       this.isCurated = data.is_curated_kraken || data.is_curated_vlm || false;
+      this.isReviewed = data.is_reviewed || false;
       // Load guide lines
       console.log('[Load] guides from server:', data.guides);
       if (data.guides && data.guides.length && this.canvas) {
@@ -1351,10 +1655,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.transliterationId = null;
     this.uploadedImageBlob = null;
     this.isCurated = false;
+    this.isReviewed = false;
     this.ocrCropArea = null;
     this.ocrSelectionBox = null;
-    this.teiValidationResults = null;
-    this.showTeiValidation = false;
     this.hasLinkedTranslation = false;
     this.linkedTranslationLines = [];
     this.showTranslationView = false;
@@ -1710,6 +2013,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   boxDeleted(index) {
     if (this.boundingBoxes) {
+      // If the deleted box is the one tracked for re-OCR promotion, clear the tracker
+      if (this.lastManualBoxStage5 && this.lastManualBoxStage5.data?.index?.row === index.row) {
+        this.lastManualBoxStage5 = null;
+      }
       this.boundingBoxes = this.boundingBoxes.filter(item => item.data.index.row != index.row);
       this.sortBoxes();
       this.updateBoundingBoxesIndexes();
@@ -1792,8 +2099,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       event.preventDefault();
       this.selectAllTexts();
     }
+    if (event.ctrlKey && event.key === 'a' && this.showDatasetList) {
+      event.preventDefault();
+      this.selectAllDatasets();
+    }
     if (event.key === 'Delete' && this.stage === 0 && this.selectedTexts.size > 0) {
       this.deleteSelectedTexts();
+    }
+    if (event.key === 'Delete' && this.showDatasetList && this.selectedDatasets.size > 0) {
+      this.deleteSelectedDatasets();
     }
   }
 
@@ -1867,6 +2181,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   goBack(fromBrowser: boolean = false) {
     // When triggered by browser back button, URL is already correct — use replaceState
     const replace = fromBrowser;
+    // Re-OCR (append) mode: back means "cancel re-OCR" rather than discarding the editor state
+    if (this.appendingOcr && this.stage == 2) {
+      this.cancelReOcrMode();
+      return;
+    }
     if (this.stage == 2) {
       // From visualizer back to thumbnails or upload
       this.backgroundImage = null;
@@ -1918,11 +2237,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.selectedBox) {
         this.canvas.getCanvas().remove(this.selectedBox);
       }
+      // Add-box mode finalises rects with selectable=false; re-enable editing so the
+      // user can move/resize the selection before clicking Generate.
+      newRect.set({ selectable: true, evented: true, hasControls: true, hasBorders: true, lockRotation: true });
+      this.canvas.getCanvas().setActiveObject(newRect);
+      this.canvas.getCanvas().renderAll();
       this.selectedBox = newRect;
+      // Switch to Pan mode so fabric handles resize/move on the new box natively —
+      // otherwise Add mode treats every mouse-down (including resize-handle clicks)
+      // as the start of a fresh draw and replaces the box.
+      this.canvas.changeMode(CanvasMode.Pan);
       this.updateToolbarButtons();
     } else if (this.stage == 5) {
       // In stage 5, allow adding new bounding boxes manually
       this.boundingBoxes.push(newRect);
+      // Remember this draw so a subsequent re-OCR click promotes it to the crop region.
+      this.lastManualBoxStage5 = newRect;
       this.sortBoxes();
       this.updateBoundingBoxesIndexes();
       this.hasUnsavedChanges = true;
@@ -2008,7 +2338,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    const ext = format.startsWith('zip_') ? 'zip' : format;
+    const ext = format.startsWith('zip_') ? 'zip' : format === 'ahw_json' ? 'json' : format;
     const filename = `${datasetName}.${ext}`;
     this.datasetService.exportDataset(this.selectedDataset.dataset_id, format).subscribe(
       blob => { saveAs(blob, filename); },
@@ -2269,6 +2599,18 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  toggleDatasetProduction(dataset: DatasetPreview, event: Event): void {
+    event.stopPropagation();
+    const newState = !dataset.for_production;
+    this.datasetService.setProduction(dataset.dataset_id, newState).subscribe({
+      next: () => {
+        dataset.for_production = newState;
+        this.notificationService.showSuccess(newState ? `'${dataset.name}' added to production` : `'${dataset.name}' removed from production`);
+      },
+      error: () => this.notificationService.showError('Failed to toggle production flag')
+    });
+  }
+
   collectExistingParts() {
     const parts = new Set<number>();
     this.curedTexts.forEach(t => {
@@ -2311,8 +2653,101 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // ============== Project Card Selection & Inline Rename ==============
 
-  selectDatasetCard(dataset: DatasetPreview): void {
+  selectDatasetCard(dataset: DatasetPreview, event?: MouseEvent): void {
+    // Unassigned card (id -1) is not multi-selectable
+    if (dataset.dataset_id === -1) {
+      this.selectedDatasets.clear();
+      this.lastSelectedDatasetIndex = -1;
+      this.selectedDatasetCard = dataset;
+      return;
+    }
+
+    const index = this.filteredDatasets.indexOf(dataset);
+    const id = dataset.dataset_id;
+
+    if (event && event.shiftKey && this.lastSelectedDatasetIndex >= 0) {
+      const start = Math.min(this.lastSelectedDatasetIndex, index);
+      const end = Math.max(this.lastSelectedDatasetIndex, index);
+      for (let i = start; i <= end; i++) {
+        const d = this.filteredDatasets[i];
+        if (d.dataset_id !== -1) { this.selectedDatasets.add(d.dataset_id); }
+      }
+    } else if (event && (event.ctrlKey || event.metaKey)) {
+      if (this.selectedDatasets.has(id)) {
+        this.selectedDatasets.delete(id);
+      } else {
+        this.selectedDatasets.add(id);
+      }
+    } else {
+      this.selectedDatasets.clear();
+      this.selectedDatasets.add(id);
+    }
+    this.lastSelectedDatasetIndex = index;
     this.selectedDatasetCard = dataset;
+  }
+
+  isDatasetSelected(dataset: DatasetPreview): boolean {
+    return this.selectedDatasets.has(dataset.dataset_id);
+  }
+
+  selectAllDatasets(): void {
+    const selectable = this.filteredDatasets.filter(d => d.dataset_id !== -1);
+    if (this.selectedDatasets.size === selectable.length) {
+      this.selectedDatasets.clear();
+    } else {
+      selectable.forEach(d => this.selectedDatasets.add(d.dataset_id));
+    }
+  }
+
+  clearDatasetSelection(): void {
+    this.selectedDatasets.clear();
+    this.lastSelectedDatasetIndex = -1;
+  }
+
+  deleteSelectedDatasets(): void {
+    if (this.selectedDatasets.size === 0) { return; }
+    const count = this.selectedDatasets.size;
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete Datasets',
+        message: `Delete ${count} selected dataset(s)? Texts will become unassigned.`,
+        confirmText: 'Delete',
+        warn: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) { return; }
+      const ids = Array.from(this.selectedDatasets);
+      const requests = ids.map(id =>
+        this.datasetService.delete(id).pipe(
+          catchError(() => of({ deleted: false, _failed: true }))
+        )
+      );
+
+      forkJoin(requests).subscribe(results => {
+        const failed = results.filter((r: any) => r._failed || r.deleted === false).length;
+        const completed = results.length - failed;
+
+        if (failed === 0) {
+          this.notificationService.showSuccess(`Deleted ${completed} dataset(s)`);
+        } else {
+          this.notificationService.showError(`Deleted ${completed}, failed ${failed}`);
+        }
+
+        // Optimistic local update — drop deleted datasets immediately
+        const deletedIds = new Set(ids);
+        this.datasets = this.datasets.filter(d => !deletedIds.has(d.dataset_id));
+
+        this.clearDatasetSelection();
+        this.selectedDatasetCard = null;
+        if (this.selectedDataset && ids.includes(this.selectedDataset.dataset_id)) {
+          this.backToDatasets();
+        } else {
+          this.loadDatasets();
+        }
+      });
+    });
   }
 
   onDatasetNameClick(dataset: DatasetPreview, event: MouseEvent): void {
@@ -2532,6 +2967,20 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  toggleSingleTextReview(item: TextPreview, event: Event): void {
+    event.stopPropagation();
+    const newState = !item.is_reviewed;
+    this.curedService.batchCurate([item.text_id], newState, 'reviewed').subscribe({
+      next: (result) => {
+        if (result.updated > 0) {
+          item.is_reviewed = newState;
+        }
+      },
+      error: () => this.notificationService.showError('Failed to toggle review')
+    });
+  }
+
+
 
   // ============== Text Context Menu (Grid View) ==============
 
@@ -2577,6 +3026,23 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       error: () => this.notificationService.showError('Failed to uncurate')
     });
   }
+
+  toggleReviewFromContextMenu(): void {
+    if (!this.textContextMenuItem) return;
+    const item = this.textContextMenuItem;
+    this.textContextMenuVisible = false;
+    const newState = !item.is_reviewed;
+    this.curedService.batchCurate([item.text_id], newState, 'reviewed').subscribe({
+      next: (result) => {
+        if (result.updated > 0) {
+          item.is_reviewed = newState;
+          this.notificationService.showSuccess(newState ? 'Marked as reviewed' : 'Review mark removed');
+        }
+      },
+      error: () => this.notificationService.showError('Failed to toggle review')
+    });
+  }
+
 
   onTextListBackgroundClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
@@ -3529,6 +3995,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
             this.loadTransliterationIds();
             this.textListNavActive = true;
           });
+          // Hydrate selectedDataset so post-save notifications report the actual dataset
+          // (e.g. on Re-OCR save) instead of falsely showing "Saved to Unassigned".
+          if (!this.selectedDataset) {
+            this.datasetService.getBreadcrumb(text.dataset_id).subscribe(crumbs => {
+              if (crumbs && crumbs.length > 0) {
+                this.selectedDataset = crumbs[crumbs.length - 1];
+              }
+            });
+          }
         }
       },
       () => {
@@ -3750,58 +4225,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         this.notificationService.showError('Line detection failed: ' + (err.error?.detail || err.message));
       }
     });
-  }
-
-  // ─── TEI Lex-0 Validation ──────────────────────────────────
-
-  getTeiValidCount(): number {
-    return this.teiValidationResults?.filter(e => e.status === 'valid').length || 0;
-  }
-
-  getTeiErrorCount(): number {
-    return this.teiValidationResults?.filter(e => e.status === 'error').length || 0;
-  }
-
-  getTeiWarningCount(): number {
-    return this.teiValidationResults?.filter(e => e.status === 'warning').length || 0;
-  }
-
-  selectTeiEntry(entry: TeiEntryResult): void {
-    this.selectedTeiEntry = this.selectedTeiEntry === entry ? null : entry;
-  }
-
-  retryTeiEntry(entry: TeiEntryResult): void {
-    if (!entry.errors.length) return;
-
-    entry['retrying'] = true;
-    this.curedService.retryTeiEntry(
-      entry.xml,
-      entry.errors,
-      this.getEffectiveModel(),
-      this.apiKey || undefined
-    ).subscribe({
-      next: (result) => {
-        // Update the entry in the results list
-        const idx = this.teiValidationResults.indexOf(entry);
-        if (idx >= 0) {
-          this.teiValidationResults[idx] = result;
-          // Also update the corresponding line in the text editor
-          if (this.lines && idx < this.lines.length) {
-            this.lines[idx] = new Letter(result.xml);
-          }
-        }
-        entry['retrying'] = false;
-        this.notificationService.showSuccess(`Entry "${result.lemma}" ${result.status === 'valid' ? 'now valid' : 'still has errors'}`);
-      },
-      error: (err) => {
-        entry['retrying'] = false;
-        this.notificationService.showError('Retry failed: ' + (err.error?.detail || err.message));
-      }
-    });
-  }
-
-  closeTeiValidation(): void {
-    this.showTeiValidation = false;
   }
 
 }

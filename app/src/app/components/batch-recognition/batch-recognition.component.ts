@@ -73,9 +73,8 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
 
   apiSubModels: { [key: string]: Array<{value: string; label: string; description: string}> } = {
     'gemini_vision': [
-      { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Fast, free tier' },
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
-      { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite', description: 'Latest multimodal' },
+      { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite', description: 'Fast multimodal' },
       { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', description: 'Most capable' },
     ],
     'claude_vision': [
@@ -158,14 +157,24 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   newPromptText: string = '';
   creatingPrompt: boolean = false;
 
-  // Image scale (null = use global setting from Settings)
-  imageScale: number | null = null;
-  imageScaleOptions: Array<{value: number | null; label: string}> = [
-    { value: null, label: 'Global Setting' },
-    { value: 1.0, label: '600 DPI (Full)' },
-    { value: 0.75, label: '450 DPI' },
-    { value: 0.5, label: '300 DPI' },
-    { value: 0.33, label: '200 DPI' },
+  // Image resize — target DPI (0 = no resize / full resolution)
+  targetDpi: number = 0;
+  targetDpiOptions: Array<{value: number; label: string}> = [
+    { value: 0, label: 'Full Resolution' },
+    { value: 600, label: '600 DPI' },
+    { value: 450, label: '450 DPI' },
+    { value: 300, label: '300 DPI' },
+    { value: 200, label: '200 DPI' },
+  ];
+
+  // Image scale — applied after DPI resize (1.0 = no additional scaling)
+  imageScale: number = 1.0;
+  imageScaleOptions: Array<{value: number; label: string}> = [
+    { value: 1.0, label: '100%' },
+    { value: 0.75, label: '75%' },
+    { value: 0.5, label: '50%' },
+    { value: 0.33, label: '33%' },
+    { value: 0.25, label: '25%' },
   ];
 
   // Box detection mode
@@ -174,6 +183,15 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     { value: 'none', label: 'None', description: 'No line boxes — text only' },
     { value: 'estimate', label: 'Estimate', description: 'Evenly divide image height by line count' },
     { value: 'predict', label: 'Predict (Kraken)', description: 'Kraken segmentation for line boundaries' },
+  ];
+
+  // Tiling Mode
+  tilingMode: string = 'none';
+  tilingModeOptions: Array<{value: string; label: string; description: string}> = [
+    { value: 'none', label: 'None', description: 'Process full page image natively' },
+    { value: 'full_page_clipped', label: 'Full Page (Clipped)', description: 'Aggressive margin reduction, single column' },
+    { value: 'two_columns', label: '2 Columns', description: 'Split vertically into Left & Right halves (plus margins)' },
+    { value: 'four_quadrants', label: '4 Quadrants', description: 'Split into 2x2 grid (optimizes OCR resolution)' },
   ];
 
   // Batch config — "dynamic" = size-based batching, "fixed" = user-specified batch size
@@ -617,7 +635,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       'plain': 'Plain',
       'markdown': 'Markdown',
       'dictionary': 'Dictionary',
-      'tei_lex0': 'TEI Lex-0',
+      'cad': 'CAD',
     };
     return labels[key] || key.charAt(0).toUpperCase() + key.slice(1);
   }
@@ -627,7 +645,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       'plain': 'Simple text extraction',
       'markdown': 'Formatted with markdown',
       'dictionary': 'Akkadian dictionary entries',
-      'tei_lex0': 'TEI Lex-0 XML encoding',
+      'cad': 'Chicago Assyrian Dictionary',
     };
     return descriptions[key] || '';
   }
@@ -808,8 +826,10 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       sub_model: this.selectedSubModel || undefined,
       batch_size: this.batchMode === 'dynamic' ? -1 : Math.max(1, this.batchSize || 1),
       correction_rules: this.correctionRules || undefined,
-      image_scale: this.imageScale ?? undefined,
+      image_scale: this.imageScale < 1.0 ? this.imageScale : undefined,
+      target_dpi: this.targetDpi || undefined,
       box_mode: this.boxMode || undefined,
+      tiling_mode: this.tilingMode,
     };
 
     this.batchService.startBatch(request).subscribe({
@@ -1125,6 +1145,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       batch_size: prevJob.batch_size != null ? prevJob.batch_size : 1,
       correction_rules: prevJob.correction_rules,
       image_scale: prevJob.image_scale ?? undefined,
+      target_dpi: prevJob.target_dpi ?? undefined,
       box_mode: prevJob.box_mode || undefined,
       exclude_filenames: processedFilenames.length > 0 ? processedFilenames : undefined,
     };

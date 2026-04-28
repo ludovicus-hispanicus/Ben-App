@@ -380,7 +380,92 @@ class NewTextsHandler:
             sort=[("use_start_time", pymongo.DESCENDING)]
         )
         texts = self._parse_texts(results)
-        return [self._extract_text_content(t) for t in texts]
+        exported = [self._extract_text_content(t) for t in texts]
+
+        # Enrich with column info from source project manifests
+        self._enrich_with_column(exported)
+        return exported
+
+    def _enrich_with_column(self, texts: List[dict]):
+        """Look up column (a/b) from source project manifests and add to each text."""
+        import json as _json
+        from pathlib import Path as _Path
+
+        _storage_path = os.environ.get("STORAGE_PATH", "data")
+        pages_path = _Path(os.path.join(_storage_path, "pages"))
+        if not pages_path.exists():
+            return
+
+        # Group texts by source project name (first part of identifier before '/')
+        by_source: Dict[str, List[dict]] = {}
+        for t in texts:
+            ident = t.get("identifier", "")
+            if "/" in ident:
+                source_name, filename = ident.split("/", 1)
+                by_source.setdefault(source_name, []).append((t, filename))
+
+        if not by_source:
+            return
+
+        # Build a map: project_name → manifest entries (loaded once per project)
+        # Scan project folders to find the one matching the source name
+        for source_name, text_entries in by_source.items():
+            manifest_lookup = {}
+            for project_dir in pages_path.iterdir():
+                if not project_dir.is_dir():
+                    continue
+                meta_file = project_dir / "metadata.json"
+                if not meta_file.exists():
+                    continue
+                try:
+                    meta = _json.loads(meta_file.read_text())
+                except Exception:
+                    continue
+                if meta.get("name") != source_name:
+                    continue
+                # Found matching project — load manifest
+                manifest_file = project_dir / "manifest.json"
+                if not manifest_file.exists():
+                    break
+                try:
+                    manifest = _json.loads(manifest_file.read_text())
+                except Exception:
+                    break
+                for m_entry in manifest:
+                    col = m_entry.get("column")
+                    if not col:
+                        continue
+                    # Direct key: entry (AHw merged) or snippet (snippets)
+                    key = m_entry.get("entry") or m_entry.get("snippet", "")
+                    if key:
+                        manifest_lookup[key] = col
+                    # Also build merged-style filename from snippet data
+                    # so old texts created by save_ahw_entries can match
+                    snippet = m_entry.get("snippet", "")
+                    merged_order = m_entry.get("merged_order")
+                    if snippet and merged_order is not None:
+                        page_stem = m_entry.get("page", "")
+                        # page_stem is "page_XXXX", extract "XXXX"
+                        import re as _re
+                        page_match = _re.search(r'(\d+)$', page_stem)
+                        if page_match:
+                            page_num = page_match.group(1)
+                            cname = m_entry.get("class_name", "")
+                            # Extract dataset prefix from snippet
+                            # e.g. "ahw_a_auto_test-page_0001-000-mainEntry.png"
+                            # → prefix = "ahw_a_auto_test"
+                            prefix_match = _re.match(r'^(.+?)-page_', snippet)
+                            if prefix_match:
+                                ds_prefix = prefix_match.group(1)
+                                merged_key = f"{ds_prefix}-{page_num}-{merged_order:03d}-{cname}.png"
+                                manifest_lookup[merged_key] = col
+                break
+
+            # Apply column to texts
+            for t, filename in text_entries:
+                col = manifest_lookup.get(filename)
+                if col:
+                    t["column"] = col
 
     def export_single_text(self, text_id: int) -> dict:
         """Export a single text with full content."""
@@ -451,6 +536,7 @@ class NewTextsHandler:
                 "boxes": box_dicts,
                 "is_curated_kraken": bool(getattr(latest_edit, "is_curated_kraken", False)),
                 "is_curated_vlm": bool(getattr(latest_edit, "is_curated_vlm", False)),
+                "is_reviewed": bool(getattr(latest_edit, "is_reviewed", False)),
             }
 
             # Add image to zip if it exists on disk
@@ -546,6 +632,7 @@ class NewTextsHandler:
                             image_name=image_name or "",
                             is_curated_kraken=trans.get("is_curated_kraken", False),
                             is_curated_vlm=trans.get("is_curated_vlm", False),
+                            is_reviewed=trans.get("is_reviewed", False),
                         )
                         self.save_new_transliteration(dto=dto, uploader_id=uploader_id)
 
@@ -627,6 +714,7 @@ class NewTextsHandler:
                         image_name=image_name or "",
                         is_curated_kraken=trans.get("is_curated_kraken", False),
                         is_curated_vlm=trans.get("is_curated_vlm", False),
+                        is_reviewed=trans.get("is_reviewed", False),
                     )
                     self.save_new_transliteration(dto=dto, uploader_id=uploader_id)
 
@@ -797,6 +885,7 @@ class NewTextsHandler:
             is_fixed=dto.is_fixed,
             is_curated_kraken=dto.is_curated_kraken,
             is_curated_vlm=dto.is_curated_vlm,
+            is_reviewed=getattr(dto, 'is_reviewed', False),
             training_targets=dto.training_targets,
             guides=getattr(dto, 'guides', None),
         )
@@ -907,15 +996,17 @@ class NewTextsHandler:
 
                         is_kraken = curate if target in ("both", "kraken") else latest_edit.get("is_curated_kraken", False)
                         is_vlm = curate if target in ("both", "vlm") else latest_edit.get("is_curated_vlm", False)
+                        is_reviewed = curate if target == "reviewed" else latest_edit.get("is_reviewed", False)
 
                         new_edit = {
                             "lines": latest_edit.get("lines", []),
                             "boxes": latest_edit.get("boxes", []),
                             "user_id": user_id,
                             "time": now_iso,
-                            "is_fixed": curate,
+                            "is_fixed": curate if target != "reviewed" else latest_edit.get("is_fixed", False),
                             "is_curated_kraken": is_kraken,
                             "is_curated_vlm": is_vlm,
+                            "is_reviewed": is_reviewed,
                         }
                         edit_history.append(new_edit)
                         item["use_start_time"] = use_time

@@ -428,14 +428,17 @@ class YoloTrainingHandler:
                 progress_callback=progress_callback,
             )
 
-            # Update status to completed
+            # Update status to completed (use actual epochs trained, may differ due to early stopping)
+            actual_epochs = result.get("actual_epochs", config.get("epochs", 100))
+            total_epochs = config.get("epochs", 100)
             self._update_job_status(
                 training_id,
                 TrainingStatus.COMPLETED,
                 completed_at=datetime.utcnow(),
                 metrics=result.get("metrics"),
                 progress_percent=100,
-                current_epoch=config.get("epochs", 100),
+                current_epoch=actual_epochs,
+                total_epochs=total_epochs,
             )
 
             logger.info(f"Training job {training_id} completed successfully")
@@ -521,6 +524,12 @@ class YoloTrainingHandler:
         if not results_path.exists():
             return {"success": True, "epochs": [], "message": "No results yet"}
 
+        def safe_float(val, default=0.0):
+            """Convert to float, replacing inf/nan with default."""
+            import math
+            v = float(val)
+            return default if math.isinf(v) or math.isnan(v) else v
+
         epochs = []
         try:
             with open(results_path, "r", encoding="utf-8") as f:
@@ -532,15 +541,15 @@ class YoloTrainingHandler:
                     row = {k.strip(): v.strip() if v else "0" for k, v in row.items()}
                     epochs.append({
                         "epoch": int(float(row.get("epoch", 0))),
-                        "box_loss": round(float(row.get("train/box_loss", 0)), 4),
-                        "cls_loss": round(float(row.get("train/cls_loss", 0)), 4),
-                        "dfl_loss": round(float(row.get("train/dfl_loss", 0)), 4),
-                        "precision": round(float(row.get("metrics/precision(B)", 0)), 4),
-                        "recall": round(float(row.get("metrics/recall(B)", 0)), 4),
-                        "mAP50": round(float(row.get("metrics/mAP50(B)", 0)), 4),
-                        "mAP50_95": round(float(row.get("metrics/mAP50-95(B)", 0)), 4),
-                        "val_box_loss": round(float(row.get("val/box_loss", 0)), 4),
-                        "val_cls_loss": round(float(row.get("val/cls_loss", 0)), 4),
+                        "box_loss": round(safe_float(row.get("train/box_loss", 0)), 4),
+                        "cls_loss": round(safe_float(row.get("train/cls_loss", 0)), 4),
+                        "dfl_loss": round(safe_float(row.get("train/dfl_loss", 0)), 4),
+                        "precision": round(safe_float(row.get("metrics/precision(B)", 0)), 4),
+                        "recall": round(safe_float(row.get("metrics/recall(B)", 0)), 4),
+                        "mAP50": round(safe_float(row.get("metrics/mAP50(B)", 0)), 4),
+                        "mAP50_95": round(safe_float(row.get("metrics/mAP50-95(B)", 0)), 4),
+                        "val_box_loss": round(safe_float(row.get("val/box_loss", 0)), 4),
+                        "val_cls_loss": round(safe_float(row.get("val/cls_loss", 0)), 4),
                     })
                 except (ValueError, TypeError):
                     # Skip partial/corrupt rows (e.g. mid-write during training)

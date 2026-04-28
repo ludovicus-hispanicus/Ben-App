@@ -3,6 +3,171 @@
   <p class="subtitle">Configure CuReD preferences</p>
 
   <mat-tab-group>
+    <!-- Modules Tab -->
+    <mat-tab label="Modules">
+      <div class="tab-content">
+        <div class="settings-section">
+          <h3>App Modules</h3>
+          <p class="section-description">
+            Enable or disable components to keep the app lightweight.
+            Disabled modules are hidden from the navigation bar.
+            CuReD is always enabled as the core module.
+          </p>
+
+          <div class="modules-grid">
+            <div class="module-card" *ngFor="let mod of appModules"
+                 [class.enabled]="moduleStates[mod.id] !== false"
+                 [class.disabled]="moduleStates[mod.id] === false"
+                 [class.core]="mod.core"
+                 [class.not-installed]="!mod.installed">
+              <div class="module-card-header">
+                <mat-icon class="module-icon">{{ mod.icon }}</mat-icon>
+                <div class="module-info">
+                  <strong>{{ mod.name }}</strong>
+                  <span class="core-badge" *ngIf="mod.core">Core</span>
+                  <span class="not-installed-badge" *ngIf="!mod.installed">Not installed</span>
+                </div>
+                <button class="btn btn-sm btn-primary" *ngIf="!mod.installed" disabled
+                        title="Module install from GitHub releases — coming soon">
+                  Install
+                </button>
+                <label class="module-toggle" *ngIf="mod.installed && !mod.core">
+                  <input type="checkbox"
+                         [checked]="moduleStates[mod.id] !== false"
+                         (change)="toggleModule(mod.id)">
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="always-on" *ngIf="mod.installed && mod.core">Always on</span>
+              </div>
+              <p class="module-description">{{ mod.description }}</p>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button class="btn btn-primary" (click)="saveModules()" [disabled]="savingModules">
+              {{ savingModules ? 'Saving...' : 'Save Module Settings' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Data Tab -->
+    <mat-tab label="Data">
+      <div class="tab-content">
+        <div class="settings-section">
+          <h3>eBL Dictionary</h3>
+          <p class="section-description">
+            The Akkadian dictionary is used for lemmatization, sign lookups, and OCR
+            disambiguation. Words are downloaded from eBL (requires login); signs are public.
+            Files are stored locally and not committed to git.
+          </p>
+
+          <!-- Status -->
+          <div *ngIf="loadingDictionaryStatus" class="loading">Loading dictionary status...</div>
+
+          <div class="dictionary-status" *ngIf="!loadingDictionaryStatus && dictionaryStatus">
+            <div class="status-row">
+              <span class="status-label">Words:</span>
+              <span class="status-value">
+                {{ dictionaryStatus.word_count | number }}
+                <span class="status-sub">({{ dictionaryStatus.index_size | number }} indexed forms)</span>
+              </span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Signs:</span>
+              <span class="status-value">
+                {{ dictionaryStatus.sign_count | number }}
+                <span class="status-sub">({{ dictionaryStatus.logogram_count | number }} logograms)</span>
+              </span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Last updated:</span>
+              <span class="status-value">{{ formatLastUpdated(dictionaryStatus.last_updated) }}</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">eBL connection:</span>
+              <span class="status-value">
+                <span class="status-indicator"
+                      [class.status-available]="eblConnected"
+                      [class.status-unavailable]="!eblConnected"></span>
+                {{ eblConnected ? 'Connected' : 'Not connected' }}
+              </span>
+            </div>
+          </div>
+
+          <div *ngIf="dictionaryError" class="error">{{ dictionaryError }}</div>
+
+          <!-- Download cards -->
+          <div class="dictionary-actions">
+            <div class="dictionary-card">
+              <div class="dictionary-card-header">
+                <strong>Words</strong>
+                <span class="dictionary-card-meta">~85 MB · public</span>
+              </div>
+              <p class="dictionary-card-description">
+                Akkadian lemmas with guide words, forms, and POS tags. Used for token
+                lemmatization and OCR dictionary prompts.
+              </p>
+
+              <div class="download-progress" *ngIf="downloadingWords && wordsProgress">
+                <div class="progress-bar">
+                  <div class="progress-fill" [style.width.%]="wordsPercent"></div>
+                </div>
+                <span class="progress-text">
+                  {{ wordsProgress.progress | number }} / {{ wordsProgress.total | number }} words ({{ wordsPercent }}%)
+                </span>
+              </div>
+
+              <div class="dictionary-card-actions">
+                <button class="btn btn-primary btn-sm"
+                        (click)="downloadWords()"
+                        [disabled]="downloadingWords">
+                  <span *ngIf="!downloadingWords">{{ dictionaryStatus?.word_count ? 'Re-download' : 'Download' }} Words</span>
+                  <span *ngIf="downloadingWords">Downloading…</span>
+                </button>
+                <button class="btn btn-secondary btn-sm"
+                        (click)="rebuildWordsIndex()"
+                        [disabled]="rebuildingWordsIndex || downloadingWords"
+                        title="Rebuild lookup index from local word files">
+                  {{ rebuildingWordsIndex ? 'Rebuilding…' : 'Rebuild Index' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="dictionary-card">
+              <div class="dictionary-card-header">
+                <strong>Signs</strong>
+                <span class="dictionary-card-meta">~10 MB · public</span>
+              </div>
+              <p class="dictionary-card-description">
+                Cuneiform sign list with logogram-to-lemma mappings. No login required.
+              </p>
+
+              <div class="dictionary-card-actions">
+                <button class="btn btn-primary btn-sm"
+                        (click)="downloadSigns()"
+                        [disabled]="downloadingSigns">
+                  <span *ngIf="!downloadingSigns">{{ dictionaryStatus?.sign_count ? 'Re-download' : 'Download' }} Signs</span>
+                  <span *ngIf="downloadingSigns">Downloading…</span>
+                </button>
+                <button class="btn btn-secondary btn-sm"
+                        (click)="rebuildSignsIndex()"
+                        [disabled]="rebuildingSignsIndex || downloadingSigns"
+                        title="Rebuild logogram index from local sign files">
+                  {{ rebuildingSignsIndex ? 'Rebuilding…' : 'Rebuild Index' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-footer">
+            <button class="btn btn-secondary btn-sm" (click)="loadDictionaryStatus()">Refresh Status</button>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
     <!-- OCR Engine Tab -->
     <mat-tab label="OCR Engine">
       <div class="tab-content">

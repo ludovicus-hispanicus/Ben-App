@@ -29,6 +29,11 @@ class DatasetPreviewDto(BaseModel):
     curated_count: int = 0
     curated_lines: int = 0
     children_count: int = 0
+    for_production: bool = False
+
+
+class SetProductionDto(BaseModel):
+    for_production: bool
 
 
 class DatasetTreeNodeDto(BaseModel):

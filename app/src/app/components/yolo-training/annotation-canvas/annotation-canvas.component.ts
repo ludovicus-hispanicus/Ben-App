@@ -114,6 +114,11 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
   viewingSavedImageSplit: string | null = null;
   viewingSavedImageCurated = false;
 
+  // Multi-select for saved images
+  selectedImageIds: Set<string> = new Set();
+  lastSelectedIndex: number = -1;
+  deletingSelected = false;
+
   // Image queue for multi-image support
   imageQueue: QueuedImage[] = [];
   activeImageId: string | null = null;
@@ -1911,6 +1916,110 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
     }, 1500);
   }
 
+  // ============== Multi-select for saved images ==============
+
+  toggleImageSelection(imageId: string, index: number, event: MouseEvent): void {
+    event.stopPropagation();
+
+    if (event.shiftKey && this.lastSelectedIndex >= 0) {
+      // Shift+click: range select
+      const start = Math.min(this.lastSelectedIndex, index);
+      const end = Math.max(this.lastSelectedIndex, index);
+      for (let i = start; i <= end; i++) {
+        this.selectedImageIds.add(this.savedImages[i].image_id);
+      }
+    } else if (event.ctrlKey || event.metaKey) {
+      // Ctrl/Cmd+click: toggle single
+      if (this.selectedImageIds.has(imageId)) {
+        this.selectedImageIds.delete(imageId);
+      } else {
+        this.selectedImageIds.add(imageId);
+      }
+    } else {
+      // Plain click on checkbox: toggle single
+      if (this.selectedImageIds.has(imageId)) {
+        this.selectedImageIds.delete(imageId);
+      } else {
+        this.selectedImageIds.add(imageId);
+      }
+    }
+    this.lastSelectedIndex = index;
+  }
+
+  isImageSelected(imageId: string): boolean {
+    return this.selectedImageIds.has(imageId);
+  }
+
+  get hasSelection(): boolean {
+    return this.selectedImageIds.size > 0;
+  }
+
+  selectAllImages(): void {
+    this.savedImages.forEach(img => this.selectedImageIds.add(img.image_id));
+  }
+
+  clearSelection(): void {
+    this.selectedImageIds.clear();
+    this.lastSelectedIndex = -1;
+  }
+
+  deleteSelectedImages(): void {
+    const count = this.selectedImageIds.size;
+    if (count === 0) return;
+
+    if (!confirm(`Delete ${count} image${count > 1 ? 's' : ''} from the dataset? This cannot be undone.`)) {
+      return;
+    }
+
+    this.deletingSelected = true;
+    const ids = Array.from(this.selectedImageIds);
+    let completed = 0;
+    let errors = 0;
+
+    ids.forEach(imageId => {
+      this.yoloService.deleteDatasetImage(this.datasetName, imageId).subscribe({
+        next: (response) => {
+          completed++;
+          if (!response.success) errors++;
+
+          // If we're viewing a deleted image, clear the canvas
+          if (this.viewingSavedImageId === imageId) {
+            this.clearAnnotations();
+            if (this.currentImage && this.canvas) {
+              this.canvas.remove(this.currentImage);
+              this.currentImage = null;
+            }
+            this.viewingSavedImageId = null;
+            this.viewingSavedImageSplit = null;
+          }
+
+          if (completed === ids.length) {
+            this.deletingSelected = false;
+            this.selectedImageIds.clear();
+            this.lastSelectedIndex = -1;
+            this.loadSavedImages();
+            if (errors > 0) {
+              this.notification.showError(`Deleted ${completed - errors}/${count} images (${errors} failed)`);
+            } else {
+              this.notification.showSuccess(`Deleted ${count} image${count > 1 ? 's' : ''}`);
+            }
+          }
+        },
+        error: () => {
+          completed++;
+          errors++;
+          if (completed === ids.length) {
+            this.deletingSelected = false;
+            this.selectedImageIds.clear();
+            this.lastSelectedIndex = -1;
+            this.loadSavedImages();
+            this.notification.showError(`Deleted ${completed - errors}/${count} images (${errors} failed)`);
+          }
+        }
+      });
+    });
+  }
+
   /**
    * Delete a saved image from the dataset
    */
@@ -1935,6 +2044,7 @@ export class AnnotationCanvasComponent implements OnInit, OnDestroy, AfterViewIn
             this.viewingSavedImageId = null;
             this.viewingSavedImageSplit = null;
           }
+          this.selectedImageIds.delete(imageId);
           // Refresh the list
           this.loadSavedImages();
         } else {

@@ -70,11 +70,25 @@ vlm-ocr/
 server/data/
 server/src/data/db/
 server/src/data/data/
+server/src/data/dictionary/
 server/src/build/
 server/src/data/kraken_training_history.json
 server/src/data/qwen_training_history.json
+server/src/ebl_config.json
 **/unsloth_compiled_cache/
 **/vlm-training/
+
+# PyInstaller / Electron build artifacts
+server/build/
+server/dist/
+electron/out/
+electron/node_modules/
+build.log
+
+# Local scratch outputs from tile/slice/destitch experiments
+slices_output/
+tiled_images_output/
+test_aggressive_output/
 
 # Secrets
 .env

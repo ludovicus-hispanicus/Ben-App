@@ -818,6 +818,39 @@
   min-height: 0;
 }
 
+// Bulk action bar
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #e3f2fd;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+
+  .selection-count {
+    font-size: 12px;
+    font-weight: 500;
+    color: #1565c0;
+    margin-right: auto;
+  }
+
+  button {
+    font-size: 11px;
+    line-height: 28px;
+    height: 28px;
+    padding: 0 10px;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      margin-right: 2px;
+    }
+  }
+}
+
 .saved-image-item {
   display: flex;
   align-items: center;
@@ -868,6 +901,46 @@
       color: #fff;
     }
   }
+
+  &.selected {
+    background: #e3f2fd;
+    border-left-color: #1976d2;
+
+    &.split-train {
+      background: #c8e6c9;
+      border-left-color: #2e7d32;
+    }
+
+    &.split-val {
+      background: #bbdefb;
+      border-left-color: #1565c0;
+    }
+  }
+}
+
+// Checkbox: hidden by default, visible on hover or when in selection mode
+.image-select-checkbox {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+  margin-left: -4px;
+
+  ::ng-deep .mat-checkbox-inner-container {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.saved-image-item:hover .image-select-checkbox,
+.saved-image-item.selection-mode .image-select-checkbox,
+.saved-image-item .image-select-checkbox:checked,
+.image-select-checkbox[ng-reflect-checked="true"] {
+  opacity: 1;
+}
+
+// Ensure checked checkboxes are always visible
+.saved-image-item.selected .image-select-checkbox {
+  opacity: 1;
 }
 
 .saved-image-info {

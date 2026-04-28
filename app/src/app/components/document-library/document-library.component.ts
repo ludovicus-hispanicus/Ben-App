@@ -5,6 +5,7 @@ import { ProjectInfo, ProjectDetail, PageInfo, UploadResponse, ProjectTreeNode }
 import { NotificationService } from '../../services/notification.service';
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.component';
+import { FolderPickerDialogComponent, FolderPickerResult } from '../common/folder-picker-dialog/folder-picker-dialog.component';
 import { PageRangeDialogComponent, PageRangeDialogResult } from '../common/page-range-dialog/page-range-dialog.component';
 import { environment } from '../../../environments/environment';
 
@@ -70,11 +71,16 @@ export class DocumentLibraryComponent implements OnInit {
   private renameClickTimer: any = null;
   private renameCancelled = false;
 
-  // Context menu
+  // Context menu (folders)
   contextMenuVisible = false;
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuNode: ProjectTreeNode | null = null;
+
+  // Context menu (pages)
+  pageContextMenuVisible = false;
+  pageContextMenuX = 0;
+  pageContextMenuY = 0;
 
   @ViewChildren('renameInput') renameInputs!: QueryList<ElementRef>;
 
@@ -265,7 +271,7 @@ export class DocumentLibraryComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Delete Folders',
-        message: `Delete ${count} selected folder(s) and all their pages?`,
+        message: `Delete ${count} selected folder(s), including all subfolders and pages? This cannot be undone.`,
         confirmText: 'Delete',
         warn: true
       }
@@ -359,10 +365,15 @@ export class DocumentLibraryComponent implements OnInit {
       event.stopPropagation();
     }
 
+    const hasChildren = folder.children_count > 0;
+    const message = hasChildren
+      ? `Delete "${folder.name}", all its pages, and ${folder.children_count} subfolder(s)? This cannot be undone.`
+      : `Delete "${folder.name}" and all its pages?`;
+
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Delete Folder',
-        message: `Delete "${folder.name}" and all its pages?`,
+        message,
         confirmText: 'Delete',
         warn: true
       }
@@ -487,6 +498,59 @@ export class DocumentLibraryComponent implements OnInit {
   @HostListener('document:click')
   onDocumentClick(): void {
     this.contextMenuVisible = false;
+    this.pageContextMenuVisible = false;
+  }
+
+  // ============== Page Context Menu ==============
+
+  onPageContextMenu(page: PageInfo, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    // If right-clicked page is not selected, select only it
+    if (!this.selectedPages.has(page.page_number)) {
+      this.selectedPages.clear();
+      this.selectedPages.add(page.page_number);
+    }
+    this.pageContextMenuX = event.clientX;
+    this.pageContextMenuY = event.clientY;
+    this.pageContextMenuVisible = true;
+  }
+
+  moveSelectedPagesFromMenu(): void {
+    this.pageContextMenuVisible = false;
+    if (!this.openProject || this.selectedPages.size === 0) { return; }
+
+    const dialogRef = this.dialog.open(FolderPickerDialogComponent, {
+      data: { title: 'Move pages to...' },
+      width: '450px'
+    });
+
+    dialogRef.afterClosed().subscribe((result: FolderPickerResult | null) => {
+      if (!result || !this.openProject) { return; }
+      if (result.project_id === this.openProject.project_id) {
+        this.notificationService.showError('Pages are already in this folder');
+        return;
+      }
+      const filenames = this.openProject.pages
+        .filter(p => this.selectedPages.has(p.page_number))
+        .map(p => p.filename);
+      const count = filenames.length;
+      this.pagesService.movePages(this.openProject.project_id, result.project_id, filenames).subscribe({
+        next: () => {
+          this.notificationService.showSuccess(`Moved ${count} page(s) to "${result.project_name}"`);
+          this.selectedPages.clear();
+          this.lastSelectedIndex = -1;
+          this.refreshOpenProject();
+          this.loadTree();
+        },
+        error: (err) => this.notificationService.showError(err.error?.detail || 'Failed to move pages')
+      });
+    });
+  }
+
+  deleteSelectedPagesFromMenu(): void {
+    this.pageContextMenuVisible = false;
+    this.deleteSelectedPages();
   }
 
   // ============== Drag & Drop ==============

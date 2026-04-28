@@ -20,7 +20,7 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  CuReD Desktop Build" -ForegroundColor Cyan
+Write-Host "  BEn Desktop Build" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -119,5 +119,5 @@ if (-not $PackageOnly -and -not $SkipElectron) {
         Get-ChildItem $outDir -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName)" }
     }
 } else {
-    Write-Host "Packaged app: electron\out\cured-desktop-win32-x64\" -ForegroundColor White
+    Write-Host "Packaged app: electron\out\ben-desktop-win32-x64\" -ForegroundColor White
 }

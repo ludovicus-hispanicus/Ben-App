@@ -1,19 +1,42 @@
-const { app, BrowserWindow, protocol } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, protocol } = require('electron');
+// Hidden during splash; restored when the Angular app loads (see installAppMenu)
+Menu.setApplicationMenu(null);
 if (require('electron-squirrel-startup')) app.quit();
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 
+// Auto-updates via update.electronjs.org (Squirrel.Windows / Squirrel.Mac)
+if (app.isPackaged) {
+    const { updateElectronApp, UpdateSourceType } = require('update-electron-app');
+    const { autoUpdater } = require('electron');
+    updateElectronApp({
+        updateSource: {
+            type: UpdateSourceType.ElectronPublicUpdateService,
+            repo: 'ludovicus-hispanicus/Ben-App'
+        },
+        updateInterval: '24 hours',
+        logger: { log: () => {}, info: () => {}, warn: () => {}, error: () => {} } // route via autoUpdater events instead
+    });
+    autoUpdater.on('checking-for-update', () => appendLog('Checking for updates…'));
+    autoUpdater.on('update-available', () => appendLog('Update available — downloading'));
+    autoUpdater.on('update-not-available', () => appendLog('Up to date'));
+    autoUpdater.on('update-downloaded', () => appendLog('Update ready — restart to install'));
+    autoUpdater.on('error', (err) => appendLog(`Update check failed: ${err.message || err}`));
+}
+
 let mainWindow;
 let pythonProcess;
 let angularProcess;
+let splashShownAt = 0;
+const SPLASH_MIN_MS = 6000; // floor on splash visibility so the carousel cycles
 
 // Configuration
 const PYTHON_SERVER_PORT = 5001;
 const ANGULAR_DEV_PORT = 4200;
-const OLLAMA_URL = 'http://localhost:11434';
-const SERVER_URL = `http://localhost:${PYTHON_SERVER_PORT}`;
+const OLLAMA_URL = 'http://127.0.0.1:11434';
+const SERVER_URL = `http://127.0.0.1:${PYTHON_SERVER_PORT}`;
 
 const IS_PACKAGED = app.isPackaged;
 
@@ -56,29 +79,103 @@ protocol.registerSchemesAsPrivileged([
     }
 ]);
 
+// ── Application menu (installed after splash transitions) ────────────────────
+
+function installAppMenu() {
+    const template = [
+        {
+            label: 'File',
+            submenu: [
+                { role: 'quit' }
+            ]
+        },
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+        {
+            label: 'Window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'close' }
+            ]
+        },
+        {
+            label: 'Help',
+            submenu: [
+                {
+                    label: 'About BEn',
+                    click: () => {
+                        dialog.showMessageBox({
+                            type: 'info',
+                            title: 'About BEn',
+                            message: 'BEn — Babylonian Engine',
+                            detail: `Version ${app.getVersion()}\nAI platform for cuneiform analysis\n\n© DigPasts`
+                        });
+                    }
+                },
+                {
+                    label: 'GitHub Repository',
+                    click: () => {
+                        shell.openExternal('https://github.com/ludovicus-hispanicus/Ben-App');
+                    }
+                }
+            ]
+        }
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        width: 720,
+        height: 500,
+        center: true,
+        resizable: false,
         show: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true
         },
-        title: "CuReD - Dictionary Curation",
-        backgroundColor: '#1e1e1e',
+        title: "BEn — Babylonian Engine",
+        backgroundColor: '#0e1a28',
         icon: path.join(__dirname, 'assets/icon.png')
     });
 
     mainWindow.webContents.session.clearCache();
     mainWindow.loadFile('loading.html');
 
+    mainWindow.webContents.once('did-finish-load', () => {
+        mainWindow.webContents.send('splash-version', app.getVersion());
+    });
+
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
-        mainWindow.maximize();
+        splashShownAt = Date.now();
     });
 
     mainWindow.on('closed', () => {
@@ -133,7 +230,7 @@ function getMimeType(filePath) {
 function checkServerReady(url) {
     return new Promise((resolve) => {
         http.get(url, (res) => {
-            resolve(res.statusCode >= 200 && res.statusCode < 400);
+            resolve(res.statusCode < 500);
         }).on('error', () => {
             resolve(false);
         });
@@ -157,7 +254,7 @@ function startPythonServer() {
     updateStatus('Starting backend server...');
 
     const storagePath = getUserDataPath();
-    os.makedirs && fs.mkdirSync(storagePath, { recursive: true });
+    fs.mkdirSync(storagePath, { recursive: true });
 
     const serverEnv = {
         ...process.env,
@@ -194,31 +291,33 @@ function startPythonServer() {
         );
     }
 
+    appendLog('Backend starting…');
+
+    // Forward Python output to the main-process console for debugging,
+    // but only emit curated splash log lines on key events.
     pythonProcess.stdout.on('data', (data) => {
-        const msg = data.toString().trim();
-        console.log(`Python: ${msg}`);
-        appendLog(msg);
+        console.log(`Python: ${data.toString().trim()}`);
     });
 
     pythonProcess.stderr.on('data', (data) => {
         const msg = data.toString().trim();
         console.log(`Python: ${msg}`);
-        appendLog(msg);
         if (msg.includes('Uvicorn running')) {
-            updateStatus('Backend server is ready!');
+            updateStatus('Backend server is ready');
+            appendLog('Backend ready');
         }
     });
 
     pythonProcess.on('error', (err) => {
         console.error('Failed to start Python server:', err);
-        updateStatus('Error: Could not start backend server.');
-        appendLog(`Error: ${err.message}`);
+        updateStatus('Error: could not start backend');
+        appendLog(`Backend error: ${err.message}`);
     });
 
     pythonProcess.on('close', (code) => {
         console.log(`Python process exited with code ${code}`);
         if (code !== 0 && code !== null) {
-            appendLog(`Server exited with code ${code}`);
+            appendLog(`Backend exited (code ${code})`);
         }
     });
 }
@@ -267,6 +366,35 @@ function appendLog(message) {
     }
 }
 
+const MODULE_LABELS = {
+    cured: 'CuReD',
+    library: 'Library',
+    cure: 'CuRe',
+    yolo: 'Layout',
+    line_segmentation: 'Segmentation'
+};
+
+function fetchAndLogModules() {
+    return new Promise((resolve) => {
+        http.get(`${SERVER_URL}/api/v1/settings/modules`, (res) => {
+            let body = '';
+            res.on('data', (c) => body += c);
+            res.on('end', () => {
+                try {
+                    const modules = JSON.parse(body);
+                    const enabled = Object.entries(modules)
+                        .filter(([, on]) => on)
+                        .map(([k]) => MODULE_LABELS[k] || k);
+                    if (enabled.length) {
+                        appendLog(`Modules: ${enabled.join(', ')}`);
+                    }
+                } catch { /* ignore parse error */ }
+                resolve();
+            });
+        }).on('error', () => resolve());
+    });
+}
+
 // ── Wait for servers and load app ─────────────────────────────────────────────
 
 async function waitForServersAndLoad() {
@@ -280,7 +408,10 @@ async function waitForServersAndLoad() {
             await new Promise(r => setTimeout(r, 1000));
         }
     }
-    console.log('Backend server is ready!');
+    console.log('Backend server is ready');
+
+    // Surface what's actually available so the user has a useful first impression
+    await fetchAndLogModules();
 
     if (!IS_PACKAGED) {
         // Dev mode: also wait for Angular dev server
@@ -303,15 +434,28 @@ async function loadApp() {
     console.log(`Ollama available: ${ollamaAvailable}`);
 
     if (ollamaAvailable) {
-        updateStatus('Ollama detected! VLM OCR available.');
+        appendLog('Ollama detected — VLM OCR available');
+        updateStatus('Ollama detected!');
     } else {
-        updateStatus('Loading app...');
+        appendLog('Ollama not detected — cloud OCR only');
+        updateStatus('Loading app…');
     }
 
     // Short delay for status message to display
     await new Promise(r => setTimeout(r, 500));
 
+    // Floor splash visibility so the feature carousel has time to cycle
+    const elapsed = Date.now() - splashShownAt;
+    const remaining = Math.max(0, SPLASH_MIN_MS - elapsed);
+    if (remaining > 0) {
+        await new Promise(r => setTimeout(r, remaining));
+    }
+
     if (mainWindow) {
+        // Lift the size lock and maximize once we transition out of the splash
+        mainWindow.setResizable(true);
+        mainWindow.maximize();
+        installAppMenu();
         if (IS_PACKAGED) {
             mainWindow.loadURL('cured://app/index.html');
         } else {

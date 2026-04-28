@@ -1,12 +1,13 @@
 {
-  "name": "cured-desktop",
+  "name": "ben-desktop",
   "version": "1.0.0",
-  "description": "CuReD - Dictionary Curation Desktop App",
+  "description": "BEn (Babylonian Engine) - AI platform for cuneiform analysis",
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "publish": "electron-forge publish"
   },
   "keywords": [
     "dictionary",
@@ -23,11 +24,13 @@
     "@electron-forge/maker-rpm": "^7.11.1",
     "@electron-forge/maker-squirrel": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/publisher-github": "^7.11.1",
     "electron": "^28.0.0",
     "png-to-ico": "^3.0.1"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "update-electron-app": "^3.0.0"
   },
   "config": {
     "forge": {
@@ -39,12 +42,25 @@
           "../server/dist/cured-server"
         ]
       },
+      "publishers": [
+        {
+          "name": "@electron-forge/publisher-github",
+          "config": {
+            "repository": {
+              "owner": "ludovicus-hispanicus",
+              "name": "Ben-App"
+            },
+            "prerelease": false,
+            "draft": true
+          }
+        }
+      ],
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
-            "name": "cured_desktop",
-            "setupExe": "CuReDSetup.exe",
+            "name": "ben_desktop",
+            "setupExe": "BEnSetup.exe",
             "setupIcon": "assets/icon.ico"
           }
         },

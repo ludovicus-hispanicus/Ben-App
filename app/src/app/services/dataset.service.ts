@@ -40,6 +40,13 @@ export class DatasetService {
         );
     }
 
+    setProduction(datasetId: number, forProduction: boolean) {
+        return this.http.patch<{ updated: boolean; for_production: boolean }>(
+            `${environment.apiUrl}${this.baseUrl}/${datasetId}/production`,
+            { for_production: forProduction }
+        );
+    }
+
     move(datasetId: number, parentId: number | null) {
         return this.http.patch<{ updated: boolean }>(
             `${environment.apiUrl}${this.baseUrl}/${datasetId}/move`,

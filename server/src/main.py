@@ -19,7 +19,7 @@ from starlette.responses import JSONResponse
 
 from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
-from api.routers import cured, about, yolo_training, production, ebl, datasets, cure, pages, batch_recognition, settings
+from api.routers import cured, about, yolo_training, production, ebl, datasets, cure, pages, batch_recognition, settings, segmentation, lemmatization, destitch, destitch_batch
 from api.routers import users, text
 from utils.storage_utils import StorageUtils
 
@@ -50,6 +50,10 @@ app.include_router(cure.router)  # CuRe Sign Classifier (separate from CuReD)
 app.include_router(pages.router)  # Document Library - unified image browsing
 app.include_router(batch_recognition.router)  # Batch Recognition - bulk OCR processing
 app.include_router(settings.router)  # Application settings
+app.include_router(segmentation.router)  # Line segmentation (shared by CuReD, CuRe)
+app.include_router(lemmatization.router)  # Lemmatization - dictionary lookup + AI suggestions
+app.include_router(destitch.router)  # Destitch - split composite into labeled view crops
+app.include_router(destitch_batch.router)  # Destitch batch - folder-level destitch jobs
 
 
 @app.exception_handler(RequestValidationError)

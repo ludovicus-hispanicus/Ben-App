@@ -1,0 +1,128 @@
+.add-text-dialog-content {
+    min-width: 480px;
+    max-width: 560px;
+}
+
+.atd-target {
+    margin: 0 0 1.25em;
+    color: #555;
+    font-size: 0.9em;
+
+    .atd-type-chip {
+        display: inline-block;
+        padding: 1px 8px;
+        margin-left: 0.4em;
+        background: #e3f2fd;
+        color: #0d47a1;
+        border-radius: 10px;
+        font-size: 0.75em;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+}
+
+.atd-section {
+    margin-bottom: 1.25em;
+
+    .atd-section-label {
+        font-size: 0.75em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #888;
+        margin-bottom: 0.5em;
+    }
+}
+
+.atd-choice-row {
+    display: flex;
+    gap: 0.75em;
+}
+
+.atd-choice {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 1em;
+    background: #fafafa;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font-size: 0.9em;
+
+    mat-icon {
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+        color: #666;
+    }
+
+    span {
+        font-weight: 500;
+    }
+
+    small {
+        color: #888;
+        font-size: 0.75em;
+    }
+
+    &:hover {
+        border-color: #1976d2;
+        background: #f5fafd;
+    }
+
+    &.selected {
+        border-color: #1976d2;
+        background: #e3f2fd;
+
+        mat-icon {
+            color: #1976d2;
+        }
+    }
+}
+
+.atd-existing-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 0.5em;
+
+    .atd-label-chip {
+        padding: 4px 12px;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 16px;
+        cursor: pointer;
+        font-size: 0.85em;
+        transition: all 0.15s;
+
+        &:hover {
+            border-color: #1976d2;
+            color: #1976d2;
+        }
+
+        &.selected {
+            border-color: #1976d2;
+            background: #1976d2;
+            color: white;
+        }
+    }
+}
+
+.atd-label-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+
+    &:focus {
+        border-color: #1976d2;
+    }
+}

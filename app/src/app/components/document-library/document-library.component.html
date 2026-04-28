@@ -244,7 +244,8 @@
                  class="thumbnail-card"
                  [class.selected]="isPageSelected(page)"
                  (click)="togglePageSelection(page, $event)"
-                 (dblclick)="openViewer(page)">
+                 (dblclick)="openViewer(page)"
+                 (contextmenu)="onPageContextMenu(page, $event)">
               <div class="thumbnail-icon">
                 <mat-icon>image</mat-icon>
               </div>
@@ -282,7 +283,8 @@
                  class="details-row"
                  [class.selected]="isPageSelected(page)"
                  (click)="togglePageSelection(page, $event)"
-                 (dblclick)="openViewer(page)">
+                 (dblclick)="openViewer(page)"
+                 (contextmenu)="onPageContextMenu(page, $event)">
               <div class="details-icon">
                 <mat-icon>image</mat-icon>
               </div>
@@ -391,13 +393,24 @@
   </ng-container>
 </ng-template>
 
-<!-- Context menu -->
+<!-- Folder context menu -->
 <div class="context-menu" *ngIf="contextMenuVisible"
      [style.left.px]="contextMenuX" [style.top.px]="contextMenuY">
   <div class="context-menu-item" (mousedown)="startRenameFromMenu()">
     <mat-icon>edit</mat-icon> Rename
   </div>
   <div class="context-menu-item delete" (mousedown)="deleteFolderFromMenu()">
+    <mat-icon>delete</mat-icon> Delete
+  </div>
+</div>
+
+<!-- Page context menu -->
+<div class="context-menu" *ngIf="pageContextMenuVisible"
+     [style.left.px]="pageContextMenuX" [style.top.px]="pageContextMenuY">
+  <div class="context-menu-item" (mousedown)="moveSelectedPagesFromMenu()">
+    <mat-icon>drive_file_move</mat-icon> Move to...
+  </div>
+  <div class="context-menu-item delete" (mousedown)="deleteSelectedPagesFromMenu()">
     <mat-icon>delete</mat-icon> Delete
   </div>
 </div>

@@ -10,17 +10,20 @@
   </button>
 
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto" routerLinkActive="active">
+    <ul class="navbar-nav mr-auto" routerLinkActive="active" *ngIf="enabledModules$ | async as modules">
       <li class="nav-item">
         <a class="nav-link" routerLink="cured">CuReD</a>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" *ngIf="modules['cure'] !== false">
         <a class="nav-link" routerLink="cure">CuRe</a>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" *ngIf="modules['yolo'] !== false">
         <a class="nav-link" routerLink="yolo-training">Layout</a>
       </li>
-      <li class="nav-item">
+      <li class="nav-item" *ngIf="modules['line_segmentation'] !== false">
+        <a class="nav-link" routerLink="segmentation">Segmentation</a>
+      </li>
+      <li class="nav-item" *ngIf="modules['library'] !== false">
         <a class="nav-link" routerLink="library">Library</a>
       </li>
     </ul>

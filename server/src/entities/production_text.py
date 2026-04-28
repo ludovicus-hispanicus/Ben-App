@@ -44,6 +44,7 @@ class ProductionText(BaseModel):
     uploaded_images: List[UploadedImage] = []  # Uploaded images (copies/photos)
     content: str = ""  # The merged/edited transliteration text
     translation_content: str = ""  # The edited translation text
+    synced_translation_ids: List[int] = []  # text_ids of translations already synced
     edit_history: List[ProductionEdit] = []  # Track edits
     created_at: str = ""
     last_modified: str = ""

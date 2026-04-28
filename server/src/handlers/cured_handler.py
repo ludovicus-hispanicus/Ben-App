@@ -195,13 +195,14 @@ class CuredHandler:
             boxes = []
         elif box_mode == 'predict' and text_lines:
             try:
-                from services.kraken_training_service import kraken_training_service
-                seg_boxes = kraken_training_service.segment_lines(image_base64)
-                if seg_boxes:
-                    boxes = seg_boxes
-                    logging.info(f"Kraken segmentation returned {len(boxes)} line boxes")
+                from services.segmentation_service import SegmentationService
+                seg_service = SegmentationService()
+                seg_result = seg_service.segment(image_base64)
+                if seg_result.lines:
+                    boxes = seg_result.lines
+                    logging.info(f"Segmentation returned {len(boxes)} line boxes (method={seg_result.method})")
             except Exception as e:
-                logging.warning(f"Kraken segmentation failed, falling back to estimate: {e}")
+                logging.warning(f"Segmentation failed, falling back to estimate: {e}")
         # 'estimate' is the default — uses whatever boxes the OCR model returned
         # (which are typically evenly-divided estimates)
 

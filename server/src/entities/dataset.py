@@ -8,3 +8,4 @@ class Dataset(DbModel):
     name: str
     created_at: int = -1
     parent_id: Optional[int] = None
+    for_production: bool = False  # opt-in: include this folder's texts in the production view

@@ -169,6 +169,13 @@ class ProductionTextsHandler:
         logging.info(f"Marked production text {production_id} as exported={exported}")
         return True
 
+    def update_field(self, production_id: int, field: str, value) -> None:
+        """Update a single field on a production text."""
+        self._collection.update_one(
+            {"production_id": int(production_id)},
+            {"$set": {field: value, "last_modified": datetime.datetime.now().isoformat()}}
+        )
+
     def generate_merged_content(self, source_texts: List[Dict]) -> str:
         """
         Generate merged content from source texts.

@@ -1,105 +1,340 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>CuReD - Dictionary Curation</title>
+    <meta charset="UTF-8" />
+    <title>BEn — Babylonian Engine</title>
     <style>
-        body {
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1e1e1e;
-            color: #ffffff;
+            user-select: none;
+            -webkit-user-select: none;
+            background: #0e1a28;
+            color: #f0f0f0;
+        }
+
+        /* Cross-fading background slideshow */
+        .slide {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out;
+            filter: brightness(0.45);
+        }
+        .slide.active { opacity: 1; }
+
+        .slide.fallback {
+            background: radial-gradient(ellipse at center,
+                #1a2a40 0%,
+                #0e1a28 60%,
+                #050a12 100%);
+            filter: none;
+            opacity: 1;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg,
+                rgba(14, 26, 40, 0.55) 0%,
+                rgba(14, 26, 40, 0.35) 40%,
+                rgba(14, 26, 40, 0.85) 100%);
+            pointer-events: none;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            box-sizing: border-box;
+            padding: 24px 28px 18px 28px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .logo {
+            width: 44px;
+            height: 44px;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+        }
+        .title-block { display: flex; flex-direction: column; }
+        .title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+        }
+        .subtitle {
+            font-size: 11px;
+            opacity: 0.65;
+            letter-spacing: 0.4px;
+            margin-top: 1px;
+        }
+        .version {
+            font-size: 10px;
+            opacity: 0.5;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        /* Feature carousel — cycles through what BEn does */
+        .features {
+            flex: 1;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
+            position: relative;
+        }
+        .feature {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            opacity: 0;
+            transform: translateY(8px) scale(0.96);
+            transition: opacity 0.6s ease-in-out, transform 0.6s ease-in-out;
+        }
+        .feature.active {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .feature-icon {
+            font-size: 32px;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+        }
+        .feature-label {
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.4px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+        }
+        .feature-detail {
+            font-size: 11px;
+            opacity: 0.7;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+            max-width: 260px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .tablet-credit {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: right;
+            margin-bottom: 6px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+            min-height: 12px;
+        }
+        .tablet-credit .tablet-id {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .tablet-credit .tablet-sep { opacity: 0.55; margin: 0 6px; }
+
+        .log {
+            font-size: 10.5px;
+            font-family: 'Consolas', 'SF Mono', 'Menlo', 'Courier New', monospace;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.5;
+            max-height: 90px;
             overflow: hidden;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+        .log-entry {
+            animation: fade-in 0.3s ease-out;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .log-entry .time { opacity: 0.5; margin-right: 8px; }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .loader {
-            border: 5px solid #333;
-            border-top: 5px solid #0078d4;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        h2 {
-            font-weight: 300;
-            letter-spacing: 1px;
-        }
-
-        #status {
-            color: #aaa;
-            font-size: 0.9em;
+        .footer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin-top: 10px;
         }
-
-        .info {
-            font-size: 0.8em;
-            color: #666;
-            margin-top: 30px;
-            text-align: center;
+        .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: rgba(255, 255, 255, 0.85);
+            border-radius: 50%;
+            animation: spin 0.85s linear infinite;
+            flex-shrink: 0;
         }
-
-        #log-container {
-            margin-top: 20px;
-            width: 80%;
-            max-width: 700px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 10px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 0.75em;
-            color: #8f8;
-            text-align: left;
-            white-space: pre-wrap;
-            word-break: break-all;
+        .status {
+            font-size: 11px;
+            opacity: 0.95;
+            letter-spacing: 0.2px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
-
 <body>
-    <div class="loader"></div>
-    <h2>Starting CuReD...</h2>
-    <p id="status">Initializing services...</p>
-    <p class="info">
-        Starting backend server and frontend application.<br>
-        Checking for Ollama VLM support...
-    </p>
-    <div id="log-container"></div>
+    <div class="slide fallback active"></div>
+    <!-- Drop tablet images into electron/assets/splash/ and uncomment to enable slideshow.
+    <div class="slide" data-id="BM 12345" data-rights="© Trustees of the British Museum"
+         style="background-image: url('assets/splash/01.jpg');"></div>
+    -->
+
+    <div class="overlay"></div>
+
+    <div class="content">
+        <div class="header">
+            <img class="logo" src="assets/icon.png" alt="" />
+            <div class="title-block">
+                <div class="title">BEn — Babylonian Engine</div>
+                <div class="subtitle">AI platform for cuneiform analysis</div>
+                <div class="version" id="version"></div>
+            </div>
+        </div>
+
+        <div class="features" id="features">
+            <div class="feature active">
+                <div class="feature-icon">📜</div>
+                <div class="feature-label">Cuneiform OCR</div>
+                <div class="feature-detail">Read cuneiform from tablet photographs with Kraken &amp; VLMs.</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✍️</div>
+                <div class="feature-label">Curate transliterations</div>
+                <div class="feature-detail">Edit, correct, and validate ATF transliterations side-by-side with the image.</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🔍</div>
+                <div class="feature-label">Layout detection</div>
+                <div class="feature-detail">YOLO-trained detectors find lines, columns, and signs.</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🪶</div>
+                <div class="feature-label">Sign classification</div>
+                <div class="feature-detail">CuRe pairs each glyph with its sign list entry.</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <div class="feature-label">Train your own models</div>
+                <div class="feature-detail">Bring your corpus, fine-tune Kraken, YOLO, or VLMs.</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📚</div>
+                <div class="feature-label">Library</div>
+                <div class="feature-detail">Browse, search, and organise tablets across your projects.</div>
+            </div>
+        </div>
+
+        <div class="tablet-credit">
+            <span class="tablet-id" id="tablet-id"></span><span class="tablet-sep" id="tablet-sep" style="display:none">·</span><span id="tablet-rights"></span>
+        </div>
+
+        <div class="log" id="log"></div>
+
+        <div class="footer">
+            <div class="spinner"></div>
+            <div class="status" id="status">Initializing services…</div>
+        </div>
+    </div>
+
     <script>
-        const statusElement = document.getElementById('status');
-        const logContainer = document.getElementById('log-container');
+        // Cross-fade slides every 2.5s
+        const slides = document.querySelectorAll('.slide');
+        const tabletIdEl = document.getElementById('tablet-id');
+        const tabletRightsEl = document.getElementById('tablet-rights');
+        const tabletSepEl = document.getElementById('tablet-sep');
+
+        function applySlideCaption(slide) {
+            if (!slide || slide.classList.contains('fallback')) {
+                tabletIdEl.textContent = '';
+                tabletRightsEl.textContent = '';
+                tabletSepEl.style.display = 'none';
+                return;
+            }
+            tabletIdEl.textContent = slide.dataset.id || '';
+            tabletRightsEl.textContent = slide.dataset.rights || '';
+            tabletSepEl.style.display = (slide.dataset.id && slide.dataset.rights) ? 'inline' : 'none';
+        }
+
+        let slideIdx = 0;
+        applySlideCaption(slides[0]);
+        if (slides.length > 1) {
+            setInterval(() => {
+                slides[slideIdx].classList.remove('active');
+                slideIdx = (slideIdx + 1) % slides.length;
+                slides[slideIdx].classList.add('active');
+                applySlideCaption(slides[slideIdx]);
+            }, 2500);
+        }
+
+        // Feature carousel — cycle every 2.6s
+        const features = document.querySelectorAll('.feature');
+        let featureIdx = 0;
+        if (features.length > 1) {
+            setInterval(() => {
+                features[featureIdx].classList.remove('active');
+                featureIdx = (featureIdx + 1) % features.length;
+                features[featureIdx].classList.add('active');
+            }, 2600);
+        }
+
+        // Log panel — keep latest few, newest at bottom
+        const MAX_LOG_ENTRIES = 5;
+        const logEl = document.getElementById('log');
+        const statusEl = document.getElementById('status');
+
+        function now() {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function appendLog(message) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="time">${now()}</span>${message}`;
+            logEl.appendChild(entry);
+            while (logEl.children.length > MAX_LOG_ENTRIES) {
+                logEl.removeChild(logEl.firstChild);
+            }
+        }
 
         window.electronAPI.onStatusUpdate((status) => {
-            statusElement.innerText = status;
+            statusEl.textContent = status;
+            appendLog(status);
         });
 
         window.electronAPI.onLogAppend((message) => {
-            const line = document.createElement('div');
-            line.textContent = message;
-            logContainer.appendChild(line);
-            logContainer.scrollTop = logContainer.scrollHeight;
+            appendLog(message);
         });
+
+        if (window.electronAPI.onVersion) {
+            window.electronAPI.onVersion((version) => {
+                const el = document.getElementById('version');
+                if (el) el.textContent = 'v' + version;
+            });
+        }
+
+        appendLog('Starting BEn');
     </script>
 </body>
-
 </html>

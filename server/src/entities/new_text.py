@@ -64,6 +64,7 @@ class TransliterationEdit(DbModel):
     is_fixed: bool = False  # legacy — kept for backward compat with old data
     is_curated_kraken: bool = False
     is_curated_vlm: bool = False
+    is_reviewed: bool = False  # lightweight "I checked the OCR" flag
     training_targets: Optional[List[str]] = None  # legacy
     guides: Optional[List[Dict]] = None  # bezier reading guide lines
 
