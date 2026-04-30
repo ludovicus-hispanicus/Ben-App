@@ -1,5 +1,7 @@
-import { Component, EventEmitter, HostListener, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import {
     LemmatizationService,
     TokenizedText, AtfLine, AtfToken,
@@ -13,7 +15,7 @@ import { ConfirmDialogComponent } from '../../common/confirm-dialog/confirm-dial
     templateUrl: './lemmatization-panel.component.html',
     styleUrls: ['./lemmatization-panel.component.scss']
 })
-export class LemmatizationPanelComponent implements OnInit, OnChanges {
+export class LemmatizationPanelComponent implements OnInit, OnChanges, OnDestroy {
 
     @Input() atfText: string = '';
     @Input() productionId: number = 0;
@@ -31,6 +33,14 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
     isAiSuggesting = false;
     isExporting = false;
     isSaving = false;
+    isAutoSaving = false;
+
+    // Autosave: debounce changes and persist quietly. Flush on destroy so
+    // toggling back to transliteration doesn't lose unsaved assignments.
+    private autoSaveSubject = new Subject<void>();
+    private autoSaveSubscription?: Subscription;
+    private hasUnsavedChanges = false;
+    private static readonly AUTOSAVE_DEBOUNCE_MS = 800;
 
     // Token selection popup
     selectedLine: AtfLine | null = null;
@@ -43,6 +53,11 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
     wordSearchQuery = '';
     searchResults: WordEntry[] = [];
     isSearching = false;
+
+    // Suffix dictionary search (free-form lookup with suffix-entry priority)
+    suffixSearchQuery = '';
+    suffixSearchResults: WordEntry[] = [];
+    isSearchingSuffix = false;
 
     // Candidate entries loaded for selected token
     candidateEntries: WordEntry[] = [];
@@ -64,6 +79,10 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
     ) {}
 
     ngOnInit(): void {
+        this.autoSaveSubscription = this.autoSaveSubject.pipe(
+            debounceTime(LemmatizationPanelComponent.AUTOSAVE_DEBOUNCE_MS)
+        ).subscribe(() => this.autoSave());
+
         this.lemmatizationService.getDictionaryStatus().subscribe(status => {
             this.dictionaryStatus = status;
         });
@@ -98,6 +117,45 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
                 // Don't auto-retokenize — show a sync button
             }
         }
+    }
+
+    ngOnDestroy(): void {
+        this.autoSaveSubscription?.unsubscribe();
+        // Flush any pending autosave so toggling back to transliteration
+        // doesn't lose unsaved lemma assignments.
+        if (this.hasUnsavedChanges && this.lemmatization && this.productionId) {
+            this.lemmatizationService.saveLemmatization(this.productionId, this.lemmatization).subscribe({
+                error: (err) => console.error('[LemPanel] Final flush save failed:', err)
+            });
+            this.hasUnsavedChanges = false;
+        }
+    }
+
+    /**
+     * Single funnel for change events: emits to the parent and schedules a
+     * debounced autosave. Use instead of calling `lemmatizationChanged.emit` directly.
+     */
+    private emitChange(): void {
+        if (!this.lemmatization) return;
+        this.lemmatizationChanged.emit(this.lemmatization);
+        this.hasUnsavedChanges = true;
+        this.autoSaveSubject.next();
+    }
+
+    private autoSave(): void {
+        if (!this.lemmatization || !this.productionId || !this.hasUnsavedChanges) return;
+        this.isAutoSaving = true;
+        this.lemmatizationService.saveLemmatization(this.productionId, this.lemmatization).subscribe({
+            next: (result) => {
+                this.lemmatization = result;
+                this.hasUnsavedChanges = false;
+                this.isAutoSaving = false;
+            },
+            error: (err) => {
+                this.isAutoSaving = false;
+                console.error('[LemPanel] Autosave failed:', err);
+            }
+        });
     }
 
     // ── Tokenization ──
@@ -309,6 +367,8 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
         this.selectedTokenIdx = tokenIdx;
         this.wordSearchQuery = '';
         this.searchResults = [];
+        this.suffixSearchQuery = '';
+        this.suffixSearchResults = [];
         this.candidateEntries = [];
 
         // Position popup near the clicked token
@@ -385,7 +445,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
             this.lemmatizationService.addCustomMapping(this.selectedToken.cleaned, lemmaId).subscribe();
         }
 
-        this.lemmatizationChanged.emit(this.lemmatization);
+        this.emitChange();
         this.closePopup();
 
         // Offer to propagate if there are matching unassigned tokens
@@ -402,7 +462,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
                 if (confirmed) {
                     const propagated = this.propagateLemma(cleaned, assignedLemma, textLineIdx, this.selectedTokenIdx);
                     this.showNotification(`Applied to ${propagated} occurrence${propagated > 1 ? 's' : ''}`, 'success');
-                    this.lemmatizationChanged.emit(this.lemmatization);
+                    this.emitChange();
                 }
             });
         }
@@ -484,7 +544,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
             lemmaLine.tokens[this.selectedTokenIdx].unique_lemma = [];
         }
 
-        this.lemmatizationChanged.emit(this.lemmatization);
+        this.emitChange();
         this.closePopup();
     }
 
@@ -513,7 +573,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
                 this.lemmatization = result;
                 this.isAiSuggesting = false;
                 this.showNotification('AI suggestions applied', 'success');
-                this.lemmatizationChanged.emit(this.lemmatization);
+                this.emitChange();
             },
             error: (err) => {
                 this.isAiSuggesting = false;
@@ -597,6 +657,81 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
         return options;
     }
 
+    /**
+     * Free dictionary search for the suffix section. Reuses the regular
+     * dictionary search but ranks suffix entries (lemma starts with `-`,
+     * or guide_word marks as "suff.") to the top so the user can pick any
+     * suffix from the dictionary, not just the curated quick-pick list.
+     */
+    searchSuffix(): void {
+        const q = this.suffixSearchQuery.trim();
+        if (q.length < 1) {
+            this.suffixSearchResults = [];
+            return;
+        }
+        this.isSearchingSuffix = true;
+        this.lemmatizationService.searchWords(q, 50).subscribe({
+            next: (results) => {
+                results.sort((a, b) => {
+                    const aIs = LemmatizationPanelComponent.isSuffixEntry(a) ? 0 : 1;
+                    const bIs = LemmatizationPanelComponent.isSuffixEntry(b) ? 0 : 1;
+                    return aIs - bIs;
+                });
+                this.suffixSearchResults = results;
+                this.isSearchingSuffix = false;
+            },
+            error: () => { this.isSearchingSuffix = false; }
+        });
+    }
+
+    /** Pre-load common suffix entries (lemmas starting with `-`) on demand. */
+    browseAllSuffixes(): void {
+        this.isSearchingSuffix = true;
+        this.suffixSearchQuery = '-';
+        this.lemmatizationService.searchWords('-', 100).subscribe({
+            next: (results) => {
+                this.suffixSearchResults = results.filter(LemmatizationPanelComponent.isSuffixEntry);
+                this.isSearchingSuffix = false;
+            },
+            error: () => { this.isSearchingSuffix = false; }
+        });
+    }
+
+    /**
+     * Treat an entry as a suffix when its lemma form begins with `-`, or its
+     * guide word is annotated with `suff.` (the eBL marking for suffixes).
+     */
+    private static isSuffixEntry(e: WordEntry): boolean {
+        if (e.lemma && e.lemma.length > 0 && /^[-–]/.test(e.lemma[0])) return true;
+        if (e.guide_word && /\bsuff\b/i.test(e.guide_word)) return true;
+        return false;
+    }
+
+    /**
+     * Assign a suffix from a dictionary entry — used by the free-search results
+     * inside the suffix section. Handles both "mark as complex" (when token
+     * isn't yet complex) and "swap suffix lemma" (when it already is).
+     */
+    assignSuffixFromEntry(entry: WordEntry): void {
+        if (!this.selectedToken) return;
+        // Display label: prefer the lemma form without leading hyphen,
+        // fall back to the word_id stripped of homonym roman numeral.
+        let suffixLabel = entry.lemma && entry.lemma[0] ? entry.lemma[0] : entry.word_id;
+        suffixLabel = suffixLabel.replace(/^[-–]/, '').replace(/\s+[IVX]+$/, '').trim();
+
+        if (this.selectedToken.is_complex) {
+            // Already complex — swap the suffix lemma in place
+            this.selectedToken.detected_suffix = suffixLabel;
+            this.selectedToken.suffix_lemma = entry.word_id;
+            this.assignLemma(entry.word_id, /*asSuffix*/ true);
+        } else {
+            // Not yet complex — mark as complex with this suffix
+            this.markAsComplex(suffixLabel, entry.word_id);
+        }
+        this.suffixSearchQuery = '';
+        this.suffixSearchResults = [];
+    }
+
     markAsComplex(suffix: string, suffixLemmaId: string): void {
         console.log('markAsComplex called:', suffix, suffixLemmaId, this.selectedToken?.raw);
         if (!this.selectedToken || !this.lemmatization) {
@@ -621,7 +756,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
         this.selectedToken.detected_suffix = suffix;
         this.selectedToken.suffix_lemma = suffixLemmaId;
 
-        this.lemmatizationChanged.emit(this.lemmatization);
+        this.emitChange();
         // Don't close popup — let user see the result and optionally change the base lemma
     }
 
@@ -652,6 +787,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
         this.lemmatizationService.saveLemmatization(this.productionId, this.lemmatization).subscribe({
             next: (result) => {
                 this.lemmatization = result;
+                this.hasUnsavedChanges = false;
                 this.isSaving = false;
                 this.showNotification('Lemmatization saved', 'success');
             },
@@ -696,7 +832,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
 
     clearAll(): void {
         this.initEmptyLemmatization();
-        this.lemmatizationChanged.emit(this.lemmatization!);
+        this.emitChange();
         this.showNotification('All lemma assignments cleared', 'info');
     }
 
@@ -758,7 +894,7 @@ export class LemmatizationPanelComponent implements OnInit, OnChanges {
         const assignment = lemmaLine.tokens[this.selectedTokenIdx];
         assignment.is_suggestion = false;
         assignment.suggestion_source = '';
-        this.lemmatizationChanged.emit(this.lemmatization!);
+        this.emitChange();
     }
 
     getTokenLemma(line: AtfLine, tokenIdx: number): string {

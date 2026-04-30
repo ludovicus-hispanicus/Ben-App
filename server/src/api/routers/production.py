@@ -342,10 +342,19 @@ async def create_production_text(request: Request, dto: CreateProductionTextDto)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid identifier type: {dto.identifier_type}")
 
-    # Check if production text already exists
+    # If a production text already exists for this identifier, treat the POST
+    # as an upsert so the front end can recover from a lost-response scenario
+    # (server created the record but the client never saw the response).
     existing = production_texts_handler.get_by_identifier(dto.identifier, id_type)
     if existing:
-        raise HTTPException(status_code=409, detail="Production text already exists for this identifier")
+        if dto.initial_content:
+            production_texts_handler.update_content(
+                production_id=existing.production_id,
+                content=dto.initial_content,
+                user_id=user_id,
+            )
+            return production_texts_handler.get_by_id(existing.production_id)
+        return existing
 
     # Build source text references
     source_refs = []

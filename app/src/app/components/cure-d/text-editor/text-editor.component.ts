@@ -189,6 +189,11 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       if (this.viewMode === 'atf' && newText && !this.disableNormalization) {
         newText = this.atfConverter.toAtf(newText);
       }
+      // In plainTextMode (production view), strip internal @reading{} tags.
+      // CuReD keeps them so it can round-trip ATF → Raw.
+      if (this.plainTextMode && newText) {
+        newText = this.atfConverter.cleanForExport(newText);
+      }
       // Only update if the text actually changed and is different from current content
       if (newText !== this.textContent) {
         this.setText(newText);
@@ -346,6 +351,10 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       this.textContent = (this.viewMode === 'atf' && !this.disableNormalization)
         ? this.atfConverter.toAtf(this.initialText)
         : this.initialText;
+      // In plainTextMode (production view), strip internal @reading{} tags.
+      if (this.plainTextMode && this.textContent) {
+        this.textContent = this.atfConverter.cleanForExport(this.textContent);
+      }
     } else if (!this.plainTextMode && this.lines && this.lines.length > 0) {
       // Letter[] mode — initialize from lines input
       const rawText = this.lines.map(l => l.letter).join('\n');

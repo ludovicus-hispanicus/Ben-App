@@ -190,6 +190,26 @@
                 <span class="candidate-meaning">{{ alt.description }}</span>
             </div>
         </div>
+        <!-- Free dictionary search for any suffix -->
+        <div class="suffix-search">
+            <div class="search-row">
+                <input type="text" [(ngModel)]="suffixSearchQuery"
+                       placeholder="Search any suffix (e.g., -ka, -ša)…"
+                       (keyup.enter)="searchSuffix()" class="search-input" />
+                <button class="search-btn" (click)="searchSuffix()" [disabled]="isSearchingSuffix">
+                    <mat-icon>search</mat-icon>
+                </button>
+                <button class="search-btn" (click)="browseAllSuffixes()" [disabled]="isSearchingSuffix"
+                        matTooltip="Browse all suffix entries">
+                    <mat-icon>list</mat-icon>
+                </button>
+            </div>
+            <div *ngFor="let entry of suffixSearchResults" class="candidate-entry suffix-alt"
+                 (click)="assignSuffixFromEntry(entry)">
+                <span class="candidate-id">{{ entry.word_id }}</span>
+                <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+            </div>
+        </div>
     </div>
 
     <div class="popup-section" *ngIf="selectedToken.lemma_candidates.length === 0 && candidateEntries.length === 0">
@@ -220,6 +240,26 @@
                   (click)="markAsComplex(suf.suffix, suf.lemma_id)">
                 -{{ suf.suffix }}
             </span>
+        </div>
+        <!-- Free dictionary search for any suffix not in the quick-pick list -->
+        <div class="suffix-search">
+            <div class="search-row">
+                <input type="text" [(ngModel)]="suffixSearchQuery"
+                       placeholder="Search any suffix (e.g., -ka, -ša)…"
+                       (keyup.enter)="searchSuffix()" class="search-input" />
+                <button class="search-btn" (click)="searchSuffix()" [disabled]="isSearchingSuffix">
+                    <mat-icon>search</mat-icon>
+                </button>
+                <button class="search-btn" (click)="browseAllSuffixes()" [disabled]="isSearchingSuffix"
+                        matTooltip="Browse all suffix entries">
+                    <mat-icon>list</mat-icon>
+                </button>
+            </div>
+            <div *ngFor="let entry of suffixSearchResults" class="candidate-entry suffix-alt"
+                 (click)="assignSuffixFromEntry(entry)">
+                <span class="candidate-id">{{ entry.word_id }}</span>
+                <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+            </div>
         </div>
     </div>
 

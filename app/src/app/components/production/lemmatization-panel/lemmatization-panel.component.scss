@@ -572,6 +572,12 @@
             }
         }
     }
+
+    .suffix-search {
+        padding: 6px 12px 8px;
+        border-top: 1px dashed #e0e0e0;
+        margin-top: 4px;
+    }
 }
 
 .suffix-add-section {
@@ -580,6 +586,12 @@
         flex-wrap: wrap;
         gap: 4px;
         padding: 4px 12px;
+    }
+
+    .suffix-search {
+        padding: 6px 12px 8px;
+        border-top: 1px dashed #e0e0e0;
+        margin-top: 4px;
     }
 
     .suffix-option-btn {

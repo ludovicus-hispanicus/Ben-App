@@ -2001,7 +2001,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         let currentColumn = 0;
         for (let i = 0; i < translitLines.length; i++) {
             const trimmed = translitLines[i].trim().toLowerCase();
-            const secMatch = trimmed.match(/^[@](reverse|obverse|left|right|top|bottom|edge|seal)/);
+            const secMatch = trimmed.match(/^[@](reverse|obverse|left|right|top|bottom|edge|seal|colophon|catchline)/);
             if (secMatch) {
                 currentSection = secMatch[1];
                 // Don't reset column — columns are numbered sequentially across surfaces
@@ -2043,7 +2043,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
             let surface = '';
             for (let i = 0; i < translitLines.length; i++) {
                 const t = translitLines[i].trim().toLowerCase();
-                const sm = t.match(/^@(obverse|reverse|left|right|top|bottom|edge|seal)/);
+                const sm = t.match(/^@(obverse|reverse|left|right|top|bottom|edge|seal|colophon|catchline)/);
                 if (sm) { surface = sm[1]; continue; }
                 const cm = t.match(/^@column\s+(\d+)/);
                 if (cm) { columnToSurface.set(parseInt(cm[1]), surface); continue; }
@@ -2063,6 +2063,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
         let pendingSectionMarker: string | null = null;
         // Track current section in translation content for section-qualified matching
         let transSection = '';
+        // Most recently parsed translation entry — used to attach trailing
+        // $-state markers ($ gap, $ single line, …) and #note: lines so they
+        // travel with the translation they belong to in the merge output.
+        let lastParsed: any = null;
 
         for (const rawLine of rawTransLines) {
             const trimmed = rawLine.trim();
@@ -2082,6 +2086,17 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 continue;
             }
 
+            // Trailing meta lines ($-state markers like "$ gap", "$ single line",
+            // and "#note:" annotations) belong to the previous translation entry.
+            // Hold onto them so they're emitted right after that entry in the merge.
+            const isStateMarker = /^\$\s+\S/.test(trimmed);
+            const isNote = /^#note:/i.test(trimmed);
+            if ((isStateMarker || isNote) && lastParsed) {
+                if (!lastParsed.trailers) lastParsed.trailers = [];
+                lastParsed.trailers.push(trimmed);
+                continue;
+            }
+
             // Split line if it contains embedded ranges
             const subLines = this.splitEmbeddedRanges(trimmed);
 
@@ -2091,6 +2106,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
                     (parsed as any).sectionMarker = pendingSectionMarker;
                     (parsed as any).section = transSection;
                     parsedTranslations.push(parsed);
+                    lastParsed = parsed;
                     pendingSectionMarker = null; // consumed
                 }
             }
@@ -2175,6 +2191,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
             const SURFACE_ABBREV: { [key: string]: string } = {
                 'obverse': 'o', 'reverse': 'r', 'left': 'le', 'right': 'ri',
                 'top': 't', 'bottom': 'b', 'edge': 'e', 'seal': 's',
+                'colophon': 'c', 'catchline': 'cl',
             };
 
             if (parsed.isRange && endCol > 0) {
@@ -2195,6 +2212,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 formattedLine = `#tr.en: ${parsed.cleanedText}`;
             }
             translationsAfterIndex.get(insertAfterIndex)!.push(formattedLine);
+            // Append any trailers ($ gap, $ single line, #note:, …) that
+            // followed this translation entry in the source.
+            const trailers = (parsed as any).trailers as string[] | undefined;
+            if (trailers && trailers.length) {
+                for (const t of trailers) {
+                    translationsAfterIndex.get(insertAfterIndex)!.push(t);
+                }
+            }
         }
 
         // 4. Create merged content with translations interleaved and § section markers
@@ -2220,6 +2245,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         const SURFACE_ABBREV_FALLBACK: { [key: string]: string } = {
             'obverse': 'o', 'reverse': 'r', 'left': 'le', 'right': 'ri',
             'top': 't', 'bottom': 'b', 'edge': 'e', 'seal': 's',
+            'colophon': 'c', 'catchline': 'cl',
         };
         for (const parsed of parsedTranslations) {
             const section = (parsed as any).section || '';
@@ -2236,6 +2262,12 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 }
                 mergedLines.push(formattedLine);
                 insertedCount++;
+                const trailers = (parsed as any).trailers as string[] | undefined;
+                if (trailers && trailers.length) {
+                    for (const t of trailers) {
+                        mergedLines.push(t);
+                    }
+                }
             }
         }
 
@@ -2340,12 +2372,19 @@ export class ProductionComponent implements OnInit, OnDestroy {
         }
 
         // Fallback: plain format "1'–2" or "13'–2" or "3-4" or "2a." or "2a-2b" etc.
-        const numMatch = text.match(/^(\d+'?[a-c]?)(?:[–\-](\d+'?[a-c]?))?\.?\s+(.*)$/);
+        // Trailing # on a label (e.g., "15#") is treated as noise — likely a typo
+        // for "'" or a damage marker on the label itself; strip it for matching.
+        const numMatch = text.match(/^(\d+'?[a-c]?)#?(?:[–\-](\d+'?[a-c]?)#?)?\.?\s+(.*)$/);
         if (!numMatch) return null;
 
-        const startLabel = numMatch[1];
-        const endLabel = numMatch[2] || startLabel;
+        let startLabel = numMatch[1];
+        let endLabel = numMatch[2] || startLabel;
         const cleanedText = numMatch[3];
+        // If the start has a prime but the end doesn't (e.g., "12'-15"), assume
+        // the user meant a primed range and propagate the prime to the end label.
+        if (startLabel.includes("'") && !endLabel.includes("'") && /^\d+[a-c]?$/.test(endLabel)) {
+            endLabel = endLabel.replace(/(\d+)/, "$1'");
+        }
         const isRange = startLabel !== endLabel;
 
         return { startLabel, endLabel, cleanedText, isRange };
