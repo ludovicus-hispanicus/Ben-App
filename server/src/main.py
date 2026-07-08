@@ -19,7 +19,8 @@ from starlette.responses import JSONResponse
 
 from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
-from api.routers import cured, about, yolo_training, production, ebl, datasets, cure, pages, batch_recognition, settings, segmentation, lemmatization, destitch, destitch_batch
+# Core routers — no heavy ML dependencies (torch / kraken / ultralytics).
+from api.routers import cured, about, production, ebl, datasets, pages, batch_recognition, settings, lemmatization, destitch, destitch_batch
 from api.routers import users, text
 from utils.storage_utils import StorageUtils
 
@@ -38,22 +39,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Core routers (always available; API-only base build) ---
 app.include_router(users.router)
 app.include_router(cured.router)
 app.include_router(text.router)
 app.include_router(about.router)
-app.include_router(yolo_training.router)
 app.include_router(production.router)
 app.include_router(ebl.router)  # eBL (Electronic Babylonian Literature) Integration
 app.include_router(datasets.router)
-app.include_router(cure.router)  # CuRe Sign Classifier (separate from CuReD)
 app.include_router(pages.router)  # Document Library - unified image browsing
 app.include_router(batch_recognition.router)  # Batch Recognition - bulk OCR processing
 app.include_router(settings.router)  # Application settings
-app.include_router(segmentation.router)  # Line segmentation (shared by CuReD, CuRe)
 app.include_router(lemmatization.router)  # Lemmatization - dictionary lookup + AI suggestions
 app.include_router(destitch.router)  # Destitch - split composite into labeled view crops
 app.include_router(destitch_batch.router)  # Destitch batch - folder-level destitch jobs
+
+
+# --- Optional ML modules (torch / ultralytics / kraken) ---
+# These require the heavy ML stack that is NOT bundled in the API-only base build.
+# Import each defensively so the base server boots without those deps; a router
+# registers only when its dependencies are present (full build, or once the module
+# is installed). Static imports keep them discoverable by PyInstaller for full builds.
+def _register_optional_modules():
+    try:
+        from api.routers import cure  # CuRe sign classifier (torch)
+        app.include_router(cure.router)
+        logging.info("Optional module 'CuRe' registered.")
+    except Exception as e:
+        logging.warning(f"Optional module 'CuRe' unavailable in this build: {e}")
+
+    try:
+        from api.routers import yolo_training  # Layout / YOLO (ultralytics)
+        app.include_router(yolo_training.router)
+        logging.info("Optional module 'Layout/YOLO' registered.")
+    except Exception as e:
+        logging.warning(f"Optional module 'Layout/YOLO' unavailable in this build: {e}")
+
+    try:
+        from api.routers import segmentation  # Line segmentation (torch/SAM, lazy)
+        app.include_router(segmentation.router)
+        logging.info("Optional module 'Segmentation' registered.")
+    except Exception as e:
+        logging.warning(f"Optional module 'Segmentation' unavailable in this build: {e}")
+
+
+_register_optional_modules()
 
 
 @app.exception_handler(RequestValidationError)

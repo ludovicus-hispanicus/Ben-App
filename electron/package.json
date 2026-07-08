@@ -39,7 +39,7 @@
         "icon": "assets/icon",
         "extraResource": [
           "../app/dist/uni-app",
-          "../server/dist/cured-server"
+          "../server/dist-base/cured-server"
         ]
       },
       "publishers": [
@@ -51,7 +51,7 @@
               "name": "Ben-App"
             },
             "prerelease": false,
-            "draft": true
+            "draft": false
           }
         }
       ],

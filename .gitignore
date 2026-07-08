@@ -81,6 +81,8 @@ server/src/ebl_config.json
 # PyInstaller / Electron build artifacts
 server/build/
 server/dist/
+server/build-base/
+server/dist-base/
 electron/out/
 electron/node_modules/
 build.log
