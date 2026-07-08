@@ -23,6 +23,7 @@ class BatchRecognitionRequest(BaseModel):
     exclude_filenames: Optional[List[str]] = None  # Skip these filenames (for resuming truncated batches)
     box_mode: Optional[str] = None  # "estimate" (default) or "predict" (Kraken segmentation)
     tiling_mode: Optional[str] = None  # "none", "two_columns", "four_quadrants"
+    execution_mode: Optional[str] = "live"  # "live" (synchronous) or "batch_api" (async, 50% off)
 
 
 class BatchRecognitionResultItem(BaseModel):

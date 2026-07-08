@@ -5,6 +5,7 @@ Follows the YOLO auto-annotate pattern for async job management.
 
 import asyncio
 import base64
+import json
 import logging
 import math
 import os
@@ -34,6 +35,50 @@ from utils.storage_utils import StorageUtils
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+
+# Cache of {folder: (mtime, {snippet_filename: {column,x,y}})} for snippet
+# manifests. Re-read when the manifest's mtime changes so a re-extraction is
+# picked up.
+_MANIFEST_POS_CACHE: Dict[str, Tuple[float, Dict[str, Dict]]] = {}
+
+
+def _lookup_snippet_position(file_path: str, filename: str) -> Dict[str, Optional[float]]:
+    """Return {"column", "x", "y"} for *filename* from the manifest.json sibling
+    of *file_path*. Missing values are None (no manifest / no entry).
+
+    Stamped onto the text at creation time so it stays correct even if the
+    source snippet folder is later re-extracted and renumbered (see the
+    snippet-renumbering drift issue). The manifest read here is the one that is
+    correct *right now*, at OCR time, before any drift can occur. `column`+`y`
+    together let dictionary entries be assembled from the records alone.
+    """
+    empty = {"column": None, "x": None, "y": None, "class": None}
+    folder = os.path.dirname(file_path)
+    manifest_path = os.path.join(folder, "manifest.json")
+    try:
+        mtime = os.path.getmtime(manifest_path)
+    except OSError:
+        return empty
+    cached = _MANIFEST_POS_CACHE.get(folder)
+    if cached is None or cached[0] != mtime:
+        positions: Dict[str, Dict] = {}
+        try:
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            for m in manifest:
+                snip = m.get("snippet") or m.get("entry")
+                if snip:
+                    positions[snip] = {
+                        "column": m.get("column"),
+                        "x": m.get("x_center"),
+                        "y": m.get("y_center"),
+                        "class": m.get("class_name"),
+                    }
+        except Exception as e:
+            logger.warning(f"Could not load snippet positions from {manifest_path}: {e}")
+        _MANIFEST_POS_CACHE[folder] = (mtime, positions)
+        cached = _MANIFEST_POS_CACHE[folder]
+    return cached[1].get(filename, empty)
 
 # ── Dynamic batching: size categories ──
 # Classification uses pixel AREA (width × height) to account for wide images.
@@ -411,20 +456,40 @@ class BatchRecognitionHandler:
         self._db = MongoClient.get_db()
         self._active_jobs: Dict[str, Dict] = {}
         self._cancelled_jobs: Set[str] = set()
-        self._executor = ThreadPoolExecutor(max_workers=3)
+        # Cap on concurrent batch jobs. Local-GPU jobs still serialize on the
+        # GPU lock (see _run_batch), so raising this mainly helps cloud-provider
+        # jobs (Gemini/Claude/GPT/Grok/Nemotron Cloud/vLLM) which call external
+        # APIs and only contend on rate limits + bandwidth.
+        self._executor = ThreadPoolExecutor(max_workers=20)
         # Clean up stale jobs from previous server session
         self._cleanup_stale_jobs()
+        # Background poller for async Batch API jobs (resumes batch_submitted jobs)
+        self._start_batch_poller()
 
     def _cleanup_stale_jobs(self):
-        """Mark any 'running' or 'pending' jobs as 'failed' on startup.
-        These are leftovers from a previous server session that didn't finish cleanly."""
+        """On startup, reconcile jobs left over from a previous server session.
+
+        Live/synchronous jobs that were mid-run ('running'/'pending') — and Batch
+        API jobs interrupted while still 'submitting' (no provider id yet) — can't
+        resume, so they're failed. Jobs that were 'collecting' are re-armed to
+        'batch_submitted' so the poller re-collects them (persistence dedups by
+        publication_id). Jobs in 'batch_submitted' are intentionally left untouched —
+        the background poller picks them back up and keeps waiting on the provider.
+        """
         collection = self._db[self.BATCH_JOBS_COLLECTION]
-        stale = collection.find_many({"status": "running"}) + collection.find_many({"status": "pending"})
+        stale = (
+            collection.find_many({"status": "running"})
+            + collection.find_many({"status": "pending"})
+            + collection.find_many({"status": "submitting"})
+        )
         for job in stale:
             collection.update_one(
                 {"_id": job["_id"]},
-                {"$set": {"status": "failed", "error": "Server restarted", "completed_at": datetime.utcnow().isoformat()}}
+                {"$set": {"status": "failed", "error": "Server restarted",
+                          "completed_at": datetime.utcnow().isoformat(), "batch_api_key": None}}
             )
+        for job in collection.find_many({"status": "collecting"}):
+            collection.update_one({"_id": job["_id"]}, {"$set": {"status": "batch_submitted"}})
         if stale:
             logger.info(f"Cleaned up {len(stale)} stale batch job(s) from previous session")
 
@@ -515,6 +580,7 @@ class BatchRecognitionHandler:
         exclude_filenames: Optional[List[str]] = None,
         box_mode: Optional[str] = None,
         tiling_mode: str = "none",
+        execution_mode: str = "live",
     ) -> Dict:
         """Start a batch recognition job asynchronously.
         Source can be a Library project (source_project_id) or a local folder (source_folder_path).
@@ -628,8 +694,25 @@ class BatchRecognitionHandler:
 
         # Build effective model name
         effective_model = model
-        if sub_model and model in ("gemini_vision", "claude_vision", "gpt4_vision"):
+        if sub_model and model in ("gemini_vision", "claude_vision", "gpt4_vision", "grok_xai"):
             effective_model = f"{model}:{sub_model}"
+
+        # Async Batch API mode is only valid for the four cloud providers that
+        # expose one. Reject local models early with a clear message.
+        execution_mode = (execution_mode or "live").lower()
+        if execution_mode == "batch_api":
+            from clients.batch_api import supports_batch_api
+            if not supports_batch_api(effective_model):
+                return {
+                    "success": False,
+                    "job_id": None,
+                    "message": (
+                        f"Model '{model}' has no async Batch API. "
+                        "Use Gemini, Claude, GPT, or Grok — or switch to Live mode."
+                    ),
+                }
+            if not api_key:
+                return {"success": False, "job_id": None, "message": "An API key is required for Batch API mode."}
 
         # Resolve prompt: custom text overrides prompt key
         from common.ocr_prompts import resolve_prompt
@@ -651,7 +734,7 @@ class BatchRecognitionHandler:
 
         # Determine if this model needs the GPU lock.
         # Cloud providers and vLLM manage their own resources externally.
-        _no_gpu_lock_prefixes = ("gemini", "openai", "gpt", "anthropic", "claude", "nemotron_cloud", "vllm")
+        _no_gpu_lock_prefixes = ("gemini", "openai", "gpt", "anthropic", "claude", "grok", "xai", "nemotron_cloud", "vllm")
         model_lower = effective_model.lower().split(":")[0]
         uses_gpu = not any(model_lower.startswith(prefix) for prefix in _no_gpu_lock_prefixes)
         job_record = {
@@ -687,6 +770,17 @@ class BatchRecognitionHandler:
             "correction_rules": correction_rules,
             "box_mode": box_mode or "estimate",
             "tiling_mode": tiling_mode,
+            "execution_mode": execution_mode,
+            # ── async Batch API fields (only used when execution_mode == "batch_api") ──
+            "provider": None,            # canonical provider key (gemini/anthropic/openai/grok)
+            "provider_batch_id": None,   # opaque id returned by the provider's batch API
+            # api_key is persisted ONLY while the job is in flight so the background
+            # poller can collect results later (incl. after a server restart). It is
+            # scrubbed to None on any terminal state. Local single-user desktop app —
+            # the key already lives in the frontend.
+            "batch_api_key": api_key if execution_mode == "batch_api" else None,
+            "file_meta": None,           # custom_id mapping built at submit time
+            "submitted_at": None,
         }
 
         self._db[self.BATCH_JOBS_COLLECTION].insert_one(job_record)
@@ -694,32 +788,56 @@ class BatchRecognitionHandler:
 
         # Start in background thread
         loop = asyncio.get_event_loop()
-        loop.run_in_executor(
-            self._executor,
-            self._run_batch,
-            job_id,
-            source_project_id,
-            local_folder,
-            source_name,
-            image_filenames,
-            effective_model,
-            resolved_prompt,
-            api_key,
-            total_images,
-            user_id,
-            destination_dataset_id,
-            destination_folder_path,
-            export_images,
-            correction_rules,
-            uses_gpu,
-            image_scale,
-            batch_size,
-            box_mode or "estimate",
-            tiling_mode,
-            target_dpi,
-        )
+        if execution_mode == "batch_api":
+            loop.run_in_executor(
+                self._executor,
+                self._submit_batch_api_job,
+                job_id,
+                source_project_id,
+                local_folder,
+                source_name,
+                image_filenames,
+                effective_model,
+                resolved_prompt,
+                api_key,
+                total_images,
+                user_id,
+                destination_dataset_id,
+                destination_folder_path,
+                export_images,
+                correction_rules,
+                image_scale,
+                box_mode or "estimate",
+                tiling_mode,
+                target_dpi,
+            )
+        else:
+            loop.run_in_executor(
+                self._executor,
+                self._run_batch,
+                job_id,
+                source_project_id,
+                local_folder,
+                source_name,
+                image_filenames,
+                effective_model,
+                resolved_prompt,
+                api_key,
+                total_images,
+                user_id,
+                destination_dataset_id,
+                destination_folder_path,
+                export_images,
+                correction_rules,
+                uses_gpu,
+                image_scale,
+                batch_size,
+                box_mode or "estimate",
+                tiling_mode,
+                target_dpi,
+            )
 
-        logger.info(f"Started batch recognition job {job_id}: {source_name} ({total_images} images) with model {effective_model}, batch_size={batch_size}")
+        logger.info(f"Started batch recognition job {job_id}: {source_name} ({total_images} images) with model {effective_model}, mode={execution_mode}, batch_size={batch_size}")
 
         msg = "Batch recognition job started"
         if auto_skipped > 0:
@@ -967,6 +1085,66 @@ class BatchRecognitionHandler:
                         image_tuples = [(b64, w, h) for _, _, b64, w, h, _, _ in chunk_images]
                         ocr_results = ocr_client.ocr_images(image_tuples, prompt)
 
+                        # Phase 2.4: Identity check via sentinel parse_status.
+                        # Any slot whose [[IMG_NNN]] tag was missing or duplicated is
+                        # untrustworthy — re-OCR it individually before anything else
+                        # touches the result. This is the primary defense against the
+                        # silent-shift bug that mis-assigned content in jobs run with
+                        # the old delimiter-only protocol.
+                        batch_diag = ocr_results[0].pop("_batch_parse", None) if ocr_results else None
+                        suspect_slots = [
+                            i for i, r in enumerate(ocr_results)
+                            if r.get("parse_status") and r.get("parse_status") != "ok"
+                        ]
+                        retried_slots: List[int] = []
+                        if suspect_slots:
+                            logger.warning(
+                                f"Batch job {job_id}: chunk {chunk_filenames[0]}.. has "
+                                f"{len(suspect_slots)}/{len(ocr_results)} slots without "
+                                f"reliable identity (status={[ocr_results[i].get('parse_status') for i in suspect_slots]}), "
+                                f"re-OCRing those individually"
+                            )
+                            for slot_i in suspect_slots:
+                                if slot_i >= len(chunk_images):
+                                    continue
+                                bad_status = ocr_results[slot_i].get("parse_status")
+                                try:
+                                    _, _, ind_b64, ind_w, ind_h, _, _ = chunk_images[slot_i]
+                                    ind_res = ocr_client.ocr_image(ind_b64, ind_w, ind_h, prompt)
+                                    ind_res["parse_status"] = "ok"
+                                    ind_res["recovered_from"] = bad_status
+                                    ocr_results[slot_i] = ind_res
+                                    retried_slots.append(slot_i)
+                                except (GeminiCancelledError, AnthropicCancelledError):
+                                    raise
+                                except GeminiRateLimitError:
+                                    raise
+                                except Exception as ind_err:
+                                    logger.error(
+                                        f"  Individual re-OCR failed for slot {slot_i} "
+                                        f"({chunk_images[slot_i][0]}): {ind_err}"
+                                    )
+
+                        # Persist diagnostics for chunks that had any anomaly. Only
+                        # logged when something interesting happened so the record
+                        # stays small.
+                        anomaly = (
+                            batch_diag and (
+                                batch_diag.get("missing_indices")
+                                or batch_diag.get("duplicate_indices")
+                                or batch_diag.get("out_of_range_indices")
+                                or batch_diag.get("method") not in (None, "sentinel")
+                            )
+                        )
+                        if anomaly or retried_slots:
+                            chunk_record = {
+                                "chunk_filenames": list(chunk_filenames),
+                                "diagnostics": batch_diag,
+                                "per_slot_status": [r.get("parse_status", "unknown") for r in ocr_results],
+                                "retried_slots": retried_slots,
+                            }
+                            self._append_chunk_log(job_id, chunk_record)
+
                         # Phase 2.5: Detect merge failure and try to redistribute.
                         # Pattern: first image gets all text, rest are empty.
                         empty_count = sum(1 for r in ocr_results if not r.get("lines"))
@@ -1197,127 +1375,37 @@ class BatchRecognitionHandler:
                                 except Exception as e3:
                                     logger.warning(f"Batch job {job_id}: two_columns 50% retry failed for {filename}: {e3}")
 
-                        # Two distinct failure modes after the cascade:
-                        #   - Truly empty (no lines or only whitespace) → drop, no entry saved
-                        #   - Headers-only ("# COLUMN A # COLUMN B" etc.) → save with "failed" label
-                        truly_empty = not any((ln or "").strip() for ln in (text_lines or []))
-                        if truly_empty:
-                            logger.warning(f"Batch job {job_id}: no text detected in {filename} after all retries — dropping")
-                            failed += 1
-                            failed_results.append({"filename": filename, "error": "No text detected (all retries exhausted)"})
-                            continue
-                        content_failed = not _has_real_content(text_lines)
-                        if content_failed:
-                            logger.warning(f"Batch job {job_id}: only structural headers in {filename} after all retries (lines={text_lines}) — saving with 'failed' label")
-
-                        pub_id = f"{source_name}/{filename}"
-
-                        # Dedup: skip if a text with this publication_id already exists in the destination
-                        if dest_did:
-                            existing = global_new_text_handler._collection.find_many(
-                                find_filter={"dataset_id": int(dest_did), "publication_id": pub_id},
-                                limit=1,
-                            )
-                            if existing:
-                                logger.info(f"Batch job {job_id}: skipping {filename} — already exists in dataset {dest_did} (text_id={existing[0].get('text_id')})")
-                                processed += 1
-                                results.append({
-                                    "filename": filename,
-                                    "text_id": existing[0].get("text_id"),
-                                    "transliteration_id": None,
-                                    "lines_count": len(text_lines),
-                                })
-                                continue
-
-                        identifiers = TextIdentifiersDto.from_values(
-                            publication=pub_id
-                        )
-                        text_id = global_new_text_handler.create_new_text(
-                            identifiers=identifiers,
-                            metadata=[{"source": "batch_recognition", "job_id": job_id}],
-                            uploader_id=user_id,
-                            dataset_id=dest_did,
-                        )
-
-                        image_name = StorageUtils.generate_cured_train_image_name(
-                            original_file_name=filename, text_id=text_id
-                        )
-                        dest_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        shutil.copy2(file_path, dest_path)
-
-                        # Verify the copy succeeded
-                        if not os.path.isfile(dest_path):
-                            logger.error(
-                                f"Batch job {job_id}: image copy FAILED for {filename} → {dest_path} "
-                                f"(source exists: {os.path.isfile(file_path)}, "
-                                f"BASE_PATH: {StorageUtils.BASE_PATH})"
-                            )
-
-                        # Draw tile boundary lines on the saved image
-                        if filename in tiled_boundaries:
-                            try:
-                                # Compute actual scale from original vs OCR dimensions
-                                img_scale = ocr_h / orig_h if orig_h > 0 else 1.0
-                                _draw_tile_boundaries(dest_path, tiled_boundaries[filename], img_scale)
-                            except Exception as e:
-                                logger.warning(f"Failed to draw tile boundaries on {filename}: {e}")
-
-                        preview_path = StorageUtils.build_preview_image_path(image_name=image_name)
-                        StorageUtils.make_a_preview(image_path=dest_path, preview_path=preview_path)
-
-                        submit_dto = TransliterationSubmitDto(
-                            text_id=text_id,
-                            lines=text_lines,
-                            boxes=boxes,
-                            source=TransliterationSource.CURED,
-                            image_name=image_name,
-                            is_curated_vlm=False,
-                            is_curated_kraken=False,
-                        )
-                        transliteration_id = global_new_text_handler.save_new_transliteration(
-                            dto=submit_dto, uploader_id=user_id
-                        )
-
-                        if export_folder:
-                            stem = Path(filename).stem
-                            txt_path = export_folder / f"{stem}.txt"
-                            with open(txt_path, "w", encoding="utf-8") as tf:
-                                tf.write("\n".join(text_lines))
-                            if export_images:
-                                shutil.copy2(file_path, export_folder / "images" / filename)
-
-                        processed += 1
-                        result_entry = {
-                            "filename": filename,
-                            "text_id": text_id,
-                            "transliteration_id": transliteration_id,
-                            "lines_count": len(text_lines),
-                        }
-                        if filename in tiled_filenames:
-                            result_entry["was_tiled"] = True
-                        # "failed" replaces the tiling label — a failed entry shouldn't
-                        # claim to have been successfully clipped/tiled.
-                        if content_failed:
-                            result_entry["failed_content"] = True
-                            labels_to_set = ["failed"]
-                        elif filename in tiled_filenames:
-                            labels_to_set = [tiled_filenames[filename]]
-                        else:
-                            labels_to_set = []
-                        if labels_to_set:
-                            try:
-                                global_new_text_handler.update_labels(text_id, labels_to_set)
-                            except Exception:
-                                pass
-                        results.append(result_entry)
-
-                        logger.info(f"Batch job {job_id}: processed {filename} -> text_id={text_id}, {len(text_lines)} lines")
-
                     except Exception as e:
-                        logger.error(f"Batch job {job_id}: failed to save {filename}: {e}")
+                        logger.error(f"Batch job {job_id}: failed to process {filename}: {e}")
                         failed += 1
                         failed_results.append({"filename": filename, "error": str(e)})
+                        continue
+
+                    # Phase 3 persistence is shared with the async Batch API path.
+                    # boxes/text_lines are already finalized (scaled + box_mode +
+                    # retries applied above).
+                    outcome = self._persist_ocr_result(
+                        job_id=job_id,
+                        source_name=source_name,
+                        filename=filename,
+                        file_path=file_path,
+                        text_lines=text_lines,
+                        boxes=boxes,
+                        orig_h=orig_h,
+                        ocr_h=ocr_h,
+                        dest_did=dest_did,
+                        export_folder=export_folder,
+                        export_images=export_images,
+                        user_id=user_id,
+                        tile_label=tiled_filenames.get(filename),
+                        tile_boundaries=tiled_boundaries.get(filename),
+                    )
+                    if outcome.get("result"):
+                        processed += 1
+                        results.append(outcome["result"])
+                    if outcome.get("failed"):
+                        failed += 1
+                        failed_results.append(outcome["failed"])
 
                 images_seen += len(chunk_filenames)
 
@@ -1362,6 +1450,452 @@ class BatchRecognitionHandler:
             if uses_gpu:
                 from services.gpu_lock import release as gpu_release
                 gpu_release(f"batch_recognition_{job_id}")
+
+    def _persist_ocr_result(
+        self,
+        *,
+        job_id: str,
+        source_name: str,
+        filename: str,
+        file_path: str,
+        text_lines: List[str],
+        boxes: list,
+        orig_h: int,
+        ocr_h: int,
+        dest_did: Optional[int],
+        export_folder: Optional[Path],
+        export_images: bool,
+        user_id: str,
+        tile_label: Optional[str] = None,
+        tile_boundaries: Optional[List[int]] = None,
+    ) -> Dict:
+        """Persist one finalized OCR result.
+
+        Shared by the live (_run_batch) and async Batch API
+        (_collect_batch_api_job) paths so persistence is byte-identical:
+        empty/headers handling → dedup → create text → copy image + preview →
+        save transliteration → export → labels.
+
+        Inputs must already be finalized — boxes scaled to original-image
+        coordinates and box_mode applied, all retries done. Never raises;
+        returns an outcome dict the caller uses to bump counters:
+            {"result": {...}} -> processed += 1, append to results
+            {"failed": {...}} -> failed += 1, append to failed_results
+        """
+        try:
+            # Two distinct failure modes after the cascade:
+            #   - Truly empty (no lines or only whitespace) → drop, no entry saved
+            #   - Headers-only ("# COLUMN A # COLUMN B" etc.) → save with "failed" label
+            truly_empty = not any((ln or "").strip() for ln in (text_lines or []))
+            if truly_empty:
+                logger.warning(f"Batch job {job_id}: no text detected in {filename} after all retries — dropping")
+                return {"failed": {"filename": filename, "error": "No text detected (all retries exhausted)"}}
+            content_failed = not _has_real_content(text_lines)
+            if content_failed:
+                logger.warning(f"Batch job {job_id}: only structural headers in {filename} after all retries (lines={text_lines}) — saving with 'failed' label")
+
+            pub_id = f"{source_name}/{filename}"
+
+            # Dedup: skip if a text with this publication_id already exists in the destination
+            if dest_did:
+                existing = global_new_text_handler._collection.find_many(
+                    find_filter={"dataset_id": int(dest_did), "publication_id": pub_id},
+                    limit=1,
+                )
+                if existing:
+                    logger.info(f"Batch job {job_id}: skipping {filename} — already exists in dataset {dest_did} (text_id={existing[0].get('text_id')})")
+                    return {"result": {
+                        "filename": filename,
+                        "text_id": existing[0].get("text_id"),
+                        "transliteration_id": None,
+                        "lines_count": len(text_lines),
+                    }}
+
+            identifiers = TextIdentifiersDto.from_values(
+                publication=pub_id
+            )
+            # Stamp column + page position now, from the source folder's
+            # manifest, so they survive any later snippet re-extraction that
+            # renumbers the folder. column+y let entries be assembled JSON-only.
+            pos = _lookup_snippet_position(file_path, filename)
+            text_id = global_new_text_handler.create_new_text(
+                identifiers=identifiers,
+                metadata=[{"source": "batch_recognition", "job_id": job_id}],
+                uploader_id=user_id,
+                dataset_id=dest_did,
+                column=pos["column"],
+                x=pos["x"],
+                y=pos["y"],
+                block_class=pos["class"],
+            )
+
+            image_name = StorageUtils.generate_cured_train_image_name(
+                original_file_name=filename, text_id=text_id
+            )
+            dest_path = StorageUtils.build_cured_train_image_path(image_name=image_name)
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            shutil.copy2(file_path, dest_path)
+
+            # Verify the copy succeeded
+            if not os.path.isfile(dest_path):
+                logger.error(
+                    f"Batch job {job_id}: image copy FAILED for {filename} → {dest_path} "
+                    f"(source exists: {os.path.isfile(file_path)}, "
+                    f"BASE_PATH: {StorageUtils.BASE_PATH})"
+                )
+
+            # Draw tile boundary lines on the saved image
+            if tile_boundaries:
+                try:
+                    # Compute actual scale from original vs OCR dimensions
+                    img_scale = ocr_h / orig_h if orig_h > 0 else 1.0
+                    _draw_tile_boundaries(dest_path, tile_boundaries, img_scale)
+                except Exception as e:
+                    logger.warning(f"Failed to draw tile boundaries on {filename}: {e}")
+
+            preview_path = StorageUtils.build_preview_image_path(image_name=image_name)
+            StorageUtils.make_a_preview(image_path=dest_path, preview_path=preview_path)
+
+            submit_dto = TransliterationSubmitDto(
+                text_id=text_id,
+                lines=text_lines,
+                boxes=boxes,
+                source=TransliterationSource.CURED,
+                image_name=image_name,
+                is_curated_vlm=False,
+                is_curated_kraken=False,
+            )
+            transliteration_id = global_new_text_handler.save_new_transliteration(
+                dto=submit_dto, uploader_id=user_id
+            )
+
+            if export_folder:
+                stem = Path(filename).stem
+                txt_path = export_folder / f"{stem}.txt"
+                with open(txt_path, "w", encoding="utf-8") as tf:
+                    tf.write("\n".join(text_lines))
+                if export_images:
+                    shutil.copy2(file_path, export_folder / "images" / filename)
+
+            result_entry = {
+                "filename": filename,
+                "text_id": text_id,
+                "transliteration_id": transliteration_id,
+                "lines_count": len(text_lines),
+            }
+            if tile_label:
+                result_entry["was_tiled"] = True
+            # "failed" replaces the tiling label — a failed entry shouldn't
+            # claim to have been successfully clipped/tiled.
+            if content_failed:
+                result_entry["failed_content"] = True
+                labels_to_set = ["failed"]
+            elif tile_label:
+                labels_to_set = [tile_label]
+            else:
+                labels_to_set = []
+            if labels_to_set:
+                try:
+                    global_new_text_handler.update_labels(text_id, labels_to_set)
+                except Exception:
+                    pass
+
+            logger.info(f"Batch job {job_id}: processed {filename} -> text_id={text_id}, {len(text_lines)} lines")
+            return {"result": result_entry}
+
+        except Exception as e:
+            logger.error(f"Batch job {job_id}: failed to save {filename}: {e}")
+            return {"failed": {"filename": filename, "error": str(e)}}
+
+    # ════════════════════════════════════════════════════════════════════
+    #  Async provider Batch API path (execution_mode == "batch_api")
+    #  Submit the whole folder as one provider batch job, then a background
+    #  poller collects results within ~24h at 50% of the synchronous price.
+    #  One request == one image (or tile); results map back via custom_id.
+    # ════════════════════════════════════════════════════════════════════
+
+    _POLL_INTERVAL_SECONDS = 120
+
+    @staticmethod
+    def _to_supported_image(raw: bytes) -> Tuple[bytes, str]:
+        """Return (bytes, media_type) the cloud batch APIs accept.
+
+        png/jpeg/webp/gif pass through unchanged; anything else (tiff/bmp/…)
+        is transcoded to PNG so the provider doesn't reject it.
+        """
+        head = raw[:16]
+        if head.startswith(b"\xff\xd8\xff"):
+            return raw, "image/jpeg"
+        if head.startswith(b"\x89PNG\r\n\x1a\n"):
+            return raw, "image/png"
+        if head.startswith(b"GIF8"):
+            return raw, "image/gif"
+        if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+            return raw, "image/webp"
+        img = Image.open(BytesIO(raw))
+        buf = BytesIO()
+        img.convert("RGB").save(buf, format="PNG")
+        img.close()
+        return buf.getvalue(), "image/png"
+
+    def _submit_batch_api_job(
+        self, job_id, source_project_id, local_folder, source_name, image_filenames,
+        effective_model, prompt, api_key, total_images, user_id, destination_dataset_id,
+        destination_folder_path, export_images, correction_rules, image_scale, box_mode,
+        tiling_mode, target_dpi,
+    ):
+        """Prepare every image (resize + tile) into one request per tile and
+        submit them as a single provider batch. Stores the provider batch id +
+        per-file metadata so the poller can collect later."""
+        from clients.batch_api import get_batch_adapter, BatchRequest
+        from utils.image_resize import resize_image_bytes, resize_to_target_dpi
+        from common.app_settings import get_image_scale, get_target_dpi
+
+        try:
+            self._update_status(job_id, "submitting", started_at=datetime.utcnow().isoformat(),
+                                current_filename="Preparing images...")
+
+            pages_handler = None
+            if source_project_id and not local_folder:
+                pages_handler = PagesHandler()
+
+            # Resize strategy mirrors _run_batch: DPI takes priority over scale.
+            effective_target_dpi = target_dpi if target_dpi else get_target_dpi()
+            use_dpi_resize = bool(effective_target_dpi and effective_target_dpi > 0)
+            effective_scale = 1.0 if use_dpi_resize else (
+                image_scale if image_scale is not None else get_image_scale())
+
+            requests: List = []
+            file_meta: Dict[str, Dict] = {}
+
+            for filename in image_filenames:
+                try:
+                    if local_folder:
+                        file_path = os.path.join(local_folder, filename)
+                        if not os.path.isfile(file_path):
+                            file_meta[filename] = {"error": "File not found"}
+                            continue
+                    else:
+                        file_path = pages_handler.get_file_path(source_project_id, filename)
+                        if not file_path:
+                            file_meta[filename] = {"error": "File not found in library"}
+                            continue
+
+                    with open(file_path, "rb") as f:
+                        image_bytes = f.read()
+                    orig_img = Image.open(BytesIO(image_bytes))
+                    orig_w, orig_h = orig_img.size
+                    orig_img.close()
+
+                    if use_dpi_resize:
+                        image_bytes, _ = resize_to_target_dpi(image_bytes, effective_target_dpi)
+                    elif effective_scale < 1.0:
+                        image_bytes = resize_image_bytes(image_bytes, effective_scale)
+
+                    rimg = Image.open(BytesIO(image_bytes))
+                    ocr_w, ocr_h = rimg.size
+                    rimg.close()
+
+                    # Same tiling triggers as the live path: explicit mode or a tall image.
+                    wants_tiling = tiling_mode != "none" or ocr_h > TILE_TARGET_HEIGHT
+                    if wants_tiling:
+                        tiles, boundary_ys = _split_image_into_tiles(image_bytes, ocr_w, ocr_h, mode=tiling_mode)
+                        tile_label = "clipped" if tiling_mode == "full_page_clipped" else "tiled"
+                    else:
+                        tiles, boundary_ys, tile_label = [(image_bytes, ocr_w, ocr_h)], [], None
+
+                    for ti, (tbytes, tw, th) in enumerate(tiles):
+                        norm_bytes, media = self._to_supported_image(tbytes)
+                        b64 = base64.b64encode(norm_bytes).decode("utf-8")
+                        requests.append(BatchRequest(
+                            custom_id=f"{filename}::t{ti}",
+                            image_base64=b64, width=tw, height=th,
+                            prompt=prompt, media_type=media,
+                        ))
+                    file_meta[filename] = {
+                        "file_path": file_path,
+                        "orig_w": orig_w, "orig_h": orig_h, "ocr_h": ocr_h,
+                        "n_tiles": len(tiles),
+                        "boundary_ys": boundary_ys,
+                        "tile_label": tile_label,
+                    }
+                except Exception as e:
+                    logger.error(f"Batch job {job_id}: failed to prepare {filename}: {e}")
+                    file_meta[filename] = {"error": str(e)}
+
+            if not requests:
+                self._update_status(job_id, "failed", error="No images could be prepared for submission",
+                                    completed_at=datetime.utcnow().isoformat(), file_meta=file_meta,
+                                    batch_api_key=None)
+                return
+
+            self._update_status(job_id, "submitting",
+                                current_filename=f"Submitting {len(requests)} request(s) to provider...")
+            adapter = get_batch_adapter(effective_model, api_key)
+            provider_batch_id = adapter.submit(requests)
+
+            self._update_status(
+                job_id, "batch_submitted",
+                provider=adapter.provider,
+                provider_batch_id=provider_batch_id,
+                file_meta=file_meta,
+                submitted_at=datetime.utcnow().isoformat(),
+                current_filename="",
+                progress_percent=0,
+            )
+            logger.info(f"Batch job {job_id}: submitted {len(requests)} request(s) to "
+                        f"{adapter.provider} (batch={provider_batch_id})")
+        except Exception as e:
+            logger.error(f"Batch job {job_id}: submission failed: {e}")
+            self._update_status(job_id, "failed", error=f"Submission failed: {e}",
+                                completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+        finally:
+            # The poller (DB-driven) owns the job from here; free the in-memory copy.
+            self._active_jobs.pop(job_id, None)
+
+    def _collect_batch_api_job(self, job: Dict):
+        """Fetch a finished provider batch, merge tiles, and persist each result
+        through the shared _persist_ocr_result path."""
+        job_id = job["job_id"]
+        provider_batch_id = job.get("provider_batch_id")
+        api_key = job.get("batch_api_key")
+        effective_model = job.get("effective_model")
+        file_meta = job.get("file_meta") or {}
+        dest_did = job.get("destination_dataset_id")
+        source_name = job.get("source_project_name", "")
+        correction_rules = job.get("correction_rules")
+        box_mode = job.get("box_mode", "estimate")
+        export_images = job.get("export_images", False)
+        destination_folder_path = job.get("destination_folder_path")
+        user_id = job.get("user_id", "admin")
+
+        from clients.batch_api import get_batch_adapter
+        from common.ocr_prompts import _estimate_dimensions
+
+        try:
+            self._update_status(job_id, "collecting", current_filename="Collecting results...")
+
+            export_folder = None
+            if destination_folder_path:
+                export_folder = Path(destination_folder_path)
+                export_folder.mkdir(parents=True, exist_ok=True)
+                if export_images:
+                    (export_folder / "images").mkdir(exist_ok=True)
+
+            adapter = get_batch_adapter(effective_model, api_key)
+            results_by_cid = {r.custom_id: r for r in adapter.collect(provider_batch_id)}
+
+            processed, failed = 0, 0
+            results, failed_results = [], []
+
+            for filename, meta in file_meta.items():
+                if meta.get("error"):
+                    failed += 1
+                    failed_results.append({"filename": filename, "error": meta["error"]})
+                    continue
+
+                n_tiles = meta.get("n_tiles", 1)
+                tile_dicts = []
+                for ti in range(n_tiles):
+                    br = results_by_cid.get(f"{filename}::t{ti}")
+                    if br is None or br.error:
+                        tile_dicts.append({"lines": [], "dimensions": []})
+                    else:
+                        tile_dicts.append({"lines": br.lines, "dimensions": []})
+                merged = _merge_tile_results(tile_dicts) if n_tiles > 1 else tile_dicts[0]
+                text_lines = [ln.replace("\n", "") for ln in merged.get("lines", [])]
+                if correction_rules == "akkadian":
+                    from utils.akkadian_ocr_corrections import correct_lines
+                    text_lines = correct_lines(text_lines)
+
+                # Batch results carry no bounding boxes — estimate (or predict) here,
+                # directly in original-image coordinates.
+                orig_w, orig_h = meta.get("orig_w", 0), meta.get("orig_h", 0)
+                if box_mode == "none" or not text_lines:
+                    boxes = []
+                elif box_mode == "predict":
+                    boxes = _estimate_dimensions(text_lines, orig_w, orig_h)
+                    try:
+                        from services.segmentation_service import SegmentationService
+                        with open(meta.get("file_path"), "rb") as img_f:
+                            img_b64 = base64.b64encode(img_f.read()).decode("utf-8")
+                        seg = SegmentationService().segment(img_b64)
+                        if seg.lines:
+                            boxes = seg.lines
+                    except Exception as seg_err:
+                        logger.warning(f"Batch job {job_id}: segmentation failed for {filename}: {seg_err}")
+                else:
+                    boxes = _estimate_dimensions(text_lines, orig_w, orig_h)
+
+                outcome = self._persist_ocr_result(
+                    job_id=job_id, source_name=source_name, filename=filename,
+                    file_path=meta.get("file_path"), text_lines=text_lines, boxes=boxes,
+                    orig_h=orig_h, ocr_h=meta.get("ocr_h", orig_h),
+                    dest_did=dest_did, export_folder=export_folder, export_images=export_images,
+                    user_id=user_id, tile_label=meta.get("tile_label"),
+                    tile_boundaries=meta.get("boundary_ys") or None,
+                )
+                if outcome.get("result"):
+                    processed += 1
+                    results.append(outcome["result"])
+                if outcome.get("failed"):
+                    failed += 1
+                    failed_results.append(outcome["failed"])
+
+            self._update_status(
+                job_id, "completed",
+                completed_at=datetime.utcnow().isoformat(),
+                progress_percent=100, processed_images=processed, failed_images=failed,
+                results=results, failed_results=failed_results,
+                current_filename="", batch_api_key=None,
+            )
+            logger.info(f"Batch job {job_id}: collected — {processed} processed, {failed} failed")
+            try:
+                adapter.cleanup(provider_batch_id)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"Batch job {job_id}: collection failed: {e}")
+            self._update_status(job_id, "failed", error=f"Collection failed: {e}",
+                                completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+
+    def _start_batch_poller(self):
+        t = threading.Thread(target=self._batch_poller_loop, name="batch_api_poller", daemon=True)
+        t.start()
+
+    def _batch_poller_loop(self):
+        """Daemon loop: poll every submitted provider batch; collect finished ones.
+        DB-driven so it survives the UI being closed and (with the persisted key)
+        a server restart."""
+        import time as _time
+        from clients.batch_api import get_batch_adapter, BatchState
+
+        while True:
+            try:
+                jobs = self._db[self.BATCH_JOBS_COLLECTION].find_many({"status": "batch_submitted"})
+                for job in jobs:
+                    job_id = job["job_id"]
+                    if job_id in self._cancelled_jobs:
+                        continue
+                    try:
+                        adapter = get_batch_adapter(job.get("effective_model"), job.get("batch_api_key"))
+                        state = adapter.poll(job.get("provider_batch_id"))
+                    except Exception as e:
+                        logger.warning(f"Batch poller: poll failed for {job_id}: {e}")
+                        continue
+                    if state == BatchState.DONE:
+                        self._collect_batch_api_job(job)
+                    elif state == BatchState.FAILED:
+                        self._update_status(job_id, "failed",
+                                            error="Provider reported the batch failed or expired",
+                                            completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+                    elif state == BatchState.CANCELLED:
+                        self._update_status(job_id, "cancelled",
+                                            completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+                    # RUNNING / PENDING → keep waiting until the next tick
+            except Exception as e:
+                logger.error(f"Batch poller loop error: {e}")
+            _time.sleep(self._POLL_INTERVAL_SECONDS)
 
     def _build_dynamic_chunks(
         self,
@@ -1486,6 +2020,27 @@ class BatchRecognitionHandler:
         if job_id in self._active_jobs:
             self._active_jobs[job_id].update(update)
 
+    def _append_chunk_log(self, job_id: str, chunk_record: Dict) -> None:
+        """Append a chunk parse-anomaly record to the job's chunk_log array.
+
+        Only chunks where a sentinel tag was missing/duplicated or any slot was
+        re-OCRed individually get logged, so this stays small even on huge jobs.
+        Lets us audit which OCR results were positionally-trusted vs re-verified.
+        """
+        existing = self._active_jobs.get(job_id) \
+            or self._db[self.BATCH_JOBS_COLLECTION].find_one({"_id": job_id}) \
+            or {}
+        log = list(existing.get("chunk_log") or [])
+        log.append(chunk_record)
+        # Cap at 500 entries to avoid runaway record size on huge jobs.
+        if len(log) > 500:
+            log = log[-500:]
+        self._db[self.BATCH_JOBS_COLLECTION].update_one(
+            {"_id": job_id}, {"$set": {"chunk_log": log}}
+        )
+        if job_id in self._active_jobs:
+            self._active_jobs[job_id]["chunk_log"] = log
+
     def get_batch_status(self, job_id: str) -> Dict:
         """Get the current status of a batch recognition job."""
         # Check active jobs first (more up-to-date)
@@ -1532,6 +2087,11 @@ class BatchRecognitionHandler:
             "tiling_mode": job.get("tiling_mode", "none"),
             "rate_limit_reached": job.get("rate_limit_reached", False),
             "rate_limit_reset": job.get("rate_limit_reset"),
+            "chunk_log": job.get("chunk_log", []),
+            "execution_mode": job.get("execution_mode", "live"),
+            "provider": job.get("provider"),
+            "provider_batch_id": job.get("provider_batch_id"),
+            "submitted_at": job.get("submitted_at"),
         }
 
     def list_batch_jobs(self, limit: int = 20) -> List[Dict]:
@@ -1553,6 +2113,8 @@ class BatchRecognitionHandler:
                 "progress_percent": job.get("progress_percent", 0),
                 "created_at": job.get("created_at"),
                 "completed_at": job.get("completed_at"),
+                "execution_mode": job.get("execution_mode", "live"),
+                "provider": job.get("provider"),
             }
             for job in jobs
         ]
@@ -1571,6 +2133,22 @@ class BatchRecognitionHandler:
         job = self._db[self.BATCH_JOBS_COLLECTION].find_one({"_id": job_id})
         if not job:
             return {"success": False, "message": f"Job '{job_id}' not found"}
+
+        # Async Batch API job waiting on / collecting from the provider — cancel it
+        # provider-side (best effort) and scrub the stored key.
+        if job.get("status") in ("submitting", "batch_submitted", "collecting"):
+            self._cancelled_jobs.add(job_id)  # keep the poller from collecting it mid-race
+            try:
+                from clients.batch_api import get_batch_adapter
+                if job.get("provider_batch_id"):
+                    adapter = get_batch_adapter(job.get("effective_model"), job.get("batch_api_key"))
+                    adapter.cancel(job["provider_batch_id"])
+                    adapter.cleanup(job["provider_batch_id"])
+            except Exception as e:
+                logger.warning(f"Batch job {job_id}: provider cancel failed: {e}")
+            self._update_status(job_id, "cancelled",
+                                completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+            return {"success": True, "message": f"Batch job {job_id} cancelled"}
 
         if job.get("status") in ("completed", "failed", "cancelled"):
             return {"success": False, "message": f"Job '{job_id}' is already {job['status']}"}

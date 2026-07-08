@@ -15,18 +15,29 @@ export class ErrorInterceptor implements HttpInterceptor {
     }
 
     intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+        // Requests can opt out of the global error toast by sending the
+        // `X-Silent-Errors` header (e.g. probe-style lookups where a 404 is an
+        // expected branch, not a failure). Strip the marker before forwarding.
+        const silent = request.headers.has('X-Silent-Errors');
+        if (silent) {
+            request = request.clone({ headers: request.headers.delete('X-Silent-Errors') });
+        }
         return next.handle(request).pipe(
             catchError((error: HttpErrorResponse) => {
                 let errorMsg = '';
                 if (error.error instanceof ErrorEvent) {
-                    console.log('This is client side error');
+                    if (!silent) console.log('This is client side error');
                     errorMsg = `Error: ${error.error.message}`;
                 } else {
-                    console.log('This is server side error');
-                    console.log(error.error.detail);
+                    if (!silent) {
+                        console.log('This is server side error');
+                        console.log(error.error.detail);
+                    }
                     errorMsg = `Server error. Details: ${error.error.detail}`;
                 }
-                this.notificationService.showError(`${errorMsg}`)
+                if (!silent) {
+                    this.notificationService.showError(`${errorMsg}`);
+                }
                 return throwError(errorMsg);
             })
         )

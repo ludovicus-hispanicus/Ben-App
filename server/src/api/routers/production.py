@@ -116,7 +116,13 @@ async def get_grouped_training_data():
                 "parts": [],
                 "has_production_text": False,
                 "production_id": None,
-                "is_exported": False
+                "is_exported": False,
+                # Labels typed by the user when attaching no-OCR images to a
+                # production text. Stored on production_text.uploaded_images
+                # rather than on a training text, so the regular parts-derived
+                # label list misses them — surfaced here so the AddText dialog
+                # can show them as reusable chips.
+                "uploaded_image_labels": []
             }
 
         grouped[key]["parts"].append({
@@ -143,6 +149,10 @@ async def get_grouped_training_data():
                 group["has_production_text"] = True
                 group["production_id"] = prod_text.production_id
                 group["is_exported"] = getattr(prod_text, 'is_exported', False)
+                group["uploaded_image_labels"] = [
+                    img.label for img in getattr(prod_text, 'uploaded_images', [])
+                    if img.label
+                ]
 
     # Include standalone production texts (e.g. imported ORACC texts with no training sources)
     for pt in all_prod_texts:
@@ -165,7 +175,11 @@ async def get_grouped_training_data():
                 }],
                 "has_production_text": True,
                 "production_id": pt.production_id,
-                "is_exported": getattr(pt, 'is_exported', False)
+                "is_exported": getattr(pt, 'is_exported', False),
+                "uploaded_image_labels": [
+                    img.label for img in getattr(pt, 'uploaded_images', [])
+                    if img.label
+                ]
             }
 
     # Sort parts within each group by part number
@@ -184,6 +198,27 @@ async def search_kwic(q: str, limit: int = 200):
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
     return global_new_text_handler.search_kwic(query=q.strip(), limit=limit)
+
+
+@router.get("/text/by-identifier")
+async def find_production_text_by_identifier(identifier: str, type: str = "museum"):
+    """Find an existing production text by identifier. Returns 404 if none.
+
+    Used by the front-end when opening a text via `?identifier=…` so it can
+    surface the saved/exported version instead of regenerating fresh content
+    from the source parts.
+
+    NOTE: This route MUST stay above `/text/{production_id}` — FastAPI matches
+    routes in declaration order and the dynamic int route would otherwise
+    swallow `/text/by-identifier` and 422 on the path-param conversion."""
+    try:
+        id_type = IdentifierType(type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid identifier type: {type}")
+    existing = production_texts_handler.get_by_identifier(identifier, id_type)
+    if not existing:
+        raise HTTPException(status_code=404, detail="No production text for this identifier")
+    return existing
 
 
 @router.get("/text/{production_id}")
@@ -722,27 +757,42 @@ async def delete_production_text(production_id: int):
     return {"deleted": True}
 
 
+class MarkExportedDto(BaseModel):
+    ebl_fragment_number: Optional[str] = None
+
+
 @router.post("/text/{production_id}/mark-exported")
-async def mark_production_exported(production_id: int):
-    """Mark a production text as exported to eBL."""
+async def mark_production_exported(production_id: int, dto: Optional[MarkExportedDto] = None):
+    """Mark a production text as exported to eBL.
+
+    When the client supplies the actual eBL fragment number used for the
+    export, persist it on the production text so subsequent flows (e.g.,
+    lemmatization export) can default to the same id."""
     prod_text = production_texts_handler.get_by_id(production_id)
     if not prod_text:
         raise HTTPException(status_code=404, detail="Production text not found")
 
-    # Update the is_exported flag
     updated = production_texts_handler.mark_exported(production_id, True)
     if not updated:
         raise HTTPException(status_code=500, detail="Failed to mark as exported")
 
-    return {"success": True, "is_exported": True}
+    fragment_number = (dto.ebl_fragment_number if dto else "") or ""
+    if fragment_number:
+        production_texts_handler.update_field(production_id, "ebl_fragment_number", fragment_number)
+
+    return {"success": True, "is_exported": True, "ebl_fragment_number": fragment_number}
 
 
-@router.get("/sources/{identifier}")
+@router.get("/sources/{identifier:path}")
 async def get_sources_by_identifier(identifier: str):
     """
     Get all training data parts for a given identifier with their content.
     Used when creating a new production text.
     Returns sources (transliterations) and translations separately.
+
+    The `:path` converter is required because museum-number identifiers can
+    contain slashes (e.g. "MS.3176/2"). Without it FastAPI splits the path
+    and 404s with the trailing segment as orphaned.
     """
     texts = global_new_text_handler.list_texts(limit=0)
 

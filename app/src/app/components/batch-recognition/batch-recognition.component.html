@@ -26,7 +26,7 @@
         <button mat-stroked-button class="browse-server-btn" (click)="browseSource()">
           <mat-icon>folder_open</mat-icon> Browse Server
         </button>
-        <button mat-stroked-button class="upload-folder-btn" (click)="uploadFolder.click()"
+        <button mat-stroked-button class="upload-folder-btn" (click)="pickLocalFolder(uploadFolder)"
                 matTooltip="Select a local folder of images">
           <mat-icon>snippet_folder</mat-icon> Upload Folder
         </button>
@@ -133,7 +133,7 @@
             <mat-icon>close</mat-icon>
           </button>
         </div>
-        <button mat-stroked-button (click)="destFolderInput.click()" *ngIf="!destinationFolderPath" class="browse-btn">
+        <button mat-stroked-button (click)="pickDestinationFolder(destFolderInput)" *ngIf="!destinationFolderPath" class="browse-btn">
           <mat-icon>folder_open</mat-icon> Select Folder
         </button>
         <input #destFolderInput (change)="handleDestinationFolderInput($event)" type="file"
@@ -160,11 +160,17 @@
            matTooltip="Click to view report">
         <div class="progress-header">
           <span class="progress-label">{{ status.source_project_name || 'Processing...' }} ({{ status.model }})</span>
-          <span class="progress-count">{{ status.current_image }} / {{ status.total_images }}</span>
+          <span class="progress-count" *ngIf="status.execution_mode !== 'batch_api'">{{ status.current_image }} / {{ status.total_images }}</span>
+          <span class="progress-count" *ngIf="status.execution_mode === 'batch_api'">{{ getStatusLabel(status.status) }}</span>
         </div>
-        <mat-progress-bar [mode]="status.status === 'pending' ? 'indeterminate' : 'determinate'" [value]="status.progress_percent"></mat-progress-bar>
+        <mat-progress-bar
+          [mode]="(status.status === 'pending' || status.status === 'submitting' || status.status === 'batch_submitted' || status.status === 'collecting') ? 'indeterminate' : 'determinate'"
+          [value]="status.progress_percent"></mat-progress-bar>
+        <div class="progress-detail batch-detail" *ngIf="status.execution_mode === 'batch_api' && status.status === 'batch_submitted'">
+          Submitted to {{ status.provider | titlecase }} — results collected automatically within ~24h. You can close this page.
+        </div>
         <div class="progress-detail" *ngIf="status.current_filename">
-          {{ status.status === 'pending' ? status.current_filename : 'Current: ' + status.current_filename }}
+          {{ (status.status === 'pending' || status.status === 'submitting') ? status.current_filename : 'Current: ' + status.current_filename }}
         </div>
         <button mat-stroked-button color="warn" (click)="cancelBatch(jobId); $event.stopPropagation()" class="cancel-btn">
           <mat-icon>stop</mat-icon> Cancel
@@ -405,12 +411,40 @@
         </mat-select>
       </mat-form-field>
     </div>
+
+    <!-- Processing mode: Live vs async Batch API (cloud providers only) -->
+    <div class="exec-mode-section" *ngIf="supportsBatchApi()">
+      <label class="config-label">Processing</label>
+      <div class="exec-mode-toggle">
+        <button type="button" class="exec-mode-btn"
+                [class.active]="executionMode === 'live'"
+                (click)="executionMode = 'live'">
+          <mat-icon>bolt</mat-icon>
+          <span class="exec-mode-title">Live</span>
+          <span class="exec-mode-sub">Real-time</span>
+        </button>
+        <button type="button" class="exec-mode-btn"
+                [class.active]="executionMode === 'batch_api'"
+                (click)="executionMode = 'batch_api'">
+          <mat-icon>schedule_send</mat-icon>
+          <span class="exec-mode-title">Batch API</span>
+          <span class="exec-mode-sub">Async · 50% off</span>
+        </button>
+      </div>
+      <p class="exec-mode-hint" *ngIf="executionMode === 'batch_api'">
+        Submits the whole job to the provider and collects results asynchronously (up to ~24h)
+        at half price, with no per-minute rate limits. You can close this page — it keeps running.
+      </p>
+    </div>
+
     <!-- Start Button -->
     <button mat-raised-button color="primary" class="start-btn"
             [disabled]="!canStart"
             (click)="startBatch()">
-      <mat-icon>{{ isStarting ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
-      {{ isStarting ? 'Starting...' : 'Start Batch' }}
+      <mat-icon>{{ isStarting ? 'hourglass_empty' : (supportsBatchApi() && executionMode === 'batch_api' ? 'schedule_send' : 'play_arrow') }}</mat-icon>
+      {{ isStarting
+          ? 'Starting...'
+          : (supportsBatchApi() && executionMode === 'batch_api' ? 'Submit Batch Job' : 'Start Batch') }}
     </button>
 
     </div><!-- /settings tab -->

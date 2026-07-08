@@ -657,7 +657,7 @@
     </button>
     <div class="toolbar-divider" *ngIf="!isLoadedFromServer && !viewOnly"></div>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
-            (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (double-click-hold to draw)">
+            (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (Alt+Z, double-click-hold to draw)">
       <mat-icon>pan_tool</mat-icon>
     </button>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Add"
@@ -702,13 +702,18 @@
     </button>
     <mat-menu #guideMenu="matMenu" class="guide-dropdown">
       <div class="guide-panel" (click)="$event.stopPropagation()">
+        <!-- Line 1: default fuchsia + 7 common preset chips. Fixed set,
+             always 8 chips wide. -->
         <div class="guide-panel-row">
           <label>Color</label>
           <div class="guide-panel-colors">
-            <input type="color" class="guide-color-input"
-                   [value]="canvas?.guideHexColor || '#ffa500'"
-                   (input)="canvas?.onGuideColorInput($event)">
-            <button class="guide-swatch" *ngFor="let preset of guideColorPresets"
+            <button class="guide-swatch"
+                    [style.background-color]="guideLineService.DEFAULT_COLOR"
+                    [class.active]="canvas?.guideColor === guideLineService.DEFAULT_COLOR"
+                    (click)="canvas?.setSelectedGuideColor(guideLineService.DEFAULT_COLOR)"
+                    matTooltip="Default (fuchsia)">
+            </button>
+            <button class="guide-swatch" *ngFor="let preset of guideLineService.COMMON_PRESETS"
                     [style.background-color]="preset.color"
                     [class.active]="canvas?.guideColor === preset.color"
                     (click)="canvas?.setSelectedGuideColor(preset.color)"
@@ -716,11 +721,47 @@
             </button>
           </div>
         </div>
+        <!-- Line 2: recent colors (MRU, persisted in localStorage, max 8).
+             Hidden entirely when empty so the popover doesn't show a blank
+             row on first use. -->
+        <div class="guide-panel-row" *ngIf="guideLineService.getRecentColors().length > 0">
+          <label>Recent</label>
+          <div class="guide-panel-colors">
+            <button class="guide-swatch" *ngFor="let c of guideLineService.getRecentColors()"
+                    [style.background-color]="c"
+                    [class.active]="canvas?.guideColor === c"
+                    (click)="canvas?.setSelectedGuideColor(c)"
+                    [matTooltip]="'Recent: ' + c">
+            </button>
+          </div>
+        </div>
+        <!-- Custom-color picker: hex + alpha + Add. Nothing applies (or
+             pollutes recents) until the user clicks Add — fixes the "every
+             cursor move in the native picker spawns a recent" spam. -->
+        <div class="guide-panel-row">
+          <label>Custom</label>
+          <div class="guide-panel-field guide-custom-pick">
+            <input type="color" class="guide-color-input"
+                   [value]="canvas?.draftHex || '#ff00ff'"
+                   (input)="canvas?.setDraftHex($event)"
+                   matTooltip="Pick a color">
+            <input type="range" class="guide-range-input" min="0" max="100" step="5"
+                   [value]="canvas?.draftAlphaPct ?? 40"
+                   (input)="canvas?.setDraftAlphaPct($event)"
+                   matTooltip="Transparency">
+            <span class="guide-unit">{{ canvas?.draftAlphaPct ?? 40 }}%</span>
+            <button mat-stroked-button class="guide-add-btn"
+                    (click)="canvas?.applyDraftColor()"
+                    matTooltip="Add this color and use it">
+              Add
+            </button>
+          </div>
+        </div>
         <div class="guide-panel-row">
           <label>Stroke</label>
           <div class="guide-panel-field">
-            <input type="number" class="guide-num-input" min="1" max="12"
-                   [value]="canvas?.guideStrokeWidth || 3"
+            <input type="number" class="guide-num-input" min="1" max="40"
+                   [value]="canvas?.guideStrokeWidth || 20"
                    (change)="onGuideStrokeChange($event)">
             <span class="guide-unit">px</span>
           </div>
@@ -844,6 +885,37 @@
                       [matTooltip]="mode.description">
                 {{ mode.label }}
               </button>
+              <button class="mode-btn"
+                      [class.selected]="selectedOcrPrompt === 'custom'"
+                      (click)="selectedOcrPrompt = 'custom'"
+                      matTooltip="Write your own free-text prompt (sent verbatim to the VLM)">
+                <mat-icon style="font-size:16px;width:16px;height:16px;vertical-align:middle;">edit_note</mat-icon>
+                Custom
+              </button>
+            </div>
+            <div class="custom-prompt-area" *ngIf="selectedOcrPrompt === 'custom'">
+              <textarea [(ngModel)]="customOcrPrompt"
+                        rows="8"
+                        class="custom-prompt-textarea"
+                        placeholder="Write your full OCR prompt here. The model receives this verbatim. Tip: describe the output FORMAT, not example content — literal example lines (e.g. §3' content) tend to be echoed back by the model."></textarea>
+              <div class="custom-prompt-hint">
+                {{ customOcrPrompt.length }} chars
+                <span *ngIf="customOcrPrompt.trim().length < 30" class="warn"> · below 30 — will fall back to Plain preset</span>
+                <span class="muted"> · saved per-browser</span>
+                <button type="button" class="custom-prompt-preview-toggle" (click)="resetCustomOcrPrompt()"
+                        matTooltip="Replace the textarea with the bundled starter (assyriologist framing + safety rules)">
+                  <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;">restart_alt</mat-icon>
+                  Reset to default
+                </button>
+                <button type="button" class="custom-prompt-preview-toggle" (click)="toggleCustomPromptPreview()">
+                  <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;">{{ showCustomPromptPreview ? 'visibility_off' : 'visibility' }}</mat-icon>
+                  {{ showCustomPromptPreview ? 'Hide what gets sent' : 'Show what gets sent' }}
+                </button>
+              </div>
+              <details class="custom-prompt-preview" *ngIf="showCustomPromptPreview" open>
+                <summary>Exact text sent to the model</summary>
+                <pre>{{ customPromptPreview }}</pre>
+              </details>
             </div>
           </div>
 

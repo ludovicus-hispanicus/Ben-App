@@ -1,4 +1,5 @@
 .lemmatization-panel {
+    position: relative; // anchor for the .token-overlay child
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -83,6 +84,18 @@
         color: #c33;
     }
 
+    // Bulk-AI action — accent to match the AI suggestion chip colour.
+    &.ai-action {
+        border-color: #4dd0e1;
+        color: #00838f;
+
+        mat-icon { color: #00acc1; }
+
+        &:hover:not(:disabled) {
+            background: #e0f7fa;
+        }
+    }
+
     &.small {
         padding: 2px 8px;
         font-size: 11px;
@@ -140,6 +153,7 @@
 // ── Token lines ──
 
 .lemma-lines {
+    position: relative; // anchor for the .token-overlay child
     overflow-y: auto;
     padding: 8px 0;
     max-height: calc(100vh - 180px);
@@ -147,6 +161,7 @@
 
 .lemma-line {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     padding: 4px 12px;
     min-height: 28px;
@@ -161,6 +176,35 @@
             font-style: italic;
             padding: 2px 0;
         }
+    }
+}
+
+// English translation shown beneath a text line's token chips. flex-basis
+// forces it onto its own row; the left margin aligns it under the chips
+// (matching the .line-number column width).
+.line-translation {
+    flex-basis: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-left: 40px;
+    margin-top: 3px;
+    color: #5a6b7a;
+    font-size: 12px;
+    font-style: italic;
+    line-height: 1.35;
+
+    .tr-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        margin-top: 1px;
+        opacity: 0.6;
+    }
+
+    .tr-text {
+        flex: 1;
     }
 }
 
@@ -232,6 +276,19 @@
         .token-lemma { color: #9c27b0; font-style: italic; }
     }
 
+    // AI suggestion — distinct from ORACC import suggestions so the user
+    // can tell at a glance which assignments came from the bulk AI run.
+    // Teal/cyan keeps it readable next to green (assigned), purple (ORACC),
+    // and blue (dictionary suggestion).
+    &.ai_suggestion {
+        background: #e0f7fa;
+        border-color: #4dd0e1;
+        border-style: dashed;
+
+        .token-text { color: #00838f; }
+        .token-lemma { color: #00acc1; font-style: italic; }
+    }
+
     &.unmatched {
         background: #fde8e8;
         border-color: #ef9a9a;
@@ -251,9 +308,23 @@
         box-shadow: 0 0 0 1px #1976d2;
     }
 
+    // Persistent "you were here" marker — shows on the last token the user
+    // opened in the overlay, after the overlay is closed. Amber outline so
+    // it doesn't get confused with the active blue selection.
+    &.last-selected {
+        border-color: #ffa000;
+        box-shadow: 0 0 0 1px #ffa000, 0 0 0 3px rgba(255, 160, 0, 0.18);
+        animation: last-selected-pulse 1.2s ease-out 1;
+    }
+
     &:hover:not(.skip) {
         border-color: #999;
     }
+}
+
+@keyframes last-selected-pulse {
+    0%   { box-shadow: 0 0 0 1px #ffa000, 0 0 0 8px rgba(255, 160, 0, 0.35); }
+    100% { box-shadow: 0 0 0 1px #ffa000, 0 0 0 3px rgba(255, 160, 0, 0.18); }
 }
 
 // ── Empty state ──
@@ -280,7 +351,8 @@
 }
 
 // ── Token popup ──
-
+// Legacy floating popup (no longer used; kept for backwards compatibility
+// in case some flow still references the class). The new overlay is below.
 .token-popup {
     position: fixed;
     z-index: 1000;
@@ -292,6 +364,471 @@
     max-width: 400px;
     max-height: 400px;
     overflow-y: auto;
+}
+
+// Dropdown overlay — appears directly below the clicked line. 80% of the
+// lemma panel width, centered horizontally. `top` is set inline from popupY;
+// height is bounded by `max-height` so it never runs off the panel.
+.token-overlay {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    z-index: 50;
+    max-height: 60vh;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    animation: overlay-fade-in 0.15s ease-out;
+}
+
+@keyframes overlay-fade-in {
+    from { transform: translateY(-6px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    background: #f5f5f5;
+    flex-shrink: 0;
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .popup-token {
+        font-weight: bold;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .popup-cleaned {
+        color: #888;
+        font-size: 12px;
+    }
+
+    .popup-complex {
+        font-size: 11px;
+        color: #e65100;
+        background: rgba(230, 81, 0, 0.08);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .popup-enclitic {
+        font-size: 11px;
+        color: #6a1b9a;
+        background: rgba(106, 27, 154, 0.08);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    .popup-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: #c62828;
+        cursor: pointer;
+
+        mat-icon {
+            font-size: 14px;
+            width: 14px;
+            height: 14px;
+        }
+
+        &:hover {
+            background: rgba(198, 40, 40, 0.06);
+        }
+    }
+
+    .popup-close {
+        background: none;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        padding: 2px;
+
+        mat-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+        }
+
+        &:hover { color: #333; }
+    }
+}
+
+.overlay-section {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.overlay-columns {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: #fff;
+}
+
+.ai-suggest-section {
+    background: #faf8ff;
+    border-bottom: 1px solid #e0d8ff;
+
+    .ai-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ai-model-controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ai-model-select {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #5e35b1;
+
+        select {
+            padding: 2px 4px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 11px;
+            background: #fff;
+            color: #333;
+
+            &:disabled { opacity: 0.5; cursor: not-allowed; }
+        }
+    }
+
+    .ai-apikey-row {
+        margin: 4px 0 6px;
+    }
+
+    .ai-apikey-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #5e35b1;
+    }
+
+    .ai-apikey-input {
+        flex: 1;
+        padding: 3px 6px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        font-size: 11px;
+        background: #fff;
+        color: #333;
+        font-family: inherit;
+
+        &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    .popup-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #5e35b1;
+
+        .ai-icon {
+            font-size: 14px;
+            width: 14px;
+            height: 14px;
+        }
+    }
+
+    .ai-prompt-textarea {
+        width: 100%;
+        margin: 6px 0;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    .ai-actions {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+
+    .ai-submit-btn,
+    .ai-cancel-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        border: 1px solid transparent;
+
+        mat-icon {
+            font-size: 14px;
+            width: 14px;
+            height: 14px;
+        }
+    }
+
+    .ai-submit-btn {
+        background: #5e35b1;
+        color: #fff;
+        border-color: #5e35b1;
+
+        &:hover:not([disabled]) { background: #4527a0; }
+        &[disabled] { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    .ai-cancel-btn {
+        background: #fff;
+        color: #555;
+        border-color: #ccc;
+
+        &:hover { background: #f5f5f5; }
+    }
+
+    .ai-response {
+        margin-top: 6px;
+        padding: 8px;
+        background: #fff;
+        border: 1px solid #e0d8ff;
+        border-radius: 4px;
+        max-height: 320px;
+        overflow-y: auto;
+    }
+
+    .ai-response-label {
+        font-size: 10px;
+        color: #5e35b1;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        position: sticky;
+        top: 0;
+        background: #fff;
+        padding-bottom: 2px;
+    }
+
+    .ai-response-text {
+        display: block;
+        font-family: inherit;
+        font-size: 12px;
+        color: #333;
+        line-height: 1.5;
+
+        // ngx-markdown emits standard html — give the inner blocks a sane look
+        :first-child { margin-top: 0; }
+        :last-child  { margin-bottom: 0; }
+
+        h1, h2, h3, h4, h5, h6 {
+            margin: 6px 0 3px;
+            font-weight: 600;
+            color: #333;
+            line-height: 1.3;
+        }
+        h1 { font-size: 12px; }
+        h2 { font-size: 12px; }
+        h3, h4, h5, h6 { font-size: 11px; }
+
+        p { margin: 4px 0; }
+
+        ul, ol { margin: 4px 0; padding-left: 18px; }
+        li { margin: 2px 0; }
+
+        code {
+            background: #f3f0fa;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        pre {
+            background: #f3f0fa;
+            padding: 6px 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 4px 0;
+
+            code {
+                background: transparent;
+                padding: 0;
+            }
+        }
+
+        blockquote {
+            margin: 4px 0;
+            padding: 2px 8px;
+            border-left: 3px solid #d1c4e9;
+            color: #555;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: 4px 0;
+            font-size: 11px;
+        }
+        th, td {
+            border: 1px solid #e0d8ff;
+            padding: 3px 6px;
+            text-align: left;
+        }
+    }
+}
+
+.popup-action.ai-action {
+    border-color: #d1c4e9;
+    color: #5e35b1;
+
+    &:hover {
+        background: rgba(94, 53, 177, 0.08);
+    }
+
+    &.active {
+        background: #ede7f6;
+        border-color: #5e35b1;
+    }
+}
+
+.add-column-btn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    align-self: stretch;
+    flex: 0 0 64px;
+    border: 1px dashed #bbb;
+    background: #fafafa;
+    color: #666;
+    cursor: pointer;
+    margin: 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    transition: all 0.15s;
+    user-select: none;
+
+    mat-icon {
+        font-size: 22px;
+        width: 22px;
+        height: 22px;
+    }
+
+    &:hover {
+        background: #e8f5e9;
+        border-color: #4caf50;
+        color: #2e7d32;
+    }
+}
+
+.overlay-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 240px;
+    flex: 1 1 240px;
+    border-right: 1px solid #eee;
+    overflow-y: auto;
+    padding-bottom: 8px;
+
+    &:last-child {
+        border-right: none;
+    }
+
+    .column-header {
+        padding: 8px 12px;
+        background: #fafafa;
+        border-bottom: 1px solid #eee;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .column-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .column-current {
+        padding: 6px 12px;
+    }
+
+    .column-subhead {
+        padding: 6px 12px 2px;
+        font-size: 10px;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .column-search {
+        padding: 6px 12px 0;
+    }
+
+    .suffix-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 0 12px 6px;
+    }
+
+    .suffix-option-btn {
+        display: inline-block;
+        border: 1px solid #ccc;
+        background: white;
+        border-radius: 3px;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.15s;
+        user-select: none;
+
+        &:hover {
+            background: #e8f5e9;
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+    }
 }
 
 .popup-header {
@@ -370,20 +907,62 @@
     flex-wrap: wrap;
     gap: 4px;
     padding: 4px 12px;
+}
 
-    .assigned-lemma {
-        background: #e8f5e9;
-        border: 1px solid #a5d6a7;
+// Used in both the legacy popup (.current-lemmas) and the new overlay
+// columns (.column-current). Top-level so it applies in either context.
+.assigned-lemma {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+    color: #2e7d32;
+    padding: 2px 4px 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+
+    .remove-part {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
         color: #2e7d32;
-        padding: 2px 8px;
-        border-radius: 3px;
-        font-size: 12px;
+        cursor: pointer;
+        padding: 0;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        opacity: 0.65;
+        margin-left: 2px;
+
+        mat-icon {
+            font-size: 14px;
+            width: 14px;
+            height: 14px;
+            line-height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        &:hover {
+            opacity: 1;
+            background: rgba(46, 125, 50, 0.15);
+        }
     }
 }
 
 // ATF import suggestion section
 .atf-suggestion-section {
     background: #faf4fc;
+
+    // AI suggestions reuse the same section but switch the accent to teal
+    // so the user can tell at a glance which source produced the suggestion.
+    &.is-ai {
+        background: #e8f8fb;
+    }
 
     .atf-import-badge {
         display: inline-block;
@@ -397,6 +976,10 @@
         letter-spacing: 0.5px;
         margin-right: 4px;
         vertical-align: middle;
+
+        &.is-ai {
+            background: #00838f;
+        }
     }
 }
 

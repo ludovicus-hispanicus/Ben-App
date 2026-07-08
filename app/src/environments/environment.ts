@@ -10,7 +10,8 @@
 
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:5003/api/v1'
+  // Dev backend port — must match PYTHON_SERVER_PORT in electron/main.js (5001).
+  apiUrl: 'http://localhost:5001/api/v1'
 }
 /*
  * For easier debugging in development mode, you can import the following file

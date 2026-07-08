@@ -10,6 +10,10 @@ export interface GroupedText {
     has_production_text: boolean;
     production_id: number | null;
     is_exported: boolean;
+    // Labels from production_text.uploaded_images[].label — the no-OCR image
+    // path stores its label here rather than on a training text, so it has to
+    // be surfaced separately for the AddText dialog's chip list.
+    uploaded_image_labels?: string[];
 }
 
 export interface PartInfo {
@@ -57,6 +61,7 @@ export interface ProductionText {
     last_modified: string;
     uploader_id: string;
     notes: string;
+    ebl_fragment_number?: string;
 }
 
 export interface SourceTextContent {
@@ -112,6 +117,20 @@ export class ProductionService {
      */
     getProductionText(productionId: number): Observable<ProductionText> {
         return this.http.get<ProductionText>(`${environment.apiUrl}${this.baseUrl}/text/${productionId}`);
+    }
+
+    /**
+     * Find an existing production text by its identifier (museum / p_number /
+     * publication). Returns 404 if there is no saved record yet — that is an
+     * expected branch (the caller falls back to source-merge), so we mark the
+     * request silent to keep the global error interceptor from toasting it.
+     */
+    findProductionTextByIdentifier(identifier: string, identifierType: string): Observable<ProductionText> {
+        const url = `${environment.apiUrl}${this.baseUrl}/text/by-identifier`;
+        return this.http.get<ProductionText>(url, {
+            params: { identifier, type: identifierType },
+            headers: { 'X-Silent-Errors': '1' },
+        });
     }
 
     /**
@@ -234,12 +253,14 @@ export class ProductionService {
     }
 
     /**
-     * Mark a production text as exported to eBL.
+     * Mark a production text as exported to eBL. Optionally persist the
+     * actual eBL fragment number used for the export so subsequent flows
+     * (e.g., lemmatization export) can reuse it.
      */
-    markExported(productionId: number): Observable<{ success: boolean; is_exported: boolean }> {
-        return this.http.post<{ success: boolean; is_exported: boolean }>(
+    markExported(productionId: number, eblFragmentNumber?: string): Observable<{ success: boolean; is_exported: boolean; ebl_fragment_number?: string }> {
+        return this.http.post<{ success: boolean; is_exported: boolean; ebl_fragment_number?: string }>(
             `${environment.apiUrl}${this.baseUrl}/text/${productionId}/mark-exported`,
-            {}
+            { ebl_fragment_number: eblFragmentNumber || '' }
         );
     }
 

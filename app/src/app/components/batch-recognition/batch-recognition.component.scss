@@ -1195,6 +1195,74 @@
   margin-top: 8px;
 }
 
+// ============== Processing mode toggle (Live vs Batch API) ==============
+.exec-mode-section {
+  margin-top: 16px;
+}
+
+.exec-mode-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.exec-mode-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  .exec-mode-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .exec-mode-sub {
+    font-size: 11px;
+    color: #888;
+  }
+
+  &:hover {
+    border-color: #b0b0b0;
+    background: #f0f0f0;
+  }
+
+  &.active {
+    border-color: #7e57c2;
+    background: #f3edfb;
+    color: #5e35b1;
+
+    .exec-mode-sub {
+      color: #7e57c2;
+    }
+  }
+}
+
+.exec-mode-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #777;
+}
+
+.progress-detail.batch-detail {
+  color: #7e57c2;
+  font-weight: 500;
+}
+
 // ============== Usage Tab ==============
 
 .usage-tab {

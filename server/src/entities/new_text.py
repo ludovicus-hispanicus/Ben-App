@@ -102,6 +102,24 @@ class NewText(DbModel):
     label: str = ""  # Legacy — migrated to labels on read
     part: str = ""
     dataset_id: Optional[int] = None
+    # Column (a/b) of the source snippet on its dictionary page. Stamped once
+    # from the manifest that was correct at creation/backfill time, so it stays
+    # right even if a later snippet re-extraction renumbers the source folder
+    # (which decouples the `publication_id` filename from the actual snippet).
+    column: Optional[str] = None
+    # Page-relative normalized center (0..1) of the source snippet, also stamped
+    # from the manifest. `y` gives within-column vertical order so dictionary
+    # entries can be assembled from the records alone — sort by (page, column, y)
+    # — without re-joining the (renumber-prone) snippet manifest. `x` lets column
+    # be re-derived/verified (a if x < 0.5 else b).
+    x: Optional[float] = None
+    y: Optional[float] = None
+    # True snippet class (header/meaning/discussion/bilingualLexical/refEntry/
+    # partMeaning/…) from the manifest's class_name. The class encoded in the
+    # `publication_id` filename can be wrong (the OCR app and the YOLO detector
+    # disagree on some blocks), which misdrives entry merging — so merging should
+    # read `block_class`, not the identifier. Stamped like column at OCR time.
+    block_class: Optional[str] = None
 
     @property
     def effective_labels(self) -> List[str]:

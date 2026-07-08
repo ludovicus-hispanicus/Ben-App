@@ -170,9 +170,19 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
   private guideStartPoint: { x: number; y: number } | null = null;
   private guidePreviewLine: fabric.Line | null = null;
   public selectedGuideId: string | null = null;
-  public guideColor: string = 'rgba(255, 165, 0, 0.4)';
-  public guideHexColor: string = '#ffa500';
-  public guideStrokeWidth: number = 3;
+  public guideColor: string = 'rgba(255, 0, 255, 0.4)';
+  public guideHexColor: string = '#ff00ff';
+  public guideStrokeWidth: number = 20;
+
+  // ── Custom-color picker draft state ───────────────────────────────────
+  // The native `<input type="color">` fires `input` on every cursor move
+  // inside the OS picker, which used to spam the recent-colors list with
+  // every transient hue the user passed through. Now the picker only
+  // mutates these draft fields; nothing is applied (and nothing lands in
+  // recents) until the user clicks the Add button. The alpha lives here
+  // as a 0–100 percentage so the slider can bind to it directly.
+  public draftHex: string = '#ff00ff';
+  public draftAlphaPct: number = 40;
 
   constructor(
     private cdref: ChangeDetectorRef,
@@ -1312,9 +1322,18 @@ setGuideMode(): void {
   this.canvas.defaultCursor = 'crosshair';
   this.guideDrawState = 'idle';
   this.guideStartPoint = null;
+  // Unfreeze any guides left in a half-drawn state from a previous
+  // session (e.g. user clicked once, switched modes, came back). No-op
+  // when nothing is frozen.
+  this._freezeGuidesForDrawing(false);
 
-  // Show existing guide handles
-  this.guides.forEach(g => this.showGuideHandles(g.data.id, true));
+  // Only the currently-selected guide (if any) shows its handles. Showing
+  // handles for every existing guide on mode entry made loaded lines look
+  // like they were all "activated" — the user couldn't tell which one
+  // their next color/opacity/stroke change would apply to.
+  this.guides.forEach(g => {
+    this.showGuideHandles(g.data.id, this.selectedGuideId === g.data.id);
+  });
 
   const self = this;
 
@@ -1340,22 +1359,36 @@ setGuideMode(): void {
     const pointer = this.canvas.getPointer(opt.e);
     const target = opt.target;
 
-    // Click on a guide handle (circle with guideId data)
-    if (target && target.data && target.data.guideId && target.data.handleType) {
-      this.selectGuide(target.data.guideId);
-      return;  // Let fabric handle the drag
-    }
+    // While drawing, the second click MUST complete the line — don't let
+    // it get hijacked into selecting whatever guide happens to live under
+    // the endpoint. At 20px stroke + 5px handles the catchment area is
+    // large, so finishing a line near another guide's endpoint used to
+    // silently select that other guide instead of placing the new one.
+    if (this.guideDrawState !== 'placing') {
+      // Click on a guide handle (circle with guideId data)
+      if (target && target.data && target.data.guideId && target.data.handleType) {
+        this.selectGuide(target.data.guideId);
+        return;  // Let fabric handle the drag
+      }
 
-    // Click on a guide path
-    if (target && target.data && target.data.guideId && target.data.type === 'guidePath') {
-      this.selectGuide(target.data.guideId);
-      return;
+      // Click on a guide path
+      if (target && target.data && target.data.guideId && target.data.type === 'guidePath') {
+        this.selectGuide(target.data.guideId);
+        return;
+      }
     }
 
     // Drawing: first click sets start, second click sets end
     if (this.guideDrawState === 'idle') {
       this.guideStartPoint = { x: pointer.x, y: pointer.y };
       this.guideDrawState = 'placing';
+
+      // Freeze all existing guides while drawing so they can't intercept
+      // the second click (or change the cursor away from crosshair). With
+      // 20px paths + 5px handles, the catchment area is large enough that
+      // landing the endpoint near a sibling guide's endpoint used to get
+      // hijacked into "select that guide" instead of completing the line.
+      this._freezeGuidesForDrawing(true);
 
       // Create preview line
       this.guidePreviewLine = new fabric.Line(
@@ -1378,6 +1411,10 @@ setGuideMode(): void {
         pointer.x, pointer.y,
         this.guideColor, this.guideStrokeWidth
       );
+      // Restore interactivity on the previously-frozen guides BEFORE
+      // adding the new one — otherwise the new guide's own path/handles
+      // would also start out frozen.
+      this._freezeGuidesForDrawing(false);
       this.addGuideToCanvas(guide);
       this.selectGuide(guide.id);
 
@@ -1450,30 +1487,31 @@ addGuideToCanvas(guide: GuideLineData): void {
 
   this.canvas.add(path);
 
-  // Create control point handles
+  // Create control point handles — they inherit the guide's color so
+  // the user can tell at a glance which guide they're editing.
   const handles: fabric.Object[] = [];
   guide.points.forEach((pt, ptIdx) => {
     // On-curve point
-    const anchor = this.createGuideHandle(pt.x, pt.y, guide.id, 'anchor', ptIdx);
+    const anchor = this.createGuideHandle(pt.x, pt.y, guide.id, 'anchor', ptIdx, guide.color);
     handles.push(anchor);
     this.canvas.add(anchor);
 
     // cpBefore handle
     if (pt.cpBefore) {
-      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guide.id, 'cpBefore', ptIdx);
+      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guide.id, 'cpBefore', ptIdx, guide.color);
       handles.push(cpb);
       this.canvas.add(cpb);
       // Connector line from anchor to cpBefore
-      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guide.id, 'connBefore', ptIdx);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guide.id, 'connBefore', ptIdx, guide.color);
       handles.push(line);
       this.canvas.add(line);
     }
     // cpAfter handle
     if (pt.cpAfter) {
-      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guide.id, 'cpAfter', ptIdx);
+      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guide.id, 'cpAfter', ptIdx, guide.color);
       handles.push(cpa);
       this.canvas.add(cpa);
-      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guide.id, 'connAfter', ptIdx);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guide.id, 'connAfter', ptIdx, guide.color);
       handles.push(line);
       this.canvas.add(line);
     }
@@ -1483,15 +1521,35 @@ addGuideToCanvas(guide: GuideLineData): void {
   this.canvas.renderAll();
 }
 
+// Handle circle radii. Used both when sizing the handles and when
+// insetting the connector line endpoints so they touch the circle margin
+// instead of passing through the centers.
+private static readonly _ANCHOR_RADIUS = 5;
+private static readonly _CP_RADIUS = 4;
+
 /** Create a small draggable circle handle for a guide control point. */
-private createGuideHandle(x: number, y: number, guideId: string, handleType: string, ptIndex: number): fabric.Circle {
+private createGuideHandle(x: number, y: number, guideId: string, handleType: string, ptIndex: number, color?: string): fabric.Circle {
   const isAnchor = handleType === 'anchor';
+  // The anchor stays in the solid guide color (it represents a point on
+  // the path itself). The CP handle takes the same color the connector
+  // line uses — luminance-flipped from the guide — so the connector +
+  // ring read as a single "stem with bulb at the end" visual and never
+  // blend into the path.
+  const fallback = color || this.guideColor;
+  const solid = this.solidifyColor(fallback);
+  const { stroke: cpStroke } = this._connectorColorFor(fallback);
+  const haloShadow = new fabric.Shadow({
+    color: 'rgba(0, 0, 0, 0.85)',
+    blur: 3,
+    offsetX: 0,
+    offsetY: 0,
+  });
   const circle = new fabric.Circle({
     left: x,
     top: y,
-    radius: isAnchor ? 5 : 4,
-    fill: isAnchor ? '#FF9800' : '#FFF',
-    stroke: '#FF9800',
+    radius: isAnchor ? FabricCanvasComponent._ANCHOR_RADIUS : FabricCanvasComponent._CP_RADIUS,
+    fill: isAnchor ? solid : '#FFF',
+    stroke: isAnchor ? solid : cpStroke,
     strokeWidth: 1.5,
     strokeUniform: true,
     originX: 'center',
@@ -1501,6 +1559,7 @@ private createGuideHandle(x: number, y: number, guideId: string, handleType: str
     hasBorders: false,
     hasControls: false,
     objectCaching: false,
+    shadow: haloShadow,
     data: { guideId, handleType, ptIndex },
   });
 
@@ -1518,18 +1577,98 @@ private createGuideHandle(x: number, y: number, guideId: string, handleType: str
   return circle;
 }
 
-/** Create a thin line connecting an anchor to its control handle. */
+/** Create a thin line connecting an anchor to its control handle. The
+ *  line endpoints are inset by each circle's radius so the line ends at
+ *  the margin of the anchor and CP circles instead of passing through
+ *  their centers — same convention Illustrator/Photoshop use, and makes
+ *  it visually obvious which CP a connector belongs to. */
 private createHandleConnector(x1: number, y1: number, x2: number, y2: number,
-                              guideId: string, connType: string, ptIndex: number): fabric.Line {
-  return new fabric.Line([x1, y1, x2, y2], {
-    stroke: 'rgba(255, 152, 0, 0.5)',
-    strokeWidth: 1,
+                              guideId: string, connType: string, ptIndex: number,
+                              color?: string): fabric.Line {
+  const base = color || this.guideColor;
+  const { stroke, halo } = this._connectorColorFor(base);
+  const seg = this._insetLine(
+    x1, y1, x2, y2,
+    FabricCanvasComponent._ANCHOR_RADIUS,
+    FabricCanvasComponent._CP_RADIUS,
+  );
+  return new fabric.Line([seg.x1, seg.y1, seg.x2, seg.y2], {
+    stroke,
+    strokeWidth: 1.5,
+    shadow: new fabric.Shadow({ color: halo, blur: 2, offsetX: 0, offsetY: 0 }),
     strokeUniform: true,
     selectable: false,
     evented: false,
     objectCaching: false,
     data: { guideId, handleType: connType, ptIndex },
   });
+}
+
+/** Pull a line segment's endpoints inward by r1/r2 along its own direction.
+ *  Returns a collapsed (zero-length) segment at the midpoint when the two
+ *  circles overlap, so fabric doesn't render a line passing back through
+ *  itself when the user drags a CP onto its anchor. */
+private _insetLine(x1: number, y1: number, x2: number, y2: number,
+                   r1: number, r2: number): { x1: number; y1: number; x2: number; y2: number } {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < r1 + r2 || len === 0) {
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    return { x1: mx, y1: my, x2: mx, y2: my };
+  }
+  const ux = dx / len;
+  const uy = dy / len;
+  return {
+    x1: x1 + ux * r1,
+    y1: y1 + uy * r1,
+    x2: x2 - ux * r2,
+    y2: y2 - uy * r2,
+  };
+}
+
+/** Pick a connector stroke + halo that contrasts with the guide color.
+ *  Returns the guide's hue shifted toward dark or light depending on the
+ *  perceived luminance of the input — so the connector stays related to
+ *  the guide (kept the affordance) but never identical (no blending into
+ *  the path). Halo color flips so the connector itself stays readable. */
+private _connectorColorFor(color: string): { stroke: string; halo: string } {
+  // Parse R/G/B out of any hex / rgb() / rgba() input.
+  let r = 255, g = 0, b = 255;
+  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) {
+    r = +m[1]; g = +m[2]; b = +m[3];
+  } else {
+    const hex = color.startsWith('#') ? color.slice(1) : color;
+    const expanded = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+    if (/^[0-9a-fA-F]{6}$/.test(expanded)) {
+      r = parseInt(expanded.slice(0, 2), 16);
+      g = parseInt(expanded.slice(2, 4), 16);
+      b = parseInt(expanded.slice(4, 6), 16);
+    }
+  }
+  // ITU-R BT.601 luma — good enough for "is this perceived as light?".
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  let sr: number, sg: number, sb: number;
+  if (luma > 0.55) {
+    // Light guide → darken connector toward 25% brightness.
+    sr = Math.round(r * 0.30);
+    sg = Math.round(g * 0.30);
+    sb = Math.round(b * 0.30);
+  } else {
+    // Dark guide → lighten connector by mixing 65% toward white.
+    sr = Math.round(r + (255 - r) * 0.65);
+    sg = Math.round(g + (255 - g) * 0.65);
+    sb = Math.round(b + (255 - b) * 0.65);
+  }
+  // Halo flips relative to the connector's own lightness, not the guide's,
+  // since the connector is what needs framing against the background.
+  const connectorLuma = (0.299 * sr + 0.587 * sg + 0.114 * sb) / 255;
+  const halo = connectorLuma > 0.55
+    ? 'rgba(0, 0, 0, 0.85)'
+    : 'rgba(255, 255, 255, 0.9)';
+  return { stroke: `rgb(${sr}, ${sg}, ${sb})`, halo };
 }
 
 /** Handle dragging of a guide control point — update path in-place without rebuilding handles. */
@@ -1539,6 +1678,9 @@ private onGuideHandleDrag(guideId: string, handleType: string, ptIndex: number, 
 
   const pt = entry.data.points[ptIndex];
   if (!pt) return;
+
+  const RA = FabricCanvasComponent._ANCHOR_RADIUS;
+  const RC = FabricCanvasComponent._CP_RADIUS;
 
   if (handleType === 'anchor') {
     const dx = newX - pt.x;
@@ -1558,24 +1700,29 @@ private onGuideHandleDrag(guideId: string, handleType: string, ptIndex: number, 
         h.set({ left: pt.cpAfter.x, top: pt.cpAfter.y });
         h.setCoords();
       } else if (h.data.handleType === 'connBefore' && pt.cpBefore) {
-        (h as any).set({ x1: pt.x, y1: pt.y, x2: pt.cpBefore.x, y2: pt.cpBefore.y });
+        const s = this._insetLine(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, RA, RC);
+        (h as any).set({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 });
       } else if (h.data.handleType === 'connAfter' && pt.cpAfter) {
-        (h as any).set({ x1: pt.x, y1: pt.y, x2: pt.cpAfter.x, y2: pt.cpAfter.y });
+        const s = this._insetLine(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, RA, RC);
+        (h as any).set({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 });
       }
     });
   } else if (handleType === 'cpBefore') {
     pt.cpBefore = { x: newX, y: newY };
-    // Update connector line
+    // Update connector line — inset both endpoints so the line still
+    // touches the margin of the anchor + CP circles, not their centers.
     entry.handles.forEach(h => {
       if (h.data && h.data.ptIndex === ptIndex && h.data.handleType === 'connBefore') {
-        (h as any).set({ x2: newX, y2: newY });
+        const s = this._insetLine(pt.x, pt.y, newX, newY, RA, RC);
+        (h as any).set({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 });
       }
     });
   } else if (handleType === 'cpAfter') {
     pt.cpAfter = { x: newX, y: newY };
     entry.handles.forEach(h => {
       if (h.data && h.data.ptIndex === ptIndex && h.data.handleType === 'connAfter') {
-        (h as any).set({ x2: newX, y2: newY });
+        const s = this._insetLine(pt.x, pt.y, newX, newY, RA, RC);
+        (h as any).set({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 });
       }
     });
   }
@@ -1605,6 +1752,11 @@ private updateGuidePath(guideId: string): void {
   // Send path behind handles
   newPath.sendToBack();
   entry.path = newPath;
+  // Re-apply the selection glow if this is the currently-selected guide
+  // (the previous path object had it, but it was destroyed by the recreate).
+  if (this.selectedGuideId === guideId) {
+    this._applySelectionStyle(guideId, true);
+  }
   this.canvas.renderAll();
 }
 
@@ -1633,25 +1785,27 @@ private rebuildGuideVisuals(guideId: string): void {
   this.canvas.add(newPath);
   entry.path = newPath;
 
-  // Recreate handles
+  // Recreate handles — pass the guide's current color so the visuals stay
+  // in sync after a color change.
+  const guideColor = entry.data.color;
   entry.data.points.forEach((pt, ptIdx) => {
-    const anchor = this.createGuideHandle(pt.x, pt.y, guideId, 'anchor', ptIdx);
+    const anchor = this.createGuideHandle(pt.x, pt.y, guideId, 'anchor', ptIdx, guideColor);
     entry.handles.push(anchor);
     this.canvas.add(anchor);
 
     if (pt.cpBefore) {
-      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guideId, 'cpBefore', ptIdx);
+      const cpb = this.createGuideHandle(pt.cpBefore.x, pt.cpBefore.y, guideId, 'cpBefore', ptIdx, guideColor);
       entry.handles.push(cpb);
       this.canvas.add(cpb);
-      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guideId, 'connBefore', ptIdx);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpBefore.x, pt.cpBefore.y, guideId, 'connBefore', ptIdx, guideColor);
       entry.handles.push(line);
       this.canvas.add(line);
     }
     if (pt.cpAfter) {
-      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guideId, 'cpAfter', ptIdx);
+      const cpa = this.createGuideHandle(pt.cpAfter.x, pt.cpAfter.y, guideId, 'cpAfter', ptIdx, guideColor);
       entry.handles.push(cpa);
       this.canvas.add(cpa);
-      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guideId, 'connAfter', ptIdx);
+      const line = this.createHandleConnector(pt.x, pt.y, pt.cpAfter.x, pt.cpAfter.y, guideId, 'connAfter', ptIdx, guideColor);
       entry.handles.push(line);
       this.canvas.add(line);
     }
@@ -1660,6 +1814,10 @@ private rebuildGuideVisuals(guideId: string): void {
   // Show/hide handles based on selection
   const showHandles = this.selectedGuideId === guideId;
   entry.handles.forEach(h => h.set({ visible: showHandles, selectable: showHandles, evented: showHandles }));
+  // Re-apply selection glow to the rebuilt path if this is the active guide.
+  if (showHandles) {
+    this._applySelectionStyle(guideId, true);
+  }
 
   this.canvas.renderAll();
 }
@@ -1669,14 +1827,22 @@ selectGuide(guideId: string): void {
   // Deselect previous
   if (this.selectedGuideId && this.selectedGuideId !== guideId) {
     this.showGuideHandles(this.selectedGuideId, false);
+    this._applySelectionStyle(this.selectedGuideId, false);
   }
   this.selectedGuideId = guideId;
   this.showGuideHandles(guideId, true);
+  this._applySelectionStyle(guideId, true);
 
-  // Update guide color selector to match
+  // Update guide color selector to match the selected guide. Sync the
+  // Custom-picker draft too so the hex picker and alpha slider snap to
+  // what's actually on the canvas — without this, dragging the alpha
+  // slider starts from a stale value (the previous selection) rather than
+  // the selected guide's real opacity.
   const entry = this.guides.get(guideId);
   if (entry) {
     this.guideColor = entry.data.color;
+    this.guideHexColor = this.rgbaToHex(entry.data.color);
+    this.syncDraftFromColor(entry.data.color);
   }
   this.canvas.renderAll();
 }
@@ -1685,8 +1851,30 @@ selectGuide(guideId: string): void {
 deselectGuide(): void {
   if (this.selectedGuideId) {
     this.showGuideHandles(this.selectedGuideId, false);
+    this._applySelectionStyle(this.selectedGuideId, false);
     this.selectedGuideId = null;
     this.canvas.renderAll();
+  }
+}
+
+/** Toggle the selection-emphasis style on a guide's path. Adds a soft
+ *  white glow via fabric.Shadow so the user can tell at a glance which
+ *  line they're editing — visible handles alone are too small to spot
+ *  when several guides overlap or sit close together. */
+private _applySelectionStyle(guideId: string, selected: boolean): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+  if (selected) {
+    entry.path.set({
+      shadow: new fabric.Shadow({
+        color: 'rgba(255, 255, 255, 0.9)',
+        blur: 10,
+        offsetX: 0,
+        offsetY: 0,
+      }),
+    });
+  } else {
+    entry.path.set({ shadow: null as any });
   }
 }
 
@@ -1751,23 +1939,96 @@ private addControlPointAtClick(px: number, py: number): void {
   }
 }
 
-/** Update the color of the selected guide, or all guides if none selected. */
-setSelectedGuideColor(color: string): void {
+/** Update the color of the selected guide. When no guide is selected this
+ *  only updates the brush state (`guideColor`/`guideHexColor`/recents) for
+ *  the next-drawn line — existing guides are NOT touched. Previously the
+ *  "no selection" fallback would recolor every guide on the canvas, which
+ *  was confusing when the user opened an image with previously-drawn guides
+ *  and just wanted to set the color for their next line.
+ *
+ *  `trackRecent: false` skips the recent-strip update — used by live-
+ *  preview paths (dragging the alpha slider, scrubbing the picker) so
+ *  transient hues don't pollute recents. */
+setSelectedGuideColor(color: string, trackRecent: boolean = true): void {
   this.guideColor = color;
   this.guideHexColor = this.rgbaToHex(color);
-  const targets = this.selectedGuideId
-    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
-    : Array.from(this.guides.values());
-  if (!targets.length) return;
-  targets.forEach(entry => {
-    entry.data.color = color;
-    entry.path.set({ stroke: color });
-  });
+  if (trackRecent) {
+    this.guideLineService.addRecentColor(color);
+  }
+  if (!this.selectedGuideId) return;
+  const entry = this.guides.get(this.selectedGuideId);
+  if (!entry) return;
+  entry.data.color = color;
+  entry.path.set({ stroke: color });
+  // Refresh handle colors so they track the guide's new stroke color
+  // instead of staying on the previous (or hardcoded) hue.
+  this.refreshHandleColors(entry.data.id);
   this.canvas.renderAll();
   this.emitGuidesChanged();
 }
 
-/** Handle color picker input (hex → rgba). */
+/** Temporarily disable (or restore) interaction on every existing guide
+ *  path and handle. Called around the two-click guide-draw sequence so
+ *  the second click can land anywhere — even on top of a sibling guide's
+ *  thick stroke or visible handles — without fabric stealing the cursor
+ *  or the event. We snapshot the previous `evented`/`selectable` flags
+ *  per object so the restore call can put them back exactly as they were
+ *  (handles for non-selected guides are normally non-evented too). */
+private _frozenGuideObjects: Array<{ obj: fabric.Object; selectable: boolean; evented: boolean }> = [];
+private _freezeGuidesForDrawing(freeze: boolean): void {
+  if (freeze) {
+    this._frozenGuideObjects = [];
+    this.guides.forEach(entry => {
+      const objs: fabric.Object[] = [entry.path, ...entry.handles];
+      for (const obj of objs) {
+        this._frozenGuideObjects.push({
+          obj,
+          selectable: !!obj.selectable,
+          evented: !!obj.evented,
+        });
+        obj.set({ selectable: false, evented: false });
+      }
+    });
+  } else {
+    for (const snap of this._frozenGuideObjects) {
+      snap.obj.set({ selectable: snap.selectable, evented: snap.evented });
+    }
+    this._frozenGuideObjects = [];
+  }
+}
+
+/** Update the fill/stroke of an existing guide's handles in place — used
+ *  after a color change so we don't have to remove/recreate the fabric
+ *  objects (which would flicker and reset interaction state). */
+private refreshHandleColors(guideId: string): void {
+  const entry = this.guides.get(guideId);
+  if (!entry) return;
+  const color = entry.data.color;
+  const solid = this.solidifyColor(color);
+  // Connector gets a luminance-flipped tint + matching halo so it stays
+  // distinct from the path even when both share the guide's hue.
+  const { stroke: connectorStroke, halo: connectorHalo } = this._connectorColorFor(color);
+  for (const h of entry.handles) {
+    const data: any = (h as any).data || {};
+    const type = data.handleType;
+    if (type === 'anchor') {
+      h.set({ fill: solid, stroke: solid });
+    } else if (type === 'cpBefore' || type === 'cpAfter') {
+      // CP ring now shares the connector color (luminance-flipped from the
+      // guide) so the stem-and-bulb reads as one unit.
+      h.set({ stroke: connectorStroke });
+    } else if (type === 'connBefore' || type === 'connAfter') {
+      h.set({
+        stroke: connectorStroke,
+        shadow: new fabric.Shadow({ color: connectorHalo, blur: 2, offsetX: 0, offsetY: 0 }),
+      });
+    }
+  }
+}
+
+/** Handle color picker input (hex → rgba). DEPRECATED — left in place for
+ *  any external callers; new picker UI uses the draft methods below so we
+ *  no longer commit (and pollute recents) on every cursor wiggle. */
 onGuideColorInput(event: Event): void {
   const hex = (event.target as HTMLInputElement).value;
   this.guideHexColor = hex;
@@ -1778,35 +2039,107 @@ onGuideColorInput(event: Event): void {
   this.setSelectedGuideColor(rgba);
 }
 
+/** Update the draft hex and live-preview it on the selected guide (no
+ *  recents added — that only happens on Add). */
+setDraftHex(event: Event): void {
+  this.draftHex = (event.target as HTMLInputElement).value;
+  if (this.selectedGuideId) {
+    this.setSelectedGuideColor(this._draftToRgba(), false);
+  }
+}
+
+/** Update the draft alpha (0–100 from the slider) and live-preview it on
+ *  the selected guide so the user sees transparency change as they drag. */
+setDraftAlphaPct(event: Event): void {
+  const raw = (event.target as HTMLInputElement).value;
+  const n = parseInt(raw, 10);
+  if (!isNaN(n)) this.draftAlphaPct = Math.max(0, Math.min(100, n));
+  if (this.selectedGuideId) {
+    this.setSelectedGuideColor(this._draftToRgba(), false);
+  }
+}
+
+/** Commit the draft hex+alpha as a guide color: apply (or re-apply) it and
+ *  add it to the recent strip. This is the only path that touches recents
+ *  in the custom-picker flow. */
+applyDraftColor(): void {
+  this.setSelectedGuideColor(this._draftToRgba(), true);
+}
+
+/** Build an rgba() string from the current draft state. */
+private _draftToRgba(): string {
+  const hex = this.draftHex || '#ff00ff';
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const a = Math.max(0, Math.min(1, this.draftAlphaPct / 100));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** Populate draft hex+alpha from a stored guide color so the custom picker
+ *  reflects whatever the user just selected. Accepts `#hex` or `rgb()`/
+ *  `rgba()` input — alpha defaults to 100% when not present. */
+private syncDraftFromColor(color: string): void {
+  this.draftHex = this.rgbaToHex(color);
+  const m = color.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/);
+  this.draftAlphaPct = m ? Math.round(parseFloat(m[1]) * 100) : 100;
+}
+
 /** Update opacity of the selected guide, or all guides if none selected. */
+/** Update opacity of the selected guide only. No-op when nothing is
+ *  selected — the slider in that case is purely informational. */
 setGuideOpacity(opacity: number): void {
-  const targets = this.selectedGuideId
-    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
-    : Array.from(this.guides.values());
-  if (!targets.length) return;
-  targets.forEach(entry => { entry.path.set({ opacity }); });
+  if (!this.selectedGuideId) return;
+  const entry = this.guides.get(this.selectedGuideId);
+  if (!entry) return;
+  entry.path.set({ opacity });
   this.canvas.renderAll();
   this.emitGuidesChanged();
 }
 
-/** Update stroke width of the selected guide, or all guides if none selected. */
+/** Update stroke width. When a guide is selected, applies to it; otherwise
+ *  just updates `guideStrokeWidth` so the NEXT-drawn line uses this width
+ *  (existing guides stay untouched). */
 setGuideStrokeWidth(width: number): void {
   this.guideStrokeWidth = width;
-  const targets = this.selectedGuideId
-    ? [this.guides.get(this.selectedGuideId)].filter(Boolean)
-    : Array.from(this.guides.values());
-  if (!targets.length) return;
-  targets.forEach(entry => {
-    entry.data.strokeWidth = width;
-    entry.path.set({ strokeWidth: width });
-  });
+  if (!this.selectedGuideId) return;
+  const entry = this.guides.get(this.selectedGuideId);
+  if (!entry) return;
+  entry.data.strokeWidth = width;
+  entry.path.set({ strokeWidth: width });
   this.canvas.renderAll();
   this.emitGuidesChanged();
+}
+
+/** Return `color` as an opaque (or alpha-overridden) `rgb()` / `rgba()`
+ *  string. Accepts hex (`#RRGGBB`), `rgb(...)`, or `rgba(...)` input.
+ *  Used for guide handles so they render at full opacity even though
+ *  the guide line itself uses a low-alpha stroke for see-through reading. */
+private solidifyColor(color: string, alpha: number = 1): string {
+  if (!color) return alpha === 1 ? 'rgb(255, 0, 255)' : `rgba(255, 0, 255, ${alpha})`;
+  // rgb()/rgba() — pull the first three numeric channels
+  const rgbaMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbaMatch) {
+    const [, r, g, b] = rgbaMatch;
+    return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  // Hex (#RGB or #RRGGBB)
+  const hex = color.startsWith('#') ? color.slice(1) : color;
+  const expanded = hex.length === 3
+    ? hex.split('').map(c => c + c).join('')
+    : hex;
+  if (/^[0-9a-fA-F]{6}$/.test(expanded)) {
+    const r = parseInt(expanded.slice(0, 2), 16);
+    const g = parseInt(expanded.slice(2, 4), 16);
+    const b = parseInt(expanded.slice(4, 6), 16);
+    return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color;
 }
 
 private rgbaToHex(rgba: string): string {
   const match = rgba.match(/\d+/g);
-  if (!match || match.length < 3) return '#ffa500';
+  if (!match || match.length < 3) return '#ff00ff';
   const r = parseInt(match[0]).toString(16).padStart(2, '0');
   const g = parseInt(match[1]).toString(16).padStart(2, '0');
   const b = parseInt(match[2]).toString(16).padStart(2, '0');

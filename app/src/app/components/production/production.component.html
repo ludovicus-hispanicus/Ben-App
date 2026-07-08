@@ -312,13 +312,17 @@
                         </button>
                         <mat-menu #guideMenu="matMenu" class="guide-dropdown">
                           <div class="guide-panel" (click)="$event.stopPropagation()">
+                            <!-- Line 1: default + 7 common preset chips. -->
                             <div class="guide-panel-row">
                               <label>Color</label>
                               <div class="guide-panel-colors">
-                                <input type="color" class="guide-color-input"
-                                       [value]="sourceCanvas?.guideHexColor || '#ffa500'"
-                                       (input)="sourceCanvas?.onGuideColorInput($event)">
-                                <button class="guide-swatch" *ngFor="let preset of sourceCanvas?.guideLineService?.COLOR_PRESETS || []"
+                                <button class="guide-swatch"
+                                        [style.background-color]="sourceCanvas?.guideLineService?.DEFAULT_COLOR"
+                                        [class.active]="sourceCanvas?.guideColor === sourceCanvas?.guideLineService?.DEFAULT_COLOR"
+                                        (click)="sourceCanvas?.setSelectedGuideColor(sourceCanvas?.guideLineService?.DEFAULT_COLOR)"
+                                        matTooltip="Default (fuchsia)">
+                                </button>
+                                <button class="guide-swatch" *ngFor="let preset of sourceCanvas?.guideLineService?.COMMON_PRESETS || []"
                                         [style.background-color]="preset.color"
                                         [class.active]="sourceCanvas?.guideColor === preset.color"
                                         (click)="sourceCanvas?.setSelectedGuideColor(preset.color)"
@@ -326,11 +330,46 @@
                                 </button>
                               </div>
                             </div>
+                            <!-- Line 2: recents (MRU, max 8). Hidden until the
+                                 first custom color is added so the popover
+                                 doesn't show an empty row. -->
+                            <div class="guide-panel-row"
+                                 *ngIf="(sourceCanvas?.guideLineService?.getRecentColors()?.length || 0) > 0">
+                              <label>Recent</label>
+                              <div class="guide-panel-colors">
+                                <button class="guide-swatch" *ngFor="let c of sourceCanvas?.guideLineService?.getRecentColors() || []"
+                                        [style.background-color]="c"
+                                        [class.active]="sourceCanvas?.guideColor === c"
+                                        (click)="sourceCanvas?.setSelectedGuideColor(c)"
+                                        [matTooltip]="'Recent: ' + c">
+                                </button>
+                              </div>
+                            </div>
+                            <!-- Custom-color picker: hex + alpha + Add. -->
+                            <div class="guide-panel-row">
+                              <label>Custom</label>
+                              <div class="guide-panel-field guide-custom-pick">
+                                <input type="color" class="guide-color-input"
+                                       [value]="sourceCanvas?.draftHex || '#ff00ff'"
+                                       (input)="sourceCanvas?.setDraftHex($event)"
+                                       matTooltip="Pick a color">
+                                <input type="range" class="guide-range-input" min="0" max="100" step="5"
+                                       [value]="sourceCanvas?.draftAlphaPct ?? 40"
+                                       (input)="sourceCanvas?.setDraftAlphaPct($event)"
+                                       matTooltip="Transparency">
+                                <span class="guide-unit">{{ sourceCanvas?.draftAlphaPct ?? 40 }}%</span>
+                                <button mat-stroked-button class="guide-add-btn"
+                                        (click)="sourceCanvas?.applyDraftColor()"
+                                        matTooltip="Add this color and use it">
+                                  Add
+                                </button>
+                              </div>
+                            </div>
                             <div class="guide-panel-row">
                               <label>Stroke</label>
                               <div class="guide-panel-field">
-                                <input type="number" class="guide-num-input" min="1" max="12"
-                                       [value]="sourceCanvas?.guideStrokeWidth || 3"
+                                <input type="number" class="guide-num-input" min="1" max="40"
+                                       [value]="sourceCanvas?.guideStrokeWidth || 20"
                                        (change)="onGuideStrokeChange($event)">
                                 <span class="guide-unit">px</span>
                               </div>
@@ -393,7 +432,7 @@
             <!-- Text editor on the right -->
             <div class="text-panel" [style.width.%]="100 - leftPanelWidth">
                 <!-- Editor Mode Toggle -->
-                <div class="editor-mode-toggle" *ngIf="hasTranslations() || currentProductionText">
+                <div class="editor-mode-toggle" *ngIf="editorContent || hasTranslations() || currentProductionText">
                     <button class="mode-btn"
                             [class.active]="editorMode === 'transliteration'"
                             (click)="setEditorMode('transliteration')">
@@ -402,6 +441,7 @@
                         <span class="line-count">{{ getTransliterationLineCount() }}</span>
                     </button>
                     <button class="mode-btn translation"
+                            *ngIf="hasTranslations() || currentProductionText"
                             [class.active]="editorMode === 'translation'"
                             (click)="setEditorMode('translation')">
                         <mat-icon>translate</mat-icon>
@@ -409,10 +449,18 @@
                         <span class="line-count">{{ getTranslationLineCount() }}</span>
                     </button>
                     <button class="mode-btn lemma"
+                            *ngIf="currentProductionText"
                             [class.active]="editorMode === 'lemmatization'"
                             (click)="setEditorMode('lemmatization')">
                         <mat-icon>spellcheck</mat-icon>
                         <span>Lemmatization</span>
+                    </button>
+                    <button class="mode-btn ai-btn"
+                            [class.active]="aiPanelOpen"
+                            (click)="toggleAiPanel()"
+                            matTooltip="Ask AI to transform the active tab's text (free-form prompt)">
+                        <mat-icon>auto_awesome</mat-icon>
+                        <span>AI</span>
                     </button>
                     <span class="validation-status-inline" *ngIf="validationResult && editorMode === 'transliteration'">
                         <mat-icon *ngIf="isValidating" class="btn-icon spinning">sync</mat-icon>
@@ -424,6 +472,88 @@
                         </span>
                         <span class="validation-source" *ngIf="getValidationSourceLabel()">{{ getValidationSourceLabel() }}</span>
                     </span>
+                </div>
+
+                <!-- AI text-assist panel (inline, free-form prompt over the active tab's text) -->
+                <div class="ai-assist-panel" *ngIf="aiPanelOpen">
+                    <div class="ai-controls-row">
+                        <label class="ai-field">
+                            <span class="ai-field-label">Provider</span>
+                            <select [(ngModel)]="selectedAiProvider" (change)="onAiProviderChange()" class="ai-select">
+                                <option *ngFor="let p of aiProviders" [value]="p.value">{{ p.label }}</option>
+                            </select>
+                        </label>
+                        <label class="ai-field">
+                            <span class="ai-field-label">Model</span>
+                            <select [(ngModel)]="selectedAiSubModel" (change)="onAiSubModelChange()" class="ai-select">
+                                <option *ngFor="let m of aiSubModels[selectedAiProvider] || []" [value]="m.value">{{ m.label }}</option>
+                            </select>
+                        </label>
+                        <label class="ai-field ai-key-field">
+                            <span class="ai-field-label">API key</span>
+                            <input type="password" [(ngModel)]="aiApiKey" placeholder="Saved per provider" class="ai-input" />
+                        </label>
+                        <span class="ai-context-hint">
+                            <mat-icon>info</mat-icon>
+                            <ng-container *ngIf="editorMode === 'lemmatization'">
+                                Lemmatization mode: AI assigns lemmas to every token using the dictionary, ORACC priors, and the translation. Result overwrites current assignments.
+                            </ng-container>
+                            <ng-container *ngIf="canApplyAiToActiveTab()">
+                                Context: current <strong>{{ editorMode }}</strong>
+                            </ng-container>
+                        </span>
+                    </div>
+                    <textarea class="ai-prompt"
+                              [(ngModel)]="aiPrompt"
+                              rows="3"
+                              [placeholder]="editorMode === 'lemmatization'
+                                  ? 'Optional steering: e.g. Be conservative on broken signs. Prefer G-stem for ambiguous verbs.'
+                                  : 'e.g. Arrange these lines according to DIŠ. Sort by line number. Normalise damage flags. Translate freely…'"
+                              (keydown.control.enter)="runAiPrompt()"></textarea>
+                    <div class="ai-actions">
+                        <button class="ai-run-btn" (click)="runAiPrompt()"
+                                [disabled]="aiLoading || !canRunAiOnActiveTab() || (editorMode !== 'lemmatization' && !aiPrompt.trim())">
+                            <mat-icon *ngIf="!aiLoading">play_arrow</mat-icon>
+                            <mat-icon *ngIf="aiLoading" class="spinning">sync</mat-icon>
+                            <span>{{ aiLoading ? (editorMode === 'lemmatization' ? 'Lemmatizing…' : 'Thinking…') : (editorMode === 'lemmatization' ? 'Lemmatize all (Ctrl+Enter)' : 'Run (Ctrl+Enter)') }}</span>
+                        </button>
+                        <button class="ai-discard-btn" (click)="toggleAiPromptPreview()"
+                                *ngIf="editorMode !== 'lemmatization'"
+                                [matTooltip]="showAiPromptPreview ? 'Hide what will be sent to the model' : 'Show what will be sent to the model'">
+                            <mat-icon>{{ showAiPromptPreview ? 'visibility_off' : 'visibility' }}</mat-icon>
+                            <span>{{ showAiPromptPreview ? 'Hide prompt' : 'Show prompt' }}</span>
+                        </button>
+                        <button class="ai-close-btn" (click)="toggleAiPanel()" matTooltip="Close panel">
+                            <mat-icon>close</mat-icon>
+                        </button>
+                    </div>
+                    <details class="ai-prompt-preview" *ngIf="showAiPromptPreview" open>
+                        <summary>Full prompt sent to {{ selectedAiSubModel || 'model' }}</summary>
+                        <pre>{{ aiPromptPreview }}</pre>
+                    </details>
+                    <div class="ai-error" *ngIf="aiError">
+                        <mat-icon>error_outline</mat-icon>
+                        <span>{{ aiError }}</span>
+                    </div>
+                    <div class="ai-response" *ngIf="aiResponse">
+                        <div class="ai-response-header">
+                            <span>Response</span>
+                            <span class="ai-response-len">{{ aiResponse.split('\n').length }} lines · {{ aiResponse.length }} chars</span>
+                        </div>
+                        <pre class="ai-response-text">{{ aiResponse }}</pre>
+                        <div class="ai-response-actions">
+                            <button class="ai-apply-btn"
+                                    (click)="applyAiResponse()"
+                                    [disabled]="!canApplyAiToActiveTab()">
+                                <mat-icon>check</mat-icon>
+                                <span>Apply to {{ editorMode }}</span>
+                            </button>
+                            <button class="ai-discard-btn" (click)="discardAiResponse()">
+                                <mat-icon>undo</mat-icon>
+                                <span>Discard</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Transliteration Editor -->
@@ -445,6 +575,14 @@
                     (textContentChanged)="onEditorContentChange($event)">
                     <div toolbar-actions>
                         <div class="rt-divider"></div>
+                        <button class="rt-btn rt-text-btn" (click)="applyEblNormalization()"
+                                matTooltip="Apply eBL normalization (convert traditional → eBL ATF: ḫ→h, accents→indices, ⸢…⸣→#, strip readings)">
+                            <span class="rt-text">eBL</span>
+                        </button>
+                        <button class="rt-btn rt-text-btn" (click)="logogramatizeSelection()"
+                                matTooltip="Logogram: uppercase the selected sign reading (or word at cursor), e.g. lugal → LUGAL">
+                            <span class="rt-text">A</span>
+                        </button>
                         <button class="rt-btn" (click)="regenerateContent()" matTooltip="Regenerate from sources">
                             <mat-icon>refresh</mat-icon>
                         </button>
@@ -489,8 +627,9 @@
                 <lemmatization-panel
                     *ngIf="editorMode === 'lemmatization'"
                     [atfText]="editorContent"
+                    [translationContent]="translationContent"
                     [productionId]="currentProductionText?.production_id || 0"
-                    [fragmentNumber]="currentIdentifier">
+                    [fragmentNumber]="currentProductionText?.ebl_fragment_number || currentIdentifier">
                 </lemmatization-panel>
 
                 <!-- eBL Content Panel (shows intro/notes from eBL when pulled) -->

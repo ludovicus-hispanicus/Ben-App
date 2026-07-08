@@ -13,6 +13,23 @@ class AnthropicCancelledError(Exception):
     pass
 
 
+def _sniff_media_type(image_base64: str) -> str:
+    # Anthropic rejects requests where declared media_type doesn't match the bytes.
+    try:
+        header = base64.b64decode(image_base64[:24], validate=False)
+    except Exception:
+        return "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"GIF8"):
+        return "image/gif"
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
 class AnthropicOcrClient(BaseOcrClient):
     def __init__(self, api_key: str, model: str = None):
         self.client = anthropic.Anthropic(api_key=api_key)
@@ -46,7 +63,7 @@ class AnthropicOcrClient(BaseOcrClient):
                                 "type": "image",
                                 "source": {
                                     "type": "base64",
-                                    "media_type": "image/png",
+                                    "media_type": _sniff_media_type(image_base64),
                                     "data": image_base64,
                                 },
                             },
@@ -88,7 +105,7 @@ class AnthropicOcrClient(BaseOcrClient):
         for img_b64, w, h in images:
             content.append({
                 "type": "image",
-                "source": {"type": "base64", "media_type": "image/png", "data": img_b64},
+                "source": {"type": "base64", "media_type": _sniff_media_type(img_b64), "data": img_b64},
             })
             dims.append((w, h))
         content.append({"type": "text", "text": wrapped})

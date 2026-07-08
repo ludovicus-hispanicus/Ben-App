@@ -26,21 +26,26 @@ class LemmatizationHandler:
 
     COLLECTION_NAME = "lemmatizations"
 
-    # Possessive suffix → eBL lemma ID mapping
-    # These are the independent pronoun lemma IDs used in eBL for bound suffixes
+    # Possessive suffix → eBL lemma ID mapping.
+    # These MUST be the bound *suffix* lemmas (hyphen-prefixed, e.g. `-ka I`),
+    # NOT the independent/dative pronouns (`kâši I`, `šū I`, `niāti I`). The
+    # latter were wrong: `kâši I`/`yâši I` don't even exist in the eBL
+    # dictionary, and `šū I`/`šī I`/`niāti I` are the standalone pronouns, so
+    # auto-detected suffixes were either dropped on export or mislemmatized.
+    # Every id below is verified present in words_index.json.
     SUFFIX_LEMMA_MAP = {
-        'šunu': 'šunu I',    # 3mp "their"
-        'šina': 'šina I',    # 3fp "their"
-        'kunu': 'kunu I',    # 2mp "your (pl)"
-        'kina': 'kina I',    # 2fp "your (pl)"
-        'šu': 'šū I',        # 3ms "his"
-        'ša': 'šī I',        # 3fs "her"
-        'ka': 'kâši I',      # 2ms "your"
-        'ki': 'kâši I',      # 2fs "your"
-        'ni': 'niāti I',     # 1cp "our"
-        'ja': 'yâši I',      # 1cs "my"
-        'ia': 'yâši I',      # 1cs "my"
-        'i': 'yâši I',       # 1cs "my" (bound form)
+        'šunu': '-šunu I',     # 3mp "their"
+        'šina': '-šina I',     # 3fp "their"
+        'kunu': '-kunu I',     # 2mp "your (pl)"
+        'kina': '-kināti I',   # 2fp "your (pl)" (no bare -kina I in eBL)
+        'šu': '-šu I',         # 3ms "his"
+        'ša': '-ša I',         # 3fs "her"
+        'ka': '-ka I',         # 2ms "your"
+        'ki': '-ki I',         # 2fs "your"
+        'ni': '-ni I',         # 1cp "our"
+        'ja': '-ya I',         # 1cs "my"
+        'ia': '-ya I',         # 1cs "my"
+        'i': '-ī I',           # 1cs "my" (bound form)
     }
 
     def __init__(self):
@@ -401,6 +406,31 @@ class LemmatizationHandler:
             our_lemma_data = self.format_for_ebl(lemmatization)
             our_line_idx = 0
 
+            # Validate every uniqueLemma against the local dictionary (mirrors
+            # eBL's words collection). Sending an id that eBL cannot resolve
+            # makes the eBL UI crash later with
+            # "Cannot read properties of undefined (reading '_id')" because
+            # its renderer dereferences the lookup result without a guard.
+            # Filter such ids out and report them back to the caller.
+            invalid_lemmas: set = set()
+            valid_cache: dict = {}
+
+            def _filter_lemmas(lemma_ids):
+                out = []
+                for lid in lemma_ids or []:
+                    if not lid:
+                        continue
+                    if lid in valid_cache:
+                        ok = valid_cache[lid]
+                    else:
+                        ok = self._dictionary.get_word_entry(lid) is not None
+                        valid_cache[lid] = ok
+                    if ok:
+                        out.append(lid)
+                    else:
+                        invalid_lemmas.add(lid)
+                return out
+
             ebl_lemmatization = []
             for frag_line in frag_lines:
                 if frag_line.get('type') == 'TextLine':
@@ -423,22 +453,24 @@ class LemmatizationHandler:
                         is_lemmatizable = ft.get('lemmatizable', False)
 
                         if ft_type in WORD_TYPES:
-                            if is_lemmatizable and fval in our_map and our_map[fval]:
-                                line_tokens.append({
-                                    "value": fval,
-                                    "uniqueLemma": our_map[fval]
-                                })
-                            else:
-                                line_tokens.append({
-                                    "value": fval,
-                                    "uniqueLemma": []
-                                })
+                            raw_lemmas = our_map.get(fval, []) if is_lemmatizable else []
+                            filtered = _filter_lemmas(raw_lemmas)
+                            line_tokens.append({
+                                "value": fval,
+                                "uniqueLemma": filtered,
+                            })
                         else:
                             # Dividers and other non-Word types: value only, no uniqueLemma
                             line_tokens.append({"value": fval})
                     ebl_lemmatization.append(line_tokens)
                 else:
                     ebl_lemmatization.append([])
+
+            if invalid_lemmas:
+                logger.warning(
+                    f"Stripped {len(invalid_lemmas)} unknown lemma id(s) from eBL "
+                    f"export payload: {sorted(invalid_lemmas)}"
+                )
 
             logger.info(f"eBL lemmatization: {len(ebl_lemmatization)} lines ({our_line_idx} text lines matched)")
 
@@ -456,8 +488,12 @@ class LemmatizationHandler:
             logger.info(f"Lemmatization exported to eBL for fragment {clean_fragment}")
             return {
                 "success": True,
-                "message": f"Lemmatization exported to eBL for {clean_fragment}",
-                "fragment_url": f"https://www.ebl.lmu.de/fragmentarium/{clean_fragment}"
+                "message": (
+                    f"Lemmatization exported to eBL for {clean_fragment}"
+                    + (f" (skipped {len(invalid_lemmas)} unknown lemma id(s))" if invalid_lemmas else "")
+                ),
+                "fragment_url": f"https://www.ebl.lmu.de/fragmentarium/{clean_fragment}",
+                "invalid_lemmas": sorted(invalid_lemmas),
             }
         except Exception as e:
             logger.error(f"eBL lemmatization export failed: {e}")

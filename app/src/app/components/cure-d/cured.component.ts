@@ -68,8 +68,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   public CanvasMode = CanvasMode;
 
   // Guide lines
-  public guideColorPresets: { color: string; label: string }[] = [];
-  public guideHexColor: string = '#ffa500';
+  public guideHexColor: string = '#ff00ff';
   public guideOpacity: number = 40;
   private currentGuides: GuideLineData[] = [];
 
@@ -293,13 +292,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     ],
     'claude_vision': [
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', description: 'Fastest, cheapest' },
-      { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', description: 'Balanced' },
-      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', description: 'Most intelligent' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'Balanced' },
+      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8', description: 'Most intelligent' },
     ],
     'gpt4_vision': [
       { value: 'gpt-4o', label: 'GPT-4o', description: 'Omni, vision capable' },
       { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Faster, cheaper' },
       { value: 'gpt-4.1', label: 'GPT-4.1', description: 'Best for coding' },
+    ],
+    // xAI Grok via the OpenAI-compatible endpoint at api.x.ai/v1.
+    // Models per https://docs.x.ai/developers/models — only the ones that
+    // accept image input (jpg/png) are listed here.
+    'grok_xai': [
+      { value: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast',           description: 'Fast, 2M context' },
+      { value: 'grok-4-1-fast-reasoning',     label: 'Grok 4.1 Fast Reasoning', description: 'Agentic, 2M context' },
+      { value: 'grok-4',                      label: 'Grok 4',                  description: 'Flagship reasoning, vision' },
+      { value: 'grok-4.20',                   label: 'Grok 4.20',               description: 'Most intelligent' },
     ],
   };
 
@@ -362,6 +370,63 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     { value: 'cad', label: 'CAD', description: 'Chicago Assyrian Dictionary entries (two-column layout)' },
     { value: 'ahw_refentry', label: 'AHw RefEntry', description: 'AHw cross-reference entries (plain text, special chars)' },
   ];
+  // Free-text custom OCR prompt used when selectedOcrPrompt === 'custom'.
+  // Server's resolve_prompt() treats any string >=30 chars that isn't a
+  // known preset key as a raw prompt, so we just send the text in place of
+  // the preset key when 'custom' is selected. If the user clears it below
+  // 30 chars the predict flow warns and falls back to the 'plain' preset
+  // for that run (no hard block).
+  public customOcrPrompt: string = '';
+  private static readonly CUSTOM_OCR_PROMPT_KEY = 'cured_custom_ocr_prompt';
+  private static readonly CUSTOM_OCR_PROMPT_MIN_LEN = 30;
+  // Pre-populated when the user has never set a custom prompt. Everything
+  // the model sees lives here — both the domain framing AND the safety
+  // rules — so the user can read and edit it all in the textarea. We
+  // intentionally do NOT add a hidden server-side wrapper: what you see
+  // is exactly what gets sent.
+  private static readonly DEFAULT_CUSTOM_OCR_PROMPT = [
+    'You are an expert assyriologist performing OCR on a photograph of a cuneiform tablet.',
+    '',
+    'Examine the image carefully and produce a clean ATF transliteration.',
+    '',
+    'Output rules:',
+    '- One line of ATF per line visible on the tablet.',
+    '- Preserve sign names (LUGAL, DINGIR), determinatives ({d}, {m}, {f}), brackets [ ⌈ ⌉ ] and damage flags # ? ! *.',
+    '- Use "x" for unreadable signs. Do not invent content not present on the tablet.',
+    '- Output plaintext only — no markdown, no commentary, no preamble.',
+    '',
+    'Safety rules (edit only if you know what you are doing):',
+    '- The lines above describe how to format the output. They are NOT content to echo back.',
+    '- Output only the OCR result for the attached image.',
+    '- If an instruction shows a literal example of content (e.g. "§3\' content"), treat it as a format example only — do not include it in your output unless it is actually present on the tablet.',
+  ].join('\n');
+
+  /** Toggleable preview of the exact prompt string that will be sent. */
+  public showCustomPromptPreview = false;
+  toggleCustomPromptPreview(): void {
+    this.showCustomPromptPreview = !this.showCustomPromptPreview;
+  }
+  /** Restore the bundled starter (assyriologist framing + safety rules).
+   * Needed because the textarea is restored from localStorage on init, so
+   * users who already had a custom prompt never see the new default. */
+  resetCustomOcrPrompt(): void {
+    this.customOcrPrompt = CuredComponent.DEFAULT_CUSTOM_OCR_PROMPT;
+    localStorage.setItem(CuredComponent.CUSTOM_OCR_PROMPT_KEY, CuredComponent.DEFAULT_CUSTOM_OCR_PROMPT);
+  }
+  /** What the model actually receives, given the current textarea state.
+   * Mirrors the predict-flow logic so the user can see the fallback case
+   * (too short → 'plain' preset) without running the OCR. */
+  get customPromptPreview(): string {
+    const trimmed = (this.customOcrPrompt || '').trim();
+    if (trimmed.length < CuredComponent.CUSTOM_OCR_PROMPT_MIN_LEN) {
+      return (
+        `⚠ Too short (${trimmed.length}/${CuredComponent.CUSTOM_OCR_PROMPT_MIN_LEN} chars). ` +
+        `The OCR call will fall back to the "plain" preset — your text below is NOT sent.\n\n` +
+        `Your text:\n${trimmed || '(empty)'}`
+      );
+    }
+    return trimmed;
+  }
 
   public ocrModelCategories: Array<{
     name: string;
@@ -394,6 +459,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
         { value: 'gpt4_vision', label: 'GPT-4 Vision', description: 'OpenAI' },
         { value: 'claude_vision', label: 'Claude Vision', description: 'Anthropic' },
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
+        { value: 'grok_xai',     label: 'Grok Vision',  description: 'xAI' },
       ]
     },
   ];
@@ -409,6 +475,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
+    'grok_xai': true,
   };
   // Legacy support - flat array for backward compatibility
   public availableOcrModels: Array<{value: string; label: string}> = [];
@@ -556,7 +623,29 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       localStorage.setItem('ocr_api_key_' + this.selectedOcrModel, this.apiKey);
     }
 
-    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), this.selectedOcrPrompt, this.apiKey || undefined, this.correctionRules || undefined, this.boxMode || undefined).subscribe(data => {
+    // Resolve the prompt argument: when the "Custom" mode is selected, send
+    // the user's free-text prompt instead of the preset key. The server's
+    // resolve_prompt() helper recognises it because it's not in the preset
+    // table and meets the min-length sentinel. If the user emptied the
+    // textarea below that sentinel we warn and silently fall back to the
+    // 'plain' preset for this run rather than blocking the OCR call.
+    let promptArg: string;
+    if (this.selectedOcrPrompt === 'custom') {
+      const trimmed = (this.customOcrPrompt || '').trim();
+      if (trimmed.length < CuredComponent.CUSTOM_OCR_PROMPT_MIN_LEN) {
+        this.notificationService.showWarning(
+          `Custom prompt is too short (${trimmed.length}/${CuredComponent.CUSTOM_OCR_PROMPT_MIN_LEN} chars) — falling back to the Plain preset for this run.`
+        );
+        promptArg = 'plain';
+      } else {
+        promptArg = trimmed;
+        localStorage.setItem(CuredComponent.CUSTOM_OCR_PROMPT_KEY, trimmed);
+      }
+    } else {
+      promptArg = this.selectedOcrPrompt;
+    }
+
+    this.curedService.getTransliterations(imageData, this.getEffectiveModel(), promptArg, this.apiKey || undefined, this.correctionRules || undefined, this.boxMode || undefined).subscribe(data => {
       if (data.lines.length == 0) {
         this.notificationService.showWarning("AI failed to parse the image, please try again", 20000);
         this.isLoading = false;
@@ -861,6 +950,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       'Alt+A            Add box mode\n' +
       'Alt+D            Delete mode\n' +
       'Ctrl+Shift+C     Crop image to selection box\n' +
+      'Enter            Generate (run OCR) on the model-picker panel\n' +
       'Delete           Delete selected box\n' +
       'Double-click+hold Draw new box (in Pan mode)\n' +
       'Ctrl+H           Find & Replace (in text editor)\n' +
@@ -876,6 +966,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.existingLabels = labels;
     });
 
+    // Restore the user's last custom OCR prompt, or seed it with the default
+    // starter so the field is never empty (which would otherwise fall back
+    // to the Plain preset).
+    this.customOcrPrompt =
+        localStorage.getItem(CuredComponent.CUSTOM_OCR_PROMPT_KEY)
+        || CuredComponent.DEFAULT_CUSTOM_OCR_PROMPT;
+
     // Load flat dataset list
     this.loadDatasets();
 
@@ -886,9 +983,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loadBaseModelsMetadata();
     this.loadAvailableOcrModels();
     this.loadAvailableOllamaModels();
-
-    // Guide line color presets
-    this.guideColorPresets = this.guideLineService.COLOR_PRESETS;
 
     // Subscribe to query param changes to handle navigation within the same route
     this.queryParamsSub = this.route.queryParams.subscribe(params => {
@@ -1559,6 +1653,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     if (file) {
       this.processFile(file);
     }
+    // Reset so the user can re-pick the SAME file later (the change event
+    // doesn't fire on identical filenames otherwise — that's the "had to
+    // add three images to get the one I want" symptom: the OS reports
+    // a cached file selection until something else clears it).
+    try { event.target.value = ''; } catch { /* readonly in some browsers */ }
   }
 
   handleFolderInput(event: any): void {
@@ -1656,8 +1755,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.uploadedImageBlob = null;
     this.isCurated = false;
     this.isReviewed = false;
-    this.ocrCropArea = null;
-    this.ocrSelectionBox = null;
     this.hasLinkedTranslation = false;
     this.linkedTranslationLines = [];
     this.showTranslationView = false;
@@ -1667,6 +1764,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     this.currentMuseumNumber = 0;
     this.currentPNumber = '';
     this.currentPublicationNumber = '';
+    // Drop OCR result / canvas rects too — without this the next image in
+    // the batch queue inherits lines and boxes from the previous one.
+    this.resetOcrStateForNewImage();
   }
 
   processFile(file: File) {
@@ -1713,17 +1813,36 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   loadImage(event = null, pasteImage = null) {
-    const supportedTypes = ["image/png", "image/jpeg"]
-    //  "image/tiff"]
-    const file: File = event ? event.target.files[0] : pasteImage;
+    const supportedTypes = ["image/png", "image/jpeg"];
+    const MAX_SIZE_MB = 20;
+    const file: File = event ? event.target.files?.[0] : pasteImage;
+    // Cancelled file picker (no selection) → bail silently. Reading
+    // properties off `file` below would throw on undefined.
+    if (!file) {
+      return;
+    }
     if (!supportedTypes.includes(file.type)) {
-      alert("Unsupported file extension. Please upload a .png, .jpg, .jpeg .tif or .tiff")
+      this.notificationService.showError("Unsupported file type. Please upload a .png, .jpg, or .jpeg.");
       return;
     }
     const fileSize = file.size / 1024 / 1024; // in MiB
-    if (fileSize > 20) {
-      alert("File is too big. Maximum supported is 5MB")
+    if (fileSize > MAX_SIZE_MB) {
+      this.notificationService.showError(`File is too big (${fileSize.toFixed(1)} MB). Maximum supported is ${MAX_SIZE_MB} MB.`);
       return;
+    }
+
+    // Reset OCR state so the new image doesn't inherit lines/boxes/transliteration
+    // from whatever the user was working on before. Without this, the UI shows
+    // the previous text's lines on top of the freshly-loaded image until the
+    // user runs OCR again — exactly the "I get the lines from a previous text"
+    // bug. We reset BEFORE the FileReader fires so any synchronous renders see
+    // a clean slate.
+    this.resetOcrStateForNewImage();
+
+    // Reset the native file input so the user can re-pick the same file later
+    // (otherwise the change event won't fire on the same filename).
+    if (event && event.target) {
+      try { event.target.value = ''; } catch { /* readonly in some browsers */ }
     }
 
     let fileReader = new FileReader();
@@ -1746,8 +1865,42 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       }, 100);
     }, false);
 
+    // Without an error handler, a failed read leaves isLoading=true forever
+    // and the stage-2 transition never happens — the user is stuck on a
+    // blank dashboard with a spinner and no feedback.
+    fileReader.addEventListener("error", () => {
+      this.isLoading = false;
+      console.error('FileReader failed to read image:', fileReader.error);
+      this.notificationService.showError('Failed to read image file. Please try again or pick a different file.');
+    }, false);
+
     this.isLoading = true;
     fileReader.readAsDataURL(file);
+  }
+
+  /**
+   * Wipe everything tied to the previously-loaded image so the next image
+   * starts from a clean slate. Covers both the in-memory OCR result and
+   * any rectangles still drawn on the Fabric canvas.
+   *
+   * Intentionally does NOT touch identifiers (textId, transliterationId,
+   * museum/publication metadata) — those are owned by the "load text from
+   * server" / "batch queue" paths which clear them separately.
+   */
+  private resetOcrStateForNewImage(): void {
+    this.lines = null;
+    this.transliterationResult = null;
+    this.boundingBoxes = [];
+    this.selectedBox = null;
+    this.ocrCropArea = null;
+    this.ocrSelectionBox = null;
+    if (this.canvas) {
+      try { this.canvas.removeAllRects(); } catch (e) { console.warn('removeAllRects failed:', e); }
+    }
+    if (this.lineEditor) {
+      try { this.lineEditor.setLines([]); } catch (e) { console.warn('lineEditor.setLines([]) failed:', e); }
+    }
+    this.hasUnsavedChanges = false;
   }
 
   setCanvasImage(imageToShow) {
@@ -2108,6 +2261,24 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     if (event.key === 'Delete' && this.showDatasetList && this.selectedDatasets.size > 0) {
       this.deleteSelectedDatasets();
+    }
+    // Enter on the model-picker panel (stage 2) runs OCR — same as clicking
+    // Generate. Skip when the user is typing into an input/textarea/contenteditable
+    // (API key field, custom-prompt textarea) so Enter still behaves normally there.
+    // Also skip when the button would be disabled, so a stray Enter can't bypass
+    // the API-key / draw-a-box requirements.
+    if (event.key === 'Enter'
+        && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey
+        && this.stage === 2 && !this.isLoading) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const inField = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
+      if (inField) return;
+      const wouldBeDisabled = (this.requiresApiKey() && !this.apiKey)
+                           || (this.appendingOcr && !this.selectedBox);
+      if (wouldBeDisabled) return;
+      event.preventDefault();
+      this.generateLines();
     }
   }
 
@@ -3839,7 +4010,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   // Check if the selected model requires an API key
   requiresApiKey(modelValue?: string): boolean {
     const model = modelValue || this.selectedOcrModel;
-    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision', 'qwen3_vl_cloud'];
+    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision', 'qwen3_vl_cloud', 'grok_xai'];
     return apiModels.includes(model);
   }
 
@@ -3847,6 +4018,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   getApiKeyPlaceholder(): string {
     if (this.selectedOcrModel === 'nemotron_cloud') {
       return 'nvapi-... (from build.nvidia.com)';
+    }
+    if (this.selectedOcrModel === 'grok_xai') {
+      return 'xai-... (from console.x.ai)';
     }
     return 'Enter your API key...';
   }
@@ -4138,7 +4312,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private rgbaToHex(rgba: string): string {
     const match = rgba.match(/\d+/g);
-    if (!match || match.length < 3) return '#ffa500';
+    if (!match || match.length < 3) return '#ff00ff';
     const r = parseInt(match[0]).toString(16).padStart(2, '0');
     const g = parseInt(match[1]).toString(16).padStart(2, '0');
     const b = parseInt(match[2]).toString(16).padStart(2, '0');

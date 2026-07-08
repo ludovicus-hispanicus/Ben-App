@@ -48,6 +48,7 @@ async def start_batch(request: Request, body: BatchRecognitionRequest):
         exclude_filenames=body.exclude_filenames,
         box_mode=body.box_mode,
         tiling_mode=body.tiling_mode or "none",
+        execution_mode=body.execution_mode or "live",
     )
     return result
 
@@ -118,14 +119,27 @@ async def browse_local_folder(path: str = ""):
 
     folder = Path(path)
     if not folder.exists() or not folder.is_dir():
-        return {"path": path, "folders": [], "image_count": 0, "error": "Directory not found"}
+        return {"path": path, "folders": [], "image_count": 0, "image_files": [], "error": "Directory not found"}
 
+    image_files = _list_image_files(str(folder))
     return {
         "path": str(folder),
         "parent": str(folder.parent) if folder.parent != folder else None,
         "folders": _list_folders(str(folder)),
-        "image_count": _count_images(str(folder)),
+        "image_count": len(image_files),
+        "image_files": image_files,
     }
+
+
+def _list_image_files(directory: str):
+    """Return sorted image filenames (non-recursive) in a directory."""
+    try:
+        return sorted(
+            entry.name for entry in os.scandir(directory)
+            if entry.is_file() and Path(entry.name).suffix.lower() in IMAGE_EXTENSIONS
+        )
+    except (PermissionError, FileNotFoundError):
+        return []
 
 
 def _list_folders(directory: str):

@@ -71,6 +71,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   apiKey: string = '';
   selectedSubModel: string = '';
 
+  // Processing mode: 'live' (synchronous, real-time) or 'batch_api' (async provider
+  // Batch API — 50% cheaper, no per-minute throttling, results within ~24h).
+  // Only valid for cloud providers (see supportsBatchApi()).
+  executionMode: 'live' | 'batch_api' = 'live';
+
   apiSubModels: { [key: string]: Array<{value: string; label: string; description: string}> } = {
     'gemini_vision': [
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
@@ -79,13 +84,17 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     ],
     'claude_vision': [
       { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', description: 'Fastest, cheapest' },
-      { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', description: 'Balanced' },
-      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', description: 'Most intelligent' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'Balanced' },
+      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8', description: 'Most intelligent' },
     ],
     'gpt4_vision': [
       { value: 'gpt-4o', label: 'GPT-4o', description: 'Omni, vision capable' },
       { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Faster, cheaper' },
       { value: 'gpt-4.1', label: 'GPT-4.1', description: 'Best for coding' },
+    ],
+    'grok_xai': [
+      { value: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast', description: 'Cheap, quick' },
+      { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast (Reasoning)', description: 'Reasoning' },
     ],
   };
 
@@ -120,6 +129,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         { value: 'gpt4_vision', label: 'GPT-4 Vision', description: 'OpenAI' },
         { value: 'claude_vision', label: 'Claude Vision', description: 'Anthropic' },
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
+        { value: 'grok_xai', label: 'Grok', description: 'xAI' },
       ]
     }
   ];
@@ -132,6 +142,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
+    'grok_xai': true,
   };
 
   // Post-OCR correction rules
@@ -259,6 +270,51 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Select a local source folder. Prefers the native Electron folder dialog
+   * (works regardless of Electron version); falls back to the hidden
+   * <input webkitdirectory> for plain-browser dev.
+   */
+  async pickLocalFolder(inputEl?: HTMLInputElement): Promise<void> {
+    const api = (window as any).electronAPI;
+    if (api && typeof api.pickDirectory === 'function') {
+      try {
+        const folderPath: string | null = await api.pickDirectory();
+        if (!folderPath) return; // user cancelled
+        this.applyLocalFolder(folderPath);
+        return;
+      } catch {
+        // fall through to the input fallback
+      }
+    }
+    if (inputEl) { inputEl.click(); }
+  }
+
+  /** Resolve a chosen folder path into source state via the backend scan. */
+  private applyLocalFolder(folderPath: string): void {
+    this.batchService.browseLocalFolder(folderPath).subscribe({
+      next: (info) => {
+        if (info.error) {
+          this.notificationService.showError(`Cannot read folder: ${info.error}`);
+          return;
+        }
+        if (!info.image_count) {
+          this.notificationService.showError('No supported image files found in that folder (PNG, JPG, TIFF, BMP, WebP)');
+          return;
+        }
+        this.sourceMode = 'local';
+        this.localFolderPath = info.path;
+        this.localFolderName = info.path.split(/[/\\]/).pop() || info.path;
+        this.localFolderImageCount = info.image_count;
+        this.sourceProjectId = '';
+        this.sourceProjectName = '';
+        this.detectClassesFromFilenames(info.image_files || []);
+        this.notificationService.showInfo(`Selected folder: ${this.localFolderName} (${info.image_count} images)`);
+      },
+      error: () => this.notificationService.showError('Failed to read the selected folder')
+    });
+  }
+
   handleFolderInput(event: any): void {
     const files: FileList = event.target.files;
     if (!files || files.length === 0) return;
@@ -319,6 +375,24 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     this.destinationDatasetId = datasetId;
     const dataset = this.curedDatasets.find(p => p.dataset_id === datasetId);
     this.destinationDatasetName = dataset ? dataset.name : '';
+  }
+
+  /** Select a local export folder — native dialog first, hidden input fallback. */
+  async pickDestinationFolder(inputEl?: HTMLInputElement): Promise<void> {
+    const api = (window as any).electronAPI;
+    if (api && typeof api.pickDirectory === 'function') {
+      try {
+        const folderPath: string | null = await api.pickDirectory();
+        if (!folderPath) return; // cancelled
+        this.destinationFolderPath = folderPath;
+        this.destinationFolderName = folderPath.split(/[/\\]/).pop() || folderPath;
+        this.notificationService.showInfo(`Export folder: ${this.destinationFolderName}`);
+        return;
+      } catch {
+        // fall through to input fallback
+      }
+    }
+    if (inputEl) { inputEl.click(); }
   }
 
   handleDestinationFolderInput(event: any): void {
@@ -526,6 +600,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       } else {
         this.selectedSubModel = '';
       }
+      this.syncExecutionMode();
     }
   }
 
@@ -534,8 +609,20 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   }
 
   requiresApiKey(): boolean {
-    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision'];
+    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'];
     return apiModels.includes(this.selectedModel) && !this.selectedModel.startsWith('vllm');
+  }
+
+  /** Models that expose an async Batch API (50% off, ~24h). Drives the Live/Batch toggle. */
+  supportsBatchApi(): boolean {
+    return ['gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'].includes(this.selectedModel);
+  }
+
+  /** Force Live mode whenever the selected model has no Batch API. Call on model change. */
+  syncExecutionMode(): void {
+    if (!this.supportsBatchApi()) {
+      this.executionMode = 'live';
+    }
   }
 
   hasSubModels(): boolean {
@@ -752,11 +839,16 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
 
   // ============== Batch Job Control ==============
 
+  // Keep in sync with server's ThreadPoolExecutor(max_workers=...) in
+  // batch_recognition_handler.py. Server-side is the real cap; this only
+  // guards the UI against queueing past the worker pool size.
+  public static readonly MAX_CONCURRENT_BATCHES = 20;
+
   get canStart(): boolean {
     return this.hasSource
       && !!this.selectedModel
       && !this.isStarting
-      && this.activeJobIds.size < 3
+      && this.activeJobIds.size < BatchRecognitionComponent.MAX_CONCURRENT_BATCHES
       && (!this.requiresApiKey() || !!this.apiKey)
       && (this.selectedPrompt !== 'custom' || !!this.customPromptText.trim());
   }
@@ -830,6 +922,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       target_dpi: this.targetDpi || undefined,
       box_mode: this.boxMode || undefined,
       tiling_mode: this.tilingMode,
+      execution_mode: this.supportsBatchApi() ? this.executionMode : 'live',
     };
 
     this.batchService.startBatch(request).subscribe({
@@ -941,9 +1034,10 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       next: (jobs) => {
         this.recentJobs = jobs;
 
-        // Auto-resume polling for any running/pending jobs (e.g. after page reload)
+        // Auto-resume polling for any active jobs (e.g. after page reload).
+        // Includes async Batch API states so a submitted batch keeps updating.
         if (this.activeJobIds.size === 0 && this.pollSubs.size === 0) {
-          const activeJobs = jobs.filter(j => j.status === 'running' || j.status === 'pending');
+          const activeJobs = jobs.filter(j => this.isActiveStatus(j.status));
           for (const job of activeJobs) {
             this.activeJobIds.add(job.job_id);
             this.startPoll(job.job_id);
@@ -966,8 +1060,8 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     this.batchService.getJobStatus(jobId).subscribe({
       next: (status) => {
         this.jobStatuses.set(jobId, status);
-        // If still running/pending, start polling
-        if (status.status === 'running' || status.status === 'pending') {
+        // If still active (incl. async batch states), start polling
+        if (this.isActiveStatus(status.status)) {
           this.activeJobIds.add(jobId);
           this.startPoll(jobId);
         }
@@ -978,6 +1072,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Active = still progressing; covers live (running/pending) and async Batch API states. */
+  isActiveStatus(status: string): boolean {
+    return ['running', 'pending', 'submitting', 'batch_submitted', 'collecting'].includes(status);
+  }
+
   getStatusIcon(status: string): string {
     switch (status) {
       case 'completed': return 'check_circle';
@@ -986,7 +1085,21 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       case 'cancelled': return 'cancel';
       case 'running': return 'hourglass_empty';
       case 'pending': return 'schedule';
+      case 'submitting': return 'cloud_upload';
+      case 'batch_submitted': return 'cloud_sync';
+      case 'collecting': return 'cloud_download';
       default: return 'help';
+    }
+  }
+
+  /** Human-readable label for a status chip. */
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'batch_submitted': return 'Waiting on provider';
+      case 'submitting': return 'Submitting';
+      case 'collecting': return 'Collecting';
+      case 'rate_limited': return 'Rate limited';
+      default: return status.charAt(0).toUpperCase() + status.slice(1);
     }
   }
 
@@ -1002,6 +1115,9 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       case 'rate_limited': return '#ff5722';
       case 'cancelled': return '#ff9800';
       case 'running': return '#2196f3';
+      case 'submitting': return '#7e57c2';
+      case 'batch_submitted': return '#7e57c2';
+      case 'collecting': return '#7e57c2';
       default: return '#9e9e9e';
     }
   }
@@ -1148,6 +1264,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       target_dpi: prevJob.target_dpi ?? undefined,
       box_mode: prevJob.box_mode || undefined,
       exclude_filenames: processedFilenames.length > 0 ? processedFilenames : undefined,
+      execution_mode: prevJob.execution_mode || 'live',
     };
 
     this.isStarting = true;

@@ -1,0 +1,24 @@
+<div class="prompt-dialog">
+  <h2 mat-dialog-title>
+    <mat-icon>edit</mat-icon>
+    {{ data.title }}
+  </h2>
+
+  <mat-dialog-content>
+    <p *ngIf="data.message">{{ data.message }}</p>
+    <mat-form-field appearance="outline" class="prompt-field">
+      <input matInput
+             [(ngModel)]="value"
+             [placeholder]="data.placeholder || ''"
+             (keyup.enter)="onConfirm()"
+             cdkFocusInitial>
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-stroked-button (click)="onCancel()">{{ data.cancelText }}</button>
+    <button mat-flat-button color="primary" [disabled]="!isValid()" (click)="onConfirm()">
+      {{ data.confirmText }}
+    </button>
+  </mat-dialog-actions>
+</div>

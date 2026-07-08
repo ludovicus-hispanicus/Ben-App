@@ -13,18 +13,62 @@ export class GuideLineService {
     return Math.random().toString(36).substring(2, 10);
   }
 
-  /** Default color: semi-transparent orange for reading. */
-  readonly DEFAULT_COLOR = 'rgba(255, 165, 0, 0.4)';
-  readonly DEFAULT_STROKE_WIDTH = 3;
+  /** Default color: semi-transparent fuchsia for reading. Fuchsia is rarely
+   *  present in cuneiform tablet imagery (clay browns / orange-tinted
+   *  lighting), so the guide stays visible across every photograph. */
+  readonly DEFAULT_COLOR = 'rgba(255, 0, 255, 0.4)';
+  readonly DEFAULT_STROKE_WIDTH = 20;
 
-  /** Preset colors for quick selection. */
-  readonly COLOR_PRESETS = [
-    { color: 'rgba(255, 165, 0, 0.4)', label: 'Reading (orange)' },
-    { color: 'rgba(76, 175, 80, 0.4)',  label: 'Reading (green)' },
-    { color: '#F44336',                  label: 'Done (red)' },
-    { color: '#4CAF50',                  label: 'Done (green)' },
-    { color: '#2196F3',                  label: 'Done (blue)' },
+  /** Fixed common-color presets shown between the default fuchsia and the
+   *  recent strip. Reading alpha (0.4) so the guide stays see-through over
+   *  text; the user can dial transparency in the custom picker if they want
+   *  a solid line for "done" markings. Order chosen to roughly follow the
+   *  visible spectrum (red → purple) so the row reads as a colour ramp. */
+  readonly COMMON_PRESETS: { color: string; label: string }[] = [
+    { color: 'rgba(244, 67, 54, 0.4)',  label: 'Red' },
+    { color: 'rgba(255, 152, 0, 0.4)',  label: 'Orange' },
+    { color: 'rgba(255, 235, 59, 0.4)', label: 'Yellow' },
+    { color: 'rgba(76, 175, 80, 0.4)',  label: 'Green' },
+    { color: 'rgba(0, 188, 212, 0.4)',  label: 'Cyan' },
+    { color: 'rgba(33, 150, 243, 0.4)', label: 'Blue' },
+    { color: 'rgba(156, 39, 176, 0.4)', label: 'Purple' },
   ];
+
+  /** localStorage key + cap for the user's recent-colors strip. The strip
+   *  is MRU-ordered: a freshly picked color goes to the front; picking a
+   *  color that already exists moves it to the front (not duplicated).
+   *  The default fuchsia is never tracked here — it already has its own
+   *  dedicated chip in the picker, so listing it twice would waste a slot. */
+  private static readonly RECENT_KEY = 'guide_recent_colors';
+  static readonly MAX_RECENT = 8;
+
+  /** Return the user's recent guide colors (MRU first, max 5). */
+  getRecentColors(): string[] {
+    try {
+      const raw = localStorage.getItem(GuideLineService.RECENT_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(c => typeof c === 'string').slice(0, GuideLineService.MAX_RECENT);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Move `color` to the front of the recent list (dedup, cap, persist).
+   *  No-op for any color that already has a permanent chip (default fuchsia
+   *  or one of the COMMON_PRESETS) — they'd waste a recent slot otherwise. */
+  addRecentColor(color: string): void {
+    if (!color || color === this.DEFAULT_COLOR) return;
+    if (this.COMMON_PRESETS.some(p => p.color === color)) return;
+    const current = this.getRecentColors().filter(c => c !== color);
+    const next = [color, ...current].slice(0, GuideLineService.MAX_RECENT);
+    try {
+      localStorage.setItem(GuideLineService.RECENT_KEY, JSON.stringify(next));
+    } catch {
+      /* localStorage unavailable (private mode, quota) — silently drop */
+    }
+  }
 
   /**
    * Create a new guide from two endpoint clicks.

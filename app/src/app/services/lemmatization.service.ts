@@ -47,6 +47,12 @@ export interface LemmaAssignment {
     oracc_guideword?: string;     // English translation (e.g., "command")
     oracc_citation?: string;      // Akkadian citation form (e.g., "amātu")
     oracc_pos?: string;           // ORACC POS tag (e.g., "N", "V")
+    // Per-word AI responses, keyed by `<provider>:<model>`. Round-tripped
+    // through saveLemmatization so the user can revisit prior answers.
+    ai_responses?: { [key: string]: string };
+    // User clicked "No lemma" — keep the slot empty and don't let
+    // auto-assign refill it on align.
+    is_cleared?: boolean;
 }
 
 export interface LineLemmatization {
@@ -160,10 +166,39 @@ export class LemmatizationService {
 
     // ── AI Suggestions ──
 
-    aiSuggest(productionId: number, atfText: string): Observable<TextLemmatization> {
-        return this.http.post<TextLemmatization>(`${this.baseUrl}/${productionId}/ai-suggest`, {
-            atf_text: atfText
-        });
+    /**
+     * Per-word contextual hint. Client composes the full prompt (editable
+     * in the UI) and the server returns the chosen LLM's freeform response.
+     * Does NOT modify any lemmatization — informational only.
+     * `provider` ("gemini" | "anthropic" | "openai"), `model`, and `apiKey`
+     * are all optional; backend falls back to defaults / env vars.
+     */
+    askAiAboutWord(req: {
+        prompt: string;
+        provider?: string;
+        model?: string;
+        apiKey?: string;
+    }): Observable<{ response: string }> {
+        return this.http.post<{ response: string }>(`${this.baseUrl}/ai-word-suggest`, req);
+    }
+
+    /**
+     * Bulk AI lemmatization for an entire production text. The server uses
+     * the chosen LLM with the ATF, the user's translation, ORACC suggestions,
+     * and dictionary candidates as context, then OVERWRITES the existing
+     * lemmatization with AI assignments tagged is_suggestion=true /
+     * suggestion_source='ai'. The user reviews/corrects each one from the
+     * panel after the call returns.
+     */
+    aiSuggestAll(productionId: number, opts: {
+        provider?: string;
+        model?: string;
+        apiKey?: string;
+        extra_instruction?: string;
+    }): Observable<TextLemmatization> {
+        return this.http.post<TextLemmatization>(
+            `${this.baseUrl}/${productionId}/ai-suggest-all`, opts
+        );
     }
 
     // ── eBL Export ──

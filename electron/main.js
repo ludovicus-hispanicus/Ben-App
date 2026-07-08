@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, protocol } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, protocol, ipcMain } = require('electron');
 // Hidden during splash; restored when the Angular app loads (see installAppMenu)
 Menu.setApplicationMenu(null);
 if (require('electron-squirrel-startup')) app.quit();
@@ -253,7 +253,13 @@ function startPythonServer() {
     console.log('Starting Python server...');
     updateStatus('Starting backend server...');
 
-    const storagePath = getUserDataPath();
+    // Packaged builds store data under the OS userData dir. In dev, use the
+    // repo-local server/src/data dir — that's where the working DB/images live
+    // (default STORAGE_PATH for a server run from server/src), so the Library
+    // isn't empty.
+    const storagePath = IS_PACKAGED
+        ? getUserDataPath()
+        : path.join(__dirname, '..', 'server', 'src', 'data');
     fs.mkdirSync(storagePath, { recursive: true });
 
     const serverEnv = {
@@ -276,8 +282,11 @@ function startPythonServer() {
             stdio: ['pipe', 'pipe', 'pipe']
         });
     } else {
-        // Dev mode: use system Python
-        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        // Dev mode: use system Python. On Windows prefer the `py` launcher — bare
+        // `python` can be shadowed on PATH (e.g. by msys2) by an interpreter that
+        // lacks the server deps, which hangs startup at "waiting for backend".
+        // `py` resolves to the default registered install (where the deps live).
+        const pythonCmd = process.platform === 'win32' ? 'py' : 'python3';
         const serverPath = path.join(__dirname, '..', 'server', 'src');
 
         pythonProcess = spawn(
@@ -490,6 +499,20 @@ function cleanup() {
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
+
+// Native folder picker — returns the absolute path of a chosen directory, or
+// null if cancelled. Replaces the fragile <input webkitdirectory> + File.path
+// approach (File.path is empty in some setups and removed in Electron 32+).
+ipcMain.handle('pick-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: 'Select a folder of images'
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return null;
+    }
+    return result.filePaths[0];
+});
 
 app.whenReady().then(() => {
     if (IS_PACKAGED) {

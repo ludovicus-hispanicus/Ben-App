@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostListener, OnInit, OnDestroy, Output, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, HostListener, OnInit, OnDestroy, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -20,6 +20,8 @@ import { SelectedPage } from '../../models/pages';
 import { AddTextDialogComponent, AddTextDialogResult } from '../common/add-text-dialog/add-text-dialog.component';
 import { PagesService } from '../../services/pages.service';
 import { LinkedPageService } from '../../services/linked-page.service';
+import { LemmatizationService } from '../../services/lemmatization.service';
+import { LemmatizationPanelComponent } from './lemmatization-panel/lemmatization-panel.component';
 
 type ViewMode = 'dashboard' | 'editor';
 
@@ -256,7 +258,7 @@ function getSectionSearchText(section: AtfHelpSection): string {
     templateUrl: './production.component.html',
     styleUrls: ['./production.component.scss']
 })
-export class ProductionComponent implements OnInit, OnDestroy {
+export class ProductionComponent implements OnInit, AfterViewInit, OnDestroy {
     // View state
     @Output() viewModeChange = new EventEmitter<ViewMode>();
     private _viewMode: ViewMode = 'dashboard';
@@ -377,6 +379,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     @ViewChild('textEditor') textEditor: TextEditorComponent;
     @ViewChild('sourceCanvas') sourceCanvas: FabricCanvasComponent;
     @ViewChild('imageFileInput') imageFileInputRef: any;
+    // Lemmatization child — used to apply AI bulk results without making the
+    // child re-fetch from the server. The child instance only exists while
+    // editorMode === 'lemmatization'.
+    @ViewChild(LemmatizationPanelComponent) lemmaPanel?: LemmatizationPanelComponent;
     // When the user picks "From computer + No OCR" via the Add dialog, we stash the
     // chosen label here so handleImageFileInput can pass it through to addImageAsSource.
     private pendingNoOcrLabel: string | null = null;
@@ -416,6 +422,52 @@ export class ProductionComponent implements OnInit, OnDestroy {
     importIdentifierTypeOverride: string = '';
     isImportingOracc: boolean = false;
 
+    // ── AI text-assist panel ─────────────────────────────────────────────
+    // Free-form prompt that runs against the currently active tab's content.
+    // The response is shown for review; user clicks Apply to overwrite the
+    // editor. Provider / model / API-key state is shared with the
+    // lemmatization panel and CuReD OCR via the same localStorage keys.
+    aiPanelOpen = false;
+    aiPrompt = '';
+    aiResponse = '';
+    aiError = '';
+    aiLoading = false;
+    aiApiKey = '';
+    selectedAiProvider = 'gemini_vision';
+    selectedAiSubModel = '';
+    readonly aiProviders: { value: string; label: string; backend: string }[] = [
+        { value: 'gemini_vision', label: 'Gemini', backend: 'gemini' },
+        { value: 'claude_vision', label: 'Claude', backend: 'anthropic' },
+        { value: 'gpt4_vision',   label: 'OpenAI', backend: 'openai' },
+        { value: 'grok_xai',      label: 'Grok',   backend: 'grok' },
+    ];
+    readonly aiSubModels: { [key: string]: { value: string; label: string }[] } = {
+        // Order matters: the first entry is the default when the user hasn't
+        // chosen one. Flash is the sweet spot for text-restructuring tasks;
+        // Flash-Lite is too weak and often echoes the input verbatim.
+        'gemini_vision': [
+            { value: 'gemini-2.5-flash',              label: 'Gemini 2.5 Flash' },
+            { value: 'gemini-3.1-pro-preview',        label: 'Gemini 3.1 Pro' },
+            { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite' },
+            { value: 'gemini-2.5-flash-lite',         label: 'Gemini 2.5 Flash-Lite' },
+        ],
+        'claude_vision': [
+            { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+            { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6' },
+            { value: 'claude-opus-4-8',           label: 'Claude Opus 4.8' },
+        ],
+        'gpt4_vision': [
+            { value: 'gpt-4o',      label: 'GPT-4o' },
+            { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+            { value: 'gpt-4.1',     label: 'GPT-4.1' },
+        ],
+        'grok_xai': [
+            { value: 'grok-4-1-fast-non-reasoning', label: 'Grok 4.1 Fast' },
+            { value: 'grok-4-1-fast-reasoning',     label: 'Grok 4.1 Reasoning' },
+            { value: 'grok-4',                      label: 'Grok 4' },
+        ],
+    };
+
     constructor(
         private productionService: ProductionService,
         private datasetService: DatasetService,
@@ -428,8 +480,19 @@ export class ProductionComponent implements OnInit, OnDestroy {
         private dialog: MatDialog,
         private http: HttpClient,
         private pagesService: PagesService,
-        private linkedPageService: LinkedPageService
+        private linkedPageService: LinkedPageService,
+        private lemmatizationService: LemmatizationService,
+        private cdr: ChangeDetectorRef
     ) {}
+
+    /** The Fabric source canvas finishes init AFTER the parent's first
+     *  change-detection pass, so its `selectedMode` flips from undefined →
+     *  Pan and Angular's dev-mode "expression changed after it was checked"
+     *  guard fires on the toolbar's `[class.active]` bindings. Re-running CD
+     *  once after view init lets the new value settle without that warning. */
+    ngAfterViewInit(): void {
+        this.cdr.detectChanges();
+    }
 
     @HostListener('window:beforeunload', ['$event'])
     onBeforeUnload(event: BeforeUnloadEvent): void {
@@ -643,8 +706,24 @@ export class ProductionComponent implements OnInit, OnDestroy {
                     labelSet.add(p.label);
                 }
             }
+            // Pull in labels typed by the user when attaching no-OCR images
+            // (stored on production_text.uploaded_images[].label). Without
+            // this, a custom label like "copy" disappears from the chip list
+            // after the user types it once.
+            if (g.uploaded_image_labels) {
+                g.uploaded_image_labels.forEach(l => {
+                    if (l && !this.isAutoGeneratedLabel(l)) labelSet.add(l);
+                });
+            }
         }
         this.availableLabels = Array.from(labelSet).sort();
+    }
+
+    /** Auto-fallback labels generated by addImageAsSource when the user didn't
+     * type one (e.g. "Uploaded 1", "Uploaded 2"). They're placeholders, not
+     * real user choices — filter them out of the reuse chip list. */
+    private isAutoGeneratedLabel(label: string): boolean {
+        return /^Uploaded \d+$/.test(label);
     }
 
     toggleIdentifierType(type: string): void {
@@ -1036,6 +1115,21 @@ export class ProductionComponent implements OnInit, OnDestroy {
         // Image-only path → attach to the current production text as a source
         if (result.source === 'local') {
             this.pendingNoOcrLabel = result.label;
+            // The native file input doesn't fire a `change` event on cancel,
+            // so without this guard `pendingNoOcrLabel` would stick around
+            // and silently get applied to the next unrelated upload (e.g.
+            // a drag-drop or PDF page conversion). When the OS dialog
+            // closes, focus returns to the window — if no file was picked
+            // by then, clear the pending label.
+            const clearOnCancel = () => {
+                setTimeout(() => {
+                    // If handleImageFileInput already consumed the label, leave it alone.
+                    if (this.pendingNoOcrLabel === result.label) {
+                        this.pendingNoOcrLabel = null;
+                    }
+                }, 300);
+            };
+            window.addEventListener('focus', clearOnCancel, { once: true });
             // Reuse the existing hidden file input
             this.imageFileInputRef?.nativeElement.click();
         } else {
@@ -1221,10 +1315,34 @@ export class ProductionComponent implements OnInit, OnDestroy {
         // the user enters this view directly via ?identifier= rather than the dashboard.
         this.ensureGroupedTextsLoaded();
 
-        // Load sources from training data (separated into transliterations and translations)
+        // First, see whether a production text already exists for this
+        // identifier. If so, load it (so the user sees their saved/exported
+        // version, not a freshly-merged one). On 404, fall back to the
+        // source-merge flow.
+        this.productionService.findProductionTextByIdentifier(identifier, identifierType).subscribe({
+            next: (prodText) => {
+                if (prodText && prodText.production_id) {
+                    this.openProductionText(prodText.production_id);
+                } else {
+                    this.loadSourcesForNewProduction(identifier);
+                }
+            },
+            error: () => {
+                // 404 (no existing record) or another error — fall through to
+                // generating fresh content from source parts.
+                this.loadSourcesForNewProduction(identifier);
+            }
+        });
+    }
+
+    /**
+     * Source-merge fallback for `openByIdentifier` when no saved production
+     * text exists yet. Loads the training-data parts and generates an
+     * initial editor content from them.
+     */
+    private loadSourcesForNewProduction(identifier: string): void {
         this.productionService.getSourcesByIdentifier(identifier).subscribe({
             next: (response) => {
-                // Sources are transliterations (with images)
                 this.currentSources = response.sources.map(p => ({
                     text_id: p.text_id,
                     transliteration_id: p.transliteration_id,
@@ -1235,14 +1353,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
                     label: p.label || ''
                 }));
                 this.sortSources();
-                // Translations are separate (text only)
                 this.currentTranslations = response.translations || [];
                 this.translationContent = this.formatTranslationText();
                 this.loadSourceImages();
-
-                // Generate initial editor content from transliteration sources only
                 this.generateInitialContent();
-
                 this.isLoading = false;
             },
             error: (err) => {
@@ -1467,22 +1581,20 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
     private removeSourceFromList(index: number): void {
         this.currentSources.splice(index, 1);
-        this.sourceImageDataUrls.delete(index);
-        this.sourceViewports.delete(index);
-        this.uploadedImageIds.delete(index);
 
-        // Rebuild maps with corrected indices
-        const newUploads = new Map<number, string>();
-        this.uploadedImageIds.forEach((id, idx) => {
-            newUploads.set(idx > index ? idx - 1 : idx, id);
-        });
-        this.uploadedImageIds = newUploads;
-
-        const newUrls = new Map<number, string>();
-        this.sourceImageDataUrls.forEach((url, idx) => {
-            newUrls.set(idx > index ? idx - 1 : idx, url);
-        });
-        this.sourceImageDataUrls = newUrls;
+        // Reindex every per-source Map so a later addImageAsSource (which uses
+        // currentSources.length as the new index) doesn't inherit orphan
+        // entries from the deleted source's old slot. Previously only
+        // sourceImageDataUrls and uploadedImageIds were reindexed, which left
+        // stale guides/viewports/rotations/originals pinned to the now-shifted
+        // indices — that surfaced as the "drawn lines from a previous image
+        // appear on the newly added image" bug.
+        this.uploadedImageIds = this._reindexAfterDelete(this.uploadedImageIds, index);
+        this.sourceImageDataUrls = this._reindexAfterDelete(this.sourceImageDataUrls, index);
+        this.sourceViewports = this._reindexAfterDelete(this.sourceViewports, index);
+        this.sourceGuides = this._reindexAfterDelete(this.sourceGuides, index);
+        this.sourceRotations = this._reindexAfterDelete(this.sourceRotations, index);
+        this.sourceOriginalDataUrls = this._reindexAfterDelete(this.sourceOriginalDataUrls, index);
 
         // Adjust selected index
         if (this.selectedSourceIndex >= this.currentSources.length) {
@@ -1492,6 +1604,31 @@ export class ProductionComponent implements OnInit, OnDestroy {
         if (dataUrl) {
             this.loadImageIntoCanvas(dataUrl);
         }
+    }
+
+    /** Drop the entry at `deletedIdx` from a number-keyed Map and shift every
+     * entry with key > deletedIdx down by one, so the resulting indices match
+     * the spliced currentSources array. */
+    private _reindexAfterDelete<V>(m: Map<number, V>, deletedIdx: number): Map<number, V> {
+        const next = new Map<number, V>();
+        m.forEach((v, k) => {
+            if (k === deletedIdx) return;
+            next.set(k > deletedIdx ? k - 1 : k, v);
+        });
+        return next;
+    }
+
+    /** Wipe any state stored at `idx` across every per-source Map so a freshly
+     * added source can't inherit orphan data left over from earlier sessions
+     * (e.g., if reindexing logic ever drifts). Defensive — paired with the
+     * delete-side reindex to make this class of bug structurally hard to hit. */
+    private _clearPerSourceState(idx: number): void {
+        this.sourceImageDataUrls.delete(idx);
+        this.sourceViewports.delete(idx);
+        this.sourceGuides.delete(idx);
+        this.sourceRotations.delete(idx);
+        this.sourceOriginalDataUrls.delete(idx);
+        this.uploadedImageIds.delete(idx);
     }
 
     selectSource(index: number): void {
@@ -1741,6 +1878,22 @@ export class ProductionComponent implements OnInit, OnDestroy {
         this.validationSubject.next(content);
     }
 
+    /**
+     * Uppercase the selected text (or the word under the cursor) in the
+     * transliteration editor to mark it as a logogram, e.g. `lugal` → `LUGAL`.
+     * Only available on the transliteration editor; delegates to the editor
+     * component which handles the ACE selection and emits the change.
+     */
+    logogramatizeSelection(): void {
+        if (this.editorMode !== 'transliteration' || !this.textEditor) {
+            return;
+        }
+        const changed = this.textEditor.logogramatizeSelection();
+        if (!changed) {
+            this.notificationService.showWarning('Select a sign reading (or place the cursor in a word) to logogramatize');
+        }
+    }
+
     saveContent(): void {
         if (!this.currentProductionText) {
             // Create new production text first
@@ -1823,6 +1976,251 @@ export class ProductionComponent implements OnInit, OnDestroy {
      */
     setEditorMode(mode: 'transliteration' | 'translation' | 'lemmatization'): void {
         this.editorMode = mode;
+    }
+
+    // ── AI text-assist panel ─────────────────────────────────────────────
+
+    toggleAiPanel(): void {
+        if (this.aiPanelOpen) {
+            this.aiPanelOpen = false;
+            return;
+        }
+        // Reuse the provider preference the lemmatization panel saves.
+        this.selectedAiProvider = localStorage.getItem('lemma_ai_provider') || this.selectedAiProvider;
+        this.loadAiProviderState();
+        // Prefill an instruction template for lemmatization mode so the user
+        // sees a sensible starting point — and can still edit it before running.
+        if (this.editorMode === 'lemmatization' && !this.aiPrompt.trim()) {
+            this.aiPrompt = this.defaultLemmatizationInstruction();
+        }
+        this.aiPanelOpen = true;
+    }
+
+    private defaultLemmatizationInstruction(): string {
+        return [
+            'Lemmatize every token in the transliteration.',
+            'Use the dictionary candidates for disambiguation, prefer ORACC priors when they match the dictionary,',
+            'and use the translation to decide which sense of a homonym is meant.',
+            'Leave determinatives, numbers, and broken signs unassigned.',
+        ].join(' ');
+    }
+
+    onAiProviderChange(): void {
+        localStorage.setItem('lemma_ai_provider', this.selectedAiProvider);
+        this.loadAiProviderState();
+    }
+
+    onAiSubModelChange(): void {
+        if (this.selectedAiProvider && this.selectedAiSubModel) {
+            localStorage.setItem('ocr_sub_model_' + this.selectedAiProvider, this.selectedAiSubModel);
+        }
+    }
+
+    private loadAiProviderState(): void {
+        const subs = this.aiSubModels[this.selectedAiProvider] || [];
+        this.selectedAiSubModel =
+            localStorage.getItem('ocr_sub_model_' + this.selectedAiProvider)
+            || (subs[0]?.value || '');
+        this.aiApiKey = localStorage.getItem('ocr_api_key_' + this.selectedAiProvider) || '';
+    }
+
+    /** Apply-target is only meaningful on the text editors. In lemmatization
+     * mode the server overwrites assignments directly, so there's no "Apply"
+     * step — the response area is hidden and the panel reloads in place. */
+    canApplyAiToActiveTab(): boolean {
+        return this.editorMode === 'transliteration' || this.editorMode === 'translation';
+    }
+
+    /** Whether Run is allowed in the current tab. Lemmatization needs a
+     * production text id and content; the editors only need content. */
+    canRunAiOnActiveTab(): boolean {
+        if (this.editorMode === 'lemmatization') {
+            return !!(this.currentProductionText && (this.editorContent || '').trim());
+        }
+        return !!(this.getActiveTabContent().trim());
+    }
+
+    /** Content fed to the AI as the "current text" context. */
+    private getActiveTabContent(): string {
+        return this.editorMode === 'translation'
+            ? (this.translationContent || '')
+            : (this.editorContent || '');
+    }
+
+    /** Wrap the user's free-form instruction with the active tab's content.
+     * Public so the template can show a "what will be sent" preview — useful
+     * for debugging when the model echoes the input unchanged. */
+    buildAiPrompt(userInstruction: string): string {
+        const tabLabel = this.editorMode === 'translation'
+            ? 'translation of a Babylonian cuneiform text'
+            : 'ATF transliteration of a Babylonian cuneiform text';
+        const systemLines = [
+            `You are an expert Assyriologist helping to edit a ${tabLabel}.`,
+            '',
+            'The user will give you the current text under === CURRENT TEXT === and an instruction under === INSTRUCTION ===.',
+            '',
+            'RULES:',
+            '1. Apply the instruction. The output MUST reflect the requested change — do not return the input unchanged unless the instruction itself asks for that.',
+            '2. Output ONLY the transformed text. No preamble, no commentary, no apologies, no markdown code fences, no labels like "Output:".',
+            '3. If the instruction asks for a STRUCTURAL change (split lines, sort, regroup, renumber, insert breaks, etc.), perform that restructuring even though it changes the layout. Layout preservation is NOT the default.',
+            '4. Preserve the spelling of individual signs and tokens (sign names like LUGAL, determinatives like {d}, brackets [ ⌈ ⌉ ], damage flags # ? ! *) unless the instruction explicitly says to change those characters.',
+            '5. If the instruction is ambiguous, choose the interpretation that produces the most useful structural change. Do NOT default to "no change".',
+            '',
+            'For reference: DIŠ is the cuneiform sign that traditionally introduces omen apodoses ("if…") in divinatory texts. A request like "make a line of each DIŠ" means: start a new line at every occurrence of the token DIŠ.',
+        ];
+        return [
+            ...systemLines,
+            '',
+            '=== CURRENT TEXT ===',
+            this.getActiveTabContent(),
+            '',
+            '=== INSTRUCTION ===',
+            userInstruction,
+            '',
+            '=== TRANSFORMED TEXT ===',
+            '',
+        ].join('\n');
+    }
+
+    /** Toggleable preview of the assembled prompt for debugging. */
+    showAiPromptPreview = false;
+    toggleAiPromptPreview(): void {
+        this.showAiPromptPreview = !this.showAiPromptPreview;
+    }
+    get aiPromptPreview(): string {
+        const instruction = (this.aiPrompt || '').trim() || '(type your instruction first)';
+        return this.buildAiPrompt(instruction);
+    }
+
+    runAiPrompt(): void {
+        const instruction = (this.aiPrompt || '').trim();
+        if (this.aiLoading) return;
+
+        if (this.aiApiKey) {
+            localStorage.setItem('ocr_api_key_' + this.selectedAiProvider, this.aiApiKey);
+        }
+
+        const providerEntry = this.aiProviders.find(p => p.value === this.selectedAiProvider);
+
+        // Lemmatization mode dispatches to the bulk endpoint — the server uses
+        // the ATF, translation, dictionary, and ORACC priors as context and
+        // OVERWRITES the saved lemmatization with AI suggestions. No client-
+        // side "Apply" step: the lemmatization panel is reloaded in place.
+        if (this.editorMode === 'lemmatization') {
+            if (!this.canRunAiOnActiveTab()) {
+                this.aiError = 'Open a production text with transliteration content first.';
+                return;
+            }
+            const prodId = this.currentProductionText?.production_id;
+            if (!prodId) {
+                this.aiError = 'No production text id — save the text before running AI lemmatization.';
+                return;
+            }
+            this.aiLoading = true;
+            this.aiError = '';
+            this.aiResponse = '';
+            this.lemmatizationService.aiSuggestAll(prodId, {
+                provider: providerEntry?.backend,
+                model: this.selectedAiSubModel || undefined,
+                apiKey: this.aiApiKey || undefined,
+                extra_instruction: instruction || undefined,
+            }).subscribe({
+                next: (result) => {
+                    this.aiLoading = false;
+                    // Push the new state straight into the lemma panel so it
+                    // shows AI suggestions immediately without a re-fetch.
+                    if (this.lemmaPanel) {
+                        this.lemmaPanel.applyExternalLemmatization(result);
+                    }
+                    this.aiPanelOpen = false;
+                    this.aiPrompt = '';
+                    this.notificationService.showSuccess('AI lemmatization applied — review the teal suggestions in the panel.');
+                },
+                error: (err) => {
+                    this.aiLoading = false;
+                    this.aiError = err?.error?.detail || err?.message || 'AI lemmatization failed';
+                }
+            });
+            return;
+        }
+
+        // Transliteration / translation: free-form transformation path
+        if (!instruction) return;
+        const fullPrompt = this.buildAiPrompt(instruction);
+
+        this.aiLoading = true;
+        this.aiError = '';
+        this.aiResponse = '';
+
+        this.lemmatizationService.askAiAboutWord({
+            prompt: fullPrompt,
+            provider: providerEntry?.backend,
+            model: this.selectedAiSubModel || undefined,
+            apiKey: this.aiApiKey || undefined,
+        }).subscribe({
+            next: (res) => {
+                this.aiResponse = this.stripFences(res.response || '');
+                this.aiLoading = false;
+            },
+            error: (err) => {
+                this.aiError = typeof err === 'string' ? err : 'AI request failed';
+                this.aiLoading = false;
+            }
+        });
+    }
+
+    /** Strip an optional surrounding ```…``` block — models add them despite being told not to. */
+    private stripFences(text: string): string {
+        const trimmed = text.trim();
+        const fence = trimmed.match(/^```(?:\w+)?\n([\s\S]*?)\n?```\s*$/);
+        return fence ? fence[1] : trimmed;
+    }
+
+    applyAiResponse(): void {
+        if (!this.aiResponse || !this.canApplyAiToActiveTab()) return;
+        // LLM output often contains CRLF line endings; ACE preserves whatever
+        // it sees, and CRLFs poison every downstream save/export (eBL rejects
+        // lines with trailing \r). Normalize to LF before handing off.
+        const normalized = this.aiResponse.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (this.editorMode === 'translation') {
+            this.translationContent = normalized;
+        } else {
+            this.editorContent = normalized;
+        }
+        this.hasUnsavedChanges = true;
+        this.aiResponse = '';
+        this.aiPrompt = '';
+        this.aiPanelOpen = false;
+        this.notificationService.showSuccess('AI output applied — review and save');
+    }
+
+    discardAiResponse(): void {
+        this.aiResponse = '';
+        this.aiError = '';
+    }
+
+    /**
+     * Manually re-apply the CuReD → eBL ATF conversion to the current
+     * transliteration. Normally the converter only runs at first source-merge
+     * (text-editor honours `[disableNormalization]="!!currentProductionText"`),
+     * but after edits — including AI-generated rewrites — the user may want
+     * to renormalize the buffer. This button reuses the same `toAtf()` +
+     * `cleanForExport()` pipeline the editor uses on first mount.
+     */
+    applyEblNormalization(): void {
+        if (!this.editorContent) {
+            this.notificationService.showInfo('Nothing to convert — the transliteration is empty.');
+            return;
+        }
+        const converted = this.atfConverter.toAtf(this.editorContent);
+        const cleaned = this.atfConverter.cleanForExport(converted);
+        if (cleaned === this.editorContent) {
+            this.notificationService.showInfo('Already in eBL form — no changes applied.');
+            return;
+        }
+        this.editorContent = cleaned;
+        this.hasUnsavedChanges = true;
+        this.notificationService.showSuccess('eBL normalization applied — review and save.');
     }
 
     /**
@@ -2801,7 +3199,17 @@ export class ProductionComponent implements OnInit, OnDestroy {
                             this.notificationService.showSuccess(result.message);
 
                             if (this.currentProductionText?.production_id) {
-                                this.productionService.markExported(this.currentProductionText.production_id).subscribe();
+                                // Persist the actual eBL fragment number used so the
+                                // lemmatization export defaults to the same id.
+                                this.productionService.markExported(
+                                    this.currentProductionText.production_id,
+                                    this.exportFragmentId,
+                                ).subscribe(res => {
+                                    if (this.currentProductionText) {
+                                        this.currentProductionText.ebl_fragment_number =
+                                            res.ebl_fragment_number || this.exportFragmentId;
+                                    }
+                                });
                             }
                         } else {
                             this.exportStatus = 'error';
@@ -3242,6 +3650,17 @@ export class ProductionComponent implements OnInit, OnDestroy {
             ? customLabel.trim()
             : `Uploaded ${this.getNextUploadedImageNumber()}`;
 
+        // Defensive cleanup of the about-to-be-occupied slot. If any
+        // per-source Map still has orphan data at `newIndex` from an earlier
+        // delete/reorder (or a future code path we haven't accounted for),
+        // it would be silently applied to this brand-new image — surfacing
+        // as "guide lines drawn on a previous source appear on the new one".
+        // Always start the slot empty.
+        this._clearPerSourceState(newIndex);
+        if (this.sourceCanvas) {
+            try { this.sourceCanvas.clearGuides(); } catch { /* canvas not ready */ }
+        }
+
         // Add to sources
         const newSource: SourceTextContent = {
             text_id: -1, // Temporary ID for uploaded images
@@ -3259,6 +3678,23 @@ export class ProductionComponent implements OnInit, OnDestroy {
             this.sourceImageDataUrls.set(newIndex, dataUrl);
             if (newIndex === this.selectedSourceIndex) {
                 this.loadImageIntoCanvas(dataUrl);
+            }
+        };
+        // Without an error path the new source slot stays stuck without a
+        // dataUrl — the canvas is blank but the source is still listed,
+        // and the user has no idea the file read failed.
+        reader.onerror = () => {
+            console.error('FileReader failed for source image:', reader.error);
+            this.notificationService.showError('Failed to read image file. The source was not added.');
+            // Roll back the optimistic source insert so the broken slot
+            // doesn't linger in the sidebar.
+            const idx = this.currentSources.indexOf(newSource);
+            if (idx !== -1) {
+                this.currentSources.splice(idx, 1);
+                this._clearPerSourceState(idx);
+                if (this.selectedSourceIndex >= this.currentSources.length) {
+                    this.selectedSourceIndex = Math.max(0, this.currentSources.length - 1);
+                }
             }
         };
         reader.readAsDataURL(file);
@@ -3307,6 +3743,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
             next: (uploadedImage) => {
                 this.uploadedImageIds.set(sourceIndex, uploadedImage.image_id);
                 this.isUploadingImage = false;
+                // Immediately surface this label in the AddText dialog's chip
+                // list so the user doesn't have to retype it on the next add.
+                // Without this, the label only shows up after a /grouped
+                // refresh (i.e. navigating back to the dashboard and reopening).
+                this.rememberUploadedLabel(label);
                 this.notificationService.showSuccess('Image saved');
             },
             error: (err) => {
@@ -3315,6 +3756,14 @@ export class ProductionComponent implements OnInit, OnDestroy {
                 this.isUploadingImage = false;
             }
         });
+    }
+
+    /** Add `label` to availableLabels in sorted order if it's a real user
+     * choice (not an auto-fallback) and not already present. */
+    private rememberUploadedLabel(label: string): void {
+        if (!label || this.isAutoGeneratedLabel(label)) return;
+        if (this.availableLabels.includes(label)) return;
+        this.availableLabels = [...this.availableLabels, label].sort();
     }
 
     private uploadPendingImages(): void {

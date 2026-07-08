@@ -50,6 +50,35 @@ class AiSuggestRequest(BaseModel):
     production_id: Optional[int] = None
 
 
+class AiWordSuggestRequest(BaseModel):
+    """Per-word contextual AI suggestion. The client composes the full prompt
+    (editable in the UI) and sends it as-is.
+
+    `provider` selects the LLM backend ("gemini", "anthropic", or "openai");
+    `model` overrides the default model id; `apiKey` is the user's saved key
+    (sourced from the same localStorage entries CuReD uses), and falls back
+    to environment variables when omitted."""
+    prompt: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    apiKey: Optional[str] = None
+
+
+class AiSuggestAllRequest(BaseModel):
+    """Bulk AI lemmatization request. Reuses the same provider/model/apiKey
+    fields as the per-word path so the user's saved keys are honoured.
+    Server overwrites the existing lemmatization with the AI result (the
+    user reviews and corrects each suggestion from the panel).
+
+    `extra_instruction` is an optional editable directive from the production
+    AI panel — appended to the system prompt so the user can steer behaviour
+    (e.g., "Be conservative on broken signs", "Prefer verbs in the G-stem")."""
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    apiKey: Optional[str] = None
+    extra_instruction: Optional[str] = None
+
+
 class ExportEblRequest(BaseModel):
     fragment_number: str
 
@@ -222,23 +251,171 @@ async def delete_lemmatization(production_id: int):
 # AI Suggestions
 # ==========================================
 
-@router.post("/{production_id}/ai-suggest")
-async def ai_suggest(production_id: int, request: AiSuggestRequest):
-    """Get AI-powered lemma suggestions for a text."""
+@router.post("/{production_id}/ai-suggest-all", response_model=TextLemmatization)
+async def ai_suggest_all(production_id: int, request: AiSuggestAllRequest):
+    """Bulk AI lemmatization for an entire production text.
+
+    Sends the ATF, current ORACC suggestions, dictionary candidates, and the
+    user's translation to the chosen LLM. Returned assignments are tagged
+    with is_suggestion=True / suggestion_source="ai" so the panel can render
+    them in the AI color and the user can confirm or correct each one.
+
+    The result OVERWRITES any existing lemmatization (per the v1 design:
+    one bulk AI pass, then the human reviews). The previous lemmatization's
+    ORACC priors are still surfaced to the model before the overwrite, so
+    they aren't lost as context — just no longer authoritative."""
+    try:
+        from handlers.production_texts_handler import production_texts_handler
+        from services.lemmatization_ai_service import LemmatizationAiService
+
+        prod_text = production_texts_handler.get_by_id(production_id)
+        if not prod_text:
+            raise HTTPException(status_code=404, detail="Production text not found")
+        if not prod_text.content or not prod_text.content.strip():
+            raise HTTPException(status_code=400, detail="Production text has no transliteration content")
+
+        existing_lem = lemmatization_handler.get_lemmatization(production_id)
+
+        ai_service = LemmatizationAiService()
+        try:
+            result = await ai_service.suggest(
+                atf_text=prod_text.content,
+                production_id=production_id,
+                tokenizer=lemmatization_handler._tokenizer,
+                dictionary=lemmatization_handler._dictionary,
+                translation_content=prod_text.translation_content or "",
+                existing_lemmatization=existing_lem,
+                provider=request.provider,
+                model=request.model,
+                api_key=request.apiKey,
+                extra_instruction=request.extra_instruction,
+            )
+        except RuntimeError as parse_err:
+            # JSON parse / truncation failure inside _parse_response. Do NOT
+            # save anything — the user's existing lemmatization stays intact.
+            logger.error(f"AI bulk lemmatization parse failure: {parse_err}")
+            raise HTTPException(status_code=502, detail=str(parse_err))
+
+        # Guard: if the AI returned valid JSON but every assignment is empty,
+        # saving would wipe whatever the user had before with nothing useful
+        # in return. Refuse the save and surface a clear error instead.
+        ai_assignment_count = sum(
+            1
+            for line in result.lines
+            for tok in line.tokens
+            if tok.unique_lemma
+        )
+        if ai_assignment_count == 0:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "The AI returned a parseable response but produced zero lemma "
+                    "assignments. Your previous lemmatization was NOT overwritten. "
+                    "Try a more capable model (e.g., Claude Sonnet or Gemini Pro)."
+                ),
+            )
+
+        # Preserve human-confirmed assignments: copy them from the prior
+        # lemmatization back onto the AI result so the AI's overwrite cannot
+        # silently replace lemmas the user has already accepted. A token
+        # counts as confirmed when it has a non-empty unique_lemma AND
+        # is_suggestion is False AND is_cleared is False (cleared means
+        # the user actively rejected a lemma here — that "no" is also a
+        # decision the AI shouldn't override). Suggestions, empty rows,
+        # and tokens that only carry ORACC metadata are NOT preserved.
+        preserved = 0
+        if existing_lem and existing_lem.lines:
+            # Match by line_number when both sides have it; fall back to
+            # position so re-tokenized lines (which may produce empty
+            # line_number) still align.
+            existing_by_ln = {
+                ln.line_number: ln for ln in existing_lem.lines if ln.line_number
+            }
+            for i, new_line in enumerate(result.lines):
+                old_line = existing_by_ln.get(new_line.line_number)
+                if old_line is None and i < len(existing_lem.lines):
+                    old_line = existing_lem.lines[i]
+                if old_line is None:
+                    continue
+                # Match tokens by position within the line — both sides come
+                # from the same tokenizer pass over the same ATF, so the
+                # ordering is stable for the line-length they share.
+                pair_count = min(len(old_line.tokens), len(new_line.tokens))
+                for ti in range(pair_count):
+                    old_tok = old_line.tokens[ti]
+                    new_tok = new_line.tokens[ti]
+                    is_human_confirmed = (
+                        bool(old_tok.unique_lemma)
+                        and not old_tok.is_suggestion
+                        and not old_tok.is_cleared
+                    )
+                    is_human_cleared = (
+                        not old_tok.unique_lemma
+                        and old_tok.is_cleared
+                    )
+                    if is_human_confirmed:
+                        new_tok.unique_lemma = list(old_tok.unique_lemma)
+                        new_tok.is_suggestion = False
+                        new_tok.suggestion_source = ""
+                        new_tok.is_cleared = False
+                        # Keep ORACC metadata on the assignment so the panel
+                        # can still surface it next to the confirmed lemma.
+                        new_tok.oracc_guideword = old_tok.oracc_guideword
+                        new_tok.oracc_citation = old_tok.oracc_citation
+                        new_tok.oracc_pos = old_tok.oracc_pos
+                        new_tok.ai_responses = dict(old_tok.ai_responses or {})
+                        preserved += 1
+                    elif is_human_cleared:
+                        # User explicitly removed a lemma here — respect that
+                        # rejection. Clear whatever the AI proposed and re-set
+                        # the cleared flag so auto-assign doesn't refill it.
+                        new_tok.unique_lemma = []
+                        new_tok.is_suggestion = False
+                        new_tok.suggestion_source = ""
+                        new_tok.is_cleared = True
+                        preserved += 1
+        if preserved:
+            logger.info(
+                f"AI bulk lemmatization: preserved {preserved} human-confirmed/cleared "
+                f"assignments through the AI overwrite"
+            )
+
+        saved = lemmatization_handler.save_lemmatization(result)
+        return saved
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(status_code=501, detail="AI lemmatization service not available")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Bulk AI lemmatization failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-word-suggest")
+async def ai_word_suggest(request: AiWordSuggestRequest):
+    """Per-word AI hint: takes the full prompt the user composed in the UI
+    (sentence + translation + question) and returns Gemini's freeform
+    response. The result is informational only — it is NOT applied as a
+    lemma assignment."""
     try:
         from services.lemmatization_ai_service import LemmatizationAiService
         ai_service = LemmatizationAiService()
-        result = await ai_service.suggest(
-            atf_text=request.atf_text,
-            production_id=production_id,
-            tokenizer=lemmatization_handler._tokenizer,
-            dictionary=lemmatization_handler._dictionary
+        text = await ai_service.ask_about_word(
+            request.prompt,
+            provider=request.provider,
+            model=request.model,
+            api_key=request.apiKey,
         )
-        return result.dict()
+        return {"response": text}
     except ImportError:
         raise HTTPException(status_code=501, detail="AI lemmatization service not available")
+    except ValueError as e:
+        # Missing API key, etc.
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"AI suggestion failed: {e}")
+        logger.error(f"AI word suggestion failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

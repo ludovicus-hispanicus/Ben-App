@@ -211,10 +211,33 @@
       "Bash(PYTHONIOENCODING=utf-8 python3:*)",
       "Bash(/c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
       "Bash(PYTHONIOENCODING=utf-8 /c/Users/wende/AppData/Local/Programs/Python/Python312/python.exe:*)",
-      "Bash(# Test: write an annotation to page_0003 and check if file is modified stat \"\"c:/Users/wende/Documents/GitHub/BEn-app/server/src/data/yolo/datasets/ahw_dictionary/labels/val/page_0003.txt\"\")"
+      "Bash(# Test: write an annotation to page_0003 and check if file is modified stat \"\"c:/Users/wende/Documents/GitHub/BEn-app/server/src/data/yolo/datasets/ahw_dictionary/labels/val/page_0003.txt\"\")",
+      "Bash(awk '/AO\\\\.6450/ {found=1} found && /09\\\\/04\\\\/2026 10:38:/{found2=1; print prev3; print prev2; print prev1; print; next} {prev3=prev2; prev2=prev1; prev1=$0}' \"server/src/data/myapp.log\")",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(printenv ANTHROPIC_API_KEY)",
+      "Bash(printenv CLAUDE_API_KEY)",
+      "Bash(gh api *)",
+      "Bash(git -C \"c:/Users/wende/Documents/GitHub/ebl-api-data-preparation\" status --short)",
+      "Bash(git -C \"c:/Users/wende/Documents/GitHub/ebl-api-data-preparation\" branch --show-current)",
+      "Bash(git -C \"c:/Users/wende/Documents/GitHub/ebl-api-data-preparation\" log -5 --oneline)",
+      "Bash(git -C \"c:/Users/wende/Documents/GitHub/ebl-api-data-preparation\" add ellermeier/tests/Ellermeier_csv_lookup.md)",
+      "Bash(git -C c:/Users/wende/Documents/GitHub/ebl-api-data-preparation commit -m ' *)",
+      "Bash(git -C \"c:/Users/wende/Documents/GitHub/ebl-api-data-preparation\" push origin main)",
+      "PowerShell(python -c \"import google.genai, anthropic, openai; print\\('genai', google.genai.__version__ if hasattr\\(google.genai,'__version__'\\) else '?'\\); print\\('anthropic', anthropic.__version__\\); print\\('openai', openai.__version__\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" c:\\\\tmp\\\\probe_sig.py)",
+      "PowerShell(& \"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" c:\\\\tmp\\\\probe_sig2.py)",
+      "PowerShell(& \"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" c:\\\\tmp\\\\probe_gemini.py)",
+      "PowerShell(& \"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m py_compile \"c:\\\\Users\\\\wende\\\\Documents\\\\GitHub\\\\BEn-app\\\\server\\\\src\\\\handlers\\\\batch_recognition_handler.py\")",
+      "PowerShell(if \\($?\\) { \"SYNTAX OK\" })",
+      "Bash('C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe' -c ' *)",
+      "Bash(\"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m py_compile src/api/routers/datasets.py src/handlers/new_texts_handler.py)",
+      "Bash(\"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m py_compile src/entities/new_text.py src/handlers/new_texts_handler.py src/api/routers/datasets.py)",
+      "Bash(\"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" \"c:\\\\tmp\\\\backfill_columns_tet.py\" --apply)",
+      "Bash(\"C:\\\\Users\\\\wende\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" \"c:\\\\tmp\\\\backfill_pos_all.py\")"
     ],
     "additionalDirectories": [
-      "C:\\Users\\wende\\Documents\\GitHub\\BEn-app-native\\server\\src\\entities"
+      "C:\\Users\\wende\\Documents\\GitHub\\BEn-app-native\\server\\src\\entities",
+      "c:\\tmp"
     ]
   }
 }

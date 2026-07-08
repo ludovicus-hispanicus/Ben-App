@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -47,6 +47,15 @@ class LemmaAssignment(BaseModel):
     oracc_guideword: str = ""  # English translation from ORACC (e.g., "command")
     oracc_citation: str = ""  # Akkadian citation form from ORACC (e.g., "amātu")
     oracc_pos: str = ""  # ORACC POS tag (e.g., "N", "V", "PRP")
+    # Per-word "Ask AI" responses, keyed by `<provider>:<model>` (e.g.,
+    # "gemini_vision:gemini-2.5-flash"). Persisted via the regular
+    # lemmatization save flow so the user can come back later and see what
+    # each model previously suggested for this token.
+    ai_responses: Dict[str, str] = {}
+    # User explicitly said "no lemma" for this token. Distinguishes a
+    # deliberate clear from an unassigned-default state, so the auto-assign
+    # logic doesn't undo the clear on the next align.
+    is_cleared: bool = False
 
 
 class LineLemmatization(BaseModel):

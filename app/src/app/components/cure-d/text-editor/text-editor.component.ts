@@ -154,6 +154,33 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
     return this.textContent;
   }
 
+  /**
+   * Uppercase the current selection — used to mark a sign reading as a
+   * logogram (Sumerogram) in ATF, e.g. `lugal` → `LUGAL`. When nothing is
+   * selected, the word under the cursor is uppercased so the user can just
+   * click into a sign and hit the button. The programmatic replace fires
+   * ACE's 'change' event, so the bound content/dirty/validation state update
+   * through the normal textContentChanged path. Returns true if text changed.
+   */
+  logogramatizeSelection(): boolean {
+    if (!this.aceEditor) return false;
+    const editor = this.aceEditor;
+    let range = editor.getSelectionRange();
+    if (range.isEmpty()) {
+      const cursor = editor.getCursorPosition();
+      range = editor.getSession().getWordRange(cursor.row, cursor.column);
+    }
+    const text = editor.getSession().getTextRange(range);
+    if (!text || !text.trim()) return false;
+    const upper = text.toUpperCase();
+    if (upper === text) return false;
+    editor.getSession().replace(range, upper);
+    // Keep the uppercased span selected so a second click can revert it.
+    editor.selection.setRange(range);
+    editor.focus();
+    return true;
+  }
+
   setNewSelectedLine(index: Index): void {
     if (this.aceEditor && index) {
       this.aceEditor.gotoLine(index.row + 1, 0, true);
@@ -923,8 +950,15 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       const lines = this.textContent.split('\n');
       if (lines.length === 0) return;
 
-      let lineNum = this.startNumber || 1;
+      let nextNum = this.startNumber || 1;
+      let prevBase: number | null = null;
+      let prevAssigned: number | null = null;
       let sectionIndex = -1; // will become 0 on first @ marker
+      // Accept the prime and sub-line letter in EITHER order — both `18'a`
+      // (canonical) and the legacy `18a'` — so re-numbering existing texts is
+      // idempotent. Group 1 = base number, group 2 = sub-line letter(s); the
+      // prime is consumed but regenerated from the numberStyle (sectionSuffix).
+      const STRIP = /^(\d+)['′]*([a-z]*)['′]*\.\s*/;
       console.log('[addLineNumbers] numberStyle:', this.numberStyle, 'lines:', lines.length);
       const numbered = lines.map((line, idx) => {
         // Skip control lines (# @ & $) and empty lines
@@ -933,12 +967,16 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
           if (this.isSectionResetMarker(line)) {
             sectionIndex++;
             if (this.sectionNumbering === 'reset') {
-              lineNum = this.startNumber || 1;
+              nextNum = this.startNumber || 1;
             }
+            prevBase = null;
+            prevAssigned = null;
             console.log(`[addLineNumbers] line ${idx}: RESET marker "${line.trim()}", sectionIndex=${sectionIndex}, mode=${this.sectionNumbering}`);
           }
           // Continue sections (bottom, top, edge, column): keep same sectionIndex and numbering
           if (this.isSectionContinueMarker(line)) {
+            prevBase = null;
+            prevAssigned = null;
             console.log(`[addLineNumbers] line ${idx}: CONTINUE marker "${line.trim()}", sectionIndex=${sectionIndex} (unchanged)`);
           }
           return line; // Keep as-is, don't number
@@ -946,14 +984,24 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
         // If no section marker seen yet, treat as section 0
         if (sectionIndex < 0) { sectionIndex = 0; }
 
-        const suffix = this.getSectionSuffix(sectionIndex);
-        const num = `${lineNum}${suffix}. `;
-        if (idx < 5 || suffix) {
-          console.log(`[addLineNumbers] line ${idx}: sectionIndex=${sectionIndex}, suffix="${suffix}", num="${num}"`);
+        const m = line.match(STRIP);
+        const userBase = m ? parseInt(m[1], 10) : null;
+        const userSuffix = m ? m[2] : '';
+        const text = line.replace(STRIP, '');
+
+        // Group lines that share a user-typed base AND have a sub-letter (5a, 5b, 5c → one position)
+        const sameGroup = !!userSuffix && userBase !== null && userBase === prevBase && prevAssigned !== null;
+        const assigned = sameGroup ? prevAssigned! : nextNum;
+        if (!sameGroup) nextNum++;
+        prevBase = userBase;
+        prevAssigned = assigned;
+
+        const sectionSuffix = this.getSectionSuffix(sectionIndex);
+        // Canonical order: number, prime, sub-line letter → e.g. `18'a`.
+        const num = `${assigned}${sectionSuffix}${userSuffix}. `;
+        if (idx < 5 || userSuffix || sectionSuffix) {
+          console.log(`[addLineNumbers] line ${idx}: sectionIndex=${sectionIndex}, userSuffix="${userSuffix}", sectionSuffix="${sectionSuffix}", num="${num}"`);
         }
-        // Remove existing line number if present
-        const text = line.replace(/^\d+'?\.\s*/, '');
-        lineNum++;
         return num + text;
       });
 
@@ -968,20 +1016,29 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
       // In Letter[] mode
       if (!this.lines || this.lines.length === 0) return;
 
-      let lineNum = this.startNumber || 1;
+      let nextNum = this.startNumber || 1;
+      let prevBase: number | null = null;
+      let prevAssigned: number | null = null;
       let sectionIndex = -1;
+      // Accept the prime and sub-line letter in EITHER order — both `18'a`
+      // (canonical) and the legacy `18a'` — so re-numbering existing texts is
+      // idempotent. Group 1 = base number, group 2 = sub-line letter(s); the
+      // prime is consumed but regenerated from the numberStyle (sectionSuffix).
+      const STRIP = /^(\d+)['′]*([a-z]*)['′]*\.\s*/;
       const numbered = this.lines.map((l, i) => {
         // Skip control lines (# @ & $) and empty lines
         if (this.isAtfControlLine(l.letter)) {
           if (this.isSectionResetMarker(l.letter)) {
             sectionIndex++;
             if (this.sectionNumbering === 'reset') {
-              lineNum = this.startNumber || 1;
+              nextNum = this.startNumber || 1;
             }
+            prevBase = null;
+            prevAssigned = null;
           }
-          // Continue sections: keep same sectionIndex and numbering
           if (this.isSectionContinueMarker(l.letter)) {
-            // no-op: inherit parent section's style and numbering
+            prevBase = null;
+            prevAssigned = null;
           }
           const letter = new Letter(l.letter);
           letter.index = new Index(i, 0);
@@ -989,11 +1046,20 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
         }
         if (sectionIndex < 0) { sectionIndex = 0; }
 
-        const suffix = this.getSectionSuffix(sectionIndex);
-        const num = `${lineNum}${suffix}. `;
-        // Remove existing line number if present
-        const text = l.letter.replace(/^\d+'?\.\s*/, '');
-        lineNum++;
+        const m = l.letter.match(STRIP);
+        const userBase = m ? parseInt(m[1], 10) : null;
+        const userSuffix = m ? m[2] : '';
+        const text = l.letter.replace(STRIP, '');
+
+        const sameGroup = !!userSuffix && userBase !== null && userBase === prevBase && prevAssigned !== null;
+        const assigned = sameGroup ? prevAssigned! : nextNum;
+        if (!sameGroup) nextNum++;
+        prevBase = userBase;
+        prevAssigned = assigned;
+
+        const sectionSuffix = this.getSectionSuffix(sectionIndex);
+        // Canonical order: number, prime, sub-line letter → e.g. `18'a`.
+        const num = `${assigned}${sectionSuffix}${userSuffix}. `;
         const letter = new Letter(num + text);
         letter.index = new Index(i, 0);
         return letter;

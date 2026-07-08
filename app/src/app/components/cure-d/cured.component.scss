@@ -249,7 +249,7 @@
 ::ng-deep .guide-dropdown {
     .guide-panel {
         padding: 10px 14px;
-        min-width: 200px;
+        min-width: 260px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         font-size: 12px;
 
@@ -324,13 +324,43 @@
                 width: 90px;
                 height: 4px;
                 cursor: pointer;
-                accent-color: #FF9800;
+                accent-color: #FF00FF;
             }
 
             .guide-unit {
                 color: #999;
                 font-size: 10px;
                 min-width: 24px;
+            }
+        }
+
+        // Custom-color picker row: hex picker + alpha slider + percent + Add.
+        // The range slider is narrower here than the standalone opacity row
+        // since it shares the line with three other controls.
+        .guide-custom-pick {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+
+            .guide-color-input {
+                width: 24px;
+                height: 24px;
+                padding: 0;
+                border: 1px solid #bbb;
+                border-radius: 3px;
+                background: none;
+                cursor: pointer;
+                &::-webkit-color-swatch-wrapper { padding: 1px; }
+                &::-webkit-color-swatch { border: none; border-radius: 2px; }
+            }
+
+            .guide-range-input { width: 70px; }
+
+            .guide-add-btn {
+                min-width: 0;
+                height: 24px;
+                line-height: 22px;
+                padding: 0 8px;
+                font-size: 11px;
             }
         }
     }
@@ -695,6 +725,7 @@
                 display: flex;
                 gap: 0.5em;
                 justify-content: center;
+                flex-wrap: wrap;
 
                 .mode-btn {
                     padding: 0.5em 1.2em;
@@ -718,6 +749,104 @@
                         background: #9b59b6;
                         color: white;
                         box-shadow: 0 2px 8px rgba(155, 89, 182, 0.3);
+                    }
+                }
+            }
+
+            .custom-prompt-area {
+                margin-top: 0.75em;
+                width: 100%;
+                max-width: 560px;
+                margin-left: auto;
+                margin-right: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 0.35em;
+
+                .custom-prompt-textarea {
+                    width: 100%;
+                    border: 1px solid #d1c4e9;
+                    border-radius: 8px;
+                    padding: 0.6em 0.75em;
+                    font-family: inherit;
+                    font-size: 0.85em;
+                    line-height: 1.4;
+                    resize: vertical;
+                    background: #faf5fc;
+                    color: #333;
+                    box-sizing: border-box;
+
+                    &:focus {
+                        outline: none;
+                        border-color: #9b59b6;
+                        background: white;
+                        box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.15);
+                    }
+                }
+
+                .custom-prompt-hint {
+                    font-size: 0.75em;
+                    color: #666;
+                    text-align: right;
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    flex-wrap: wrap;
+                    gap: 0.35em;
+
+                    .warn { color: #c62828; font-weight: 500; }
+                    .muted { color: #999; }
+
+                    .custom-prompt-preview-toggle {
+                        background: transparent;
+                        border: 1px solid #d1c4e9;
+                        border-radius: 4px;
+                        color: #6a1b9a;
+                        padding: 0.15em 0.5em;
+                        font-size: 0.95em;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 0.25em;
+                        margin-left: 0.4em;
+
+                        &:hover {
+                            background: #f3e5f5;
+                            border-color: #9b59b6;
+                        }
+                    }
+                }
+
+                .custom-prompt-preview {
+                    border: 1px solid #e0d7ee;
+                    border-radius: 6px;
+                    background: #faf7fd;
+                    padding: 0.4em 0.6em;
+                    font-size: 0.78em;
+                    color: #444;
+
+                    summary {
+                        cursor: pointer;
+                        color: #6a1b9a;
+                        font-weight: 500;
+                        padding: 0.15em 0;
+                        user-select: none;
+                    }
+
+                    pre {
+                        margin: 0.4em 0 0;
+                        white-space: pre-wrap;
+                        word-break: break-word;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                        font-size: 0.95em;
+                        line-height: 1.45;
+                        color: #333;
+                        background: white;
+                        border: 1px solid #ece4f5;
+                        border-radius: 4px;
+                        padding: 0.5em 0.65em;
+                        max-height: 320px;
+                        overflow: auto;
                     }
                 }
             }

@@ -869,6 +869,11 @@ class EblHandler:
         Uses the /fragments/{number}/edition endpoint.
         Required scope: transliterate:fragments
         """
+        # eBL's parser rejects lines with trailing \r (CRLF). Normalize defensively
+        # in case any CRLF-poisoned content (e.g. from past LLM responses applied
+        # in the editor before the client-side fix) is still stored in the DB.
+        atf_text = atf_text.replace('\r\n', '\n').replace('\r', '\n')
+
         # Log export attempt with timestamp for debugging
         import datetime
         timestamp = datetime.datetime.now().isoformat()

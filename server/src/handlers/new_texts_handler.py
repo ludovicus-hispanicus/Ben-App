@@ -362,6 +362,16 @@ class NewTextsHandler:
             latest = t.transliterations[-1]
             if latest.edit_history:
                 content = "\n".join(latest.edit_history[-1].lines)
+        # The canonical OCR image (copied at creation time) is the source of
+        # truth for what this text was transcribed from. The `identifier`
+        # (publication_id) only names the *original* source snippet — that file
+        # may have been renamed/renumbered by a later snippet re-extraction, so
+        # never rely on it to fetch the image. Bundle image_name instead.
+        image_name = ""
+        for tr in reversed(t.transliterations or []):
+            if getattr(tr, "image_name", None):
+                image_name = tr.image_name
+                break
         label = t.labels[0] if t.labels else t.label or ""
         return {
             "text_id": t.text_id,
@@ -370,6 +380,17 @@ class NewTextsHandler:
             "part": t.part,
             "content": content,
             "identifier": f"{t.publication_id or ''} {t.museum_id or ''}".strip() or str(t.text_id),
+            "image_name": image_name,
+            # None when not yet stamped; export_dataset_texts falls back to
+            # deriving it from the source manifest only in that case.
+            "column": t.column,
+            # Page-relative centers for JSON-only entry assembly: sort blocks by
+            # (page, column, y) to recover true reading order.
+            "x": t.x,
+            "y": t.y,
+            # True class for merge decisions (falls back to the identifier's
+            # class only when not stamped).
+            "block_class": t.block_class,
         }
 
     def export_dataset_texts(self, dataset_id: int) -> List[dict]:
@@ -382,8 +403,12 @@ class NewTextsHandler:
         texts = self._parse_texts(results)
         exported = [self._extract_text_content(t) for t in texts]
 
-        # Enrich with column info from source project manifests
-        self._enrich_with_column(exported)
+        # A stamped `column` on the record is authoritative and drift-proof.
+        # Only fall back to deriving column from the source manifest for records
+        # that don't have one yet (legacy texts / other datasets).
+        need_column = [e for e in exported if not e.get("column")]
+        if need_column:
+            self._enrich_with_column(need_column)
         return exported
 
     def _enrich_with_column(self, texts: List[dict]):
@@ -557,6 +582,10 @@ class NewTextsHandler:
             "publication_id": text.publication_id,
             "labels": labels,
             "part": text.part or "",
+            "column": text.column,
+            "x": text.x,
+            "y": text.y,
+            "block_class": text.block_class,
             "image_filename": image_filename,
             "transliteration": trans_data,
         }
@@ -588,6 +617,10 @@ class NewTextsHandler:
                         metadata=[],
                         uploader_id=uploader_id,
                         dataset_id=target_dataset_id,
+                        column=entry.get("column"),
+                        x=entry.get("x"),
+                        y=entry.get("y"),
+                        block_class=entry.get("block_class"),
                     )
 
                     # Update labels and part
@@ -673,6 +706,10 @@ class NewTextsHandler:
                     metadata=[],
                     uploader_id=uploader_id,
                     dataset_id=target_dataset_id,
+                    column=entry.get("column"),
+                    x=entry.get("x"),
+                    y=entry.get("y"),
+                    block_class=entry.get("block_class"),
                 )
 
                 if entry.get("labels"):
@@ -1063,7 +1100,7 @@ class NewTextsHandler:
             {"$set": {"transliterations.$.image_name": image_name}}
         )
 
-    def create_new_text(self, identifiers: TextIdentifiersDto, metadata: List[Dict], uploader_id: str, dataset_id: int = None) -> int:
+    def create_new_text(self, identifiers: TextIdentifiersDto, metadata: List[Dict], uploader_id: str, dataset_id: int = None, column: str = None, x: float = None, y: float = None, block_class: str = None) -> int:
         new_text = NewText(
             text_id=randint(1000000, 9999999),
             publication_id=identifiers.publication.get_value() if identifiers.publication else None,
@@ -1073,7 +1110,11 @@ class NewTextsHandler:
             uploader=Uploader.ADMIN,
             metadata=metadata,
             use_start_time=self._get_time_in_numbers(),
-            dataset_id=dataset_id
+            dataset_id=dataset_id,
+            column=column,
+            x=x,
+            y=y,
+            block_class=block_class,
         )
         self.insert_text(text=new_text)
 

@@ -15,10 +15,12 @@ import { MatSliderModule } from '@angular/material/slider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
+import { MarkdownModule } from 'ngx-markdown';
 
 import { ProductionComponent } from './production.component';
 import { LemmatizationPanelComponent } from './lemmatization-panel/lemmatization-panel.component';
 import { AddTextDialogComponent } from '../common/add-text-dialog/add-text-dialog.component';
+import { PromptDialogComponent } from '../common/prompt-dialog/prompt-dialog.component';
 import { PdfUploaderModule } from '../cure-d/cured.module';
 import { TextEditorModule } from '../cure-d/text-editor/text-editor.module';
 import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
@@ -27,7 +29,8 @@ import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
     declarations: [
         ProductionComponent,
         LemmatizationPanelComponent,
-        AddTextDialogComponent
+        AddTextDialogComponent,
+        PromptDialogComponent
     ],
     imports: [
         CommonModule,
@@ -48,7 +51,8 @@ import { FabricCanvasModule } from '../fabric-canvas/fabric-canvas.module';
         MatDividerModule,
         PdfUploaderModule,
         TextEditorModule,
-        FabricCanvasModule
+        FabricCanvasModule,
+        MarkdownModule.forChild()
     ],
     exports: [
         ProductionComponent

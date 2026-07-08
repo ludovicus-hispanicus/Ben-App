@@ -15,8 +15,13 @@ from entities.lemmatization import AtfToken, AtfLine, TokenizedText
 
 logger = logging.getLogger(__name__)
 
-# Regex for ATF line number prefix: "1.", "1'.", "1''.", "1a.", "a+1.", "1-3.", etc.
-LINE_NUMBER_RE = re.compile(r'^([a-z]\+)?\d+[a-z]?(?:[-–]\d+)?(?:[\'′]+)?(?:\.\s*)')
+# Regex for ATF line number prefix: "1.", "1'.", "1''.", "1a.", "1'a.", "1a'.",
+# "a+1.", "1-3.", "1'-3'.", etc. The prime(s) and sub-line letter may appear in
+# either order (1'a or 1a') so traditional and eBL-style numbering both parse.
+_LINE_NUM_CORE = r"\d+(?:['′]+[a-z]?|[a-z]['′]*)?"
+LINE_NUMBER_RE = re.compile(
+    r'^([a-z]\+)?' + _LINE_NUM_CORE + r'(?:[-–]' + _LINE_NUM_CORE + r')?(?:\.\s*)'
+)
 
 # Regex for damage/uncertainty flags at the end of a token
 FLAGS_RE = re.compile(r'[#?!*]+$')
@@ -33,8 +38,15 @@ STARTS_WITH_DET_RE = re.compile(r'^\{[^}]+\}')
 # Regex to detect numbers: pure digits, or digit+sign patterns like 1(diš)
 NUMBER_RE = re.compile(r'^\d+(\([^)]+\))?$')
 
+# Gap/break markers that aren't lemmatizable but MUST stay visible so the
+# reader keeps their orientation about where signs are lost. The brackets
+# [ and ] survive on their own because they ride along in a token's `raw`
+# text; the standalone ellipsis would otherwise be dropped, so we emit it as
+# an inert marker token (empty `cleaned` → treated as skip downstream).
+MARKER_TOKENS = {'...', '…'}
+
 # Tokens that are not words and should not be lemmatized
-SKIP_TOKENS = {'...', 'x', 'X', '$', '||', '|'}
+SKIP_TOKENS = {'x', 'X', '$', '||', '|'}
 
 
 class AtfTokenizer:
@@ -122,6 +134,17 @@ class AtfTokenizer:
                 was_broken = True
             else:
                 was_broken = False
+
+            # Keep gap markers visible (inert chip), but never lemmatize them.
+            if part in MARKER_TOKENS:
+                tokens.append(AtfToken(
+                    index=token_index,
+                    raw=part,
+                    cleaned="",
+                    is_broken=in_broken,
+                ))
+                token_index += 1
+                continue
 
             # Skip non-lemmatizable tokens
             if part in SKIP_TOKENS:

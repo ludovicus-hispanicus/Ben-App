@@ -1,6 +1,8 @@
 import asyncio
 import io
 import json
+import logging
+import os
 import zipfile
 from typing import List, Optional
 
@@ -180,6 +182,10 @@ def _enrich_ahw_columns(texts: list):
     )
 
     for t in texts:
+        # A stamped column is authoritative — never override it by re-deriving
+        # from the (possibly renumbered) source annotations.
+        if t.get("column"):
+            continue
         ident = t.get("identifier", "")
         if "/" not in ident:
             continue
@@ -356,11 +362,33 @@ async def export_dataset(dataset_id: int, format: str = "json"):
         )
 
     elif format == "zip_json":
+        # Self-contained download: each text's JSON plus its canonical OCR image
+        # (the copy made at creation time), bundled under images/. We deliberately
+        # do NOT resolve the image via the `identifier`/publication_id — that names
+        # the original source snippet, which a later snippet re-extraction may have
+        # renamed/renumbered, so it can point at the wrong picture. image_name is
+        # the source of truth and is always consistent with `content`.
+        from utils.storage_utils import StorageUtils
         buf = io.BytesIO()
+        missing_images = 0
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for t in texts:
-                fname = f'{t["label"]}_{t["text_id"]}.json' if t["label"] else f'{t["text_id"]}.json'
-                zf.writestr(fname, json.dumps(t, ensure_ascii=False, indent=2))
+                base = f'{t["label"]}_{t["text_id"]}' if t["label"] else f'{t["text_id"]}'
+                img_name = t.get("image_name")
+                img_rel = None
+                if img_name:
+                    img_path = StorageUtils.build_cured_train_image_path(image_name=img_name)
+                    if os.path.isfile(img_path):
+                        ext = os.path.splitext(img_name)[1] or ".png"
+                        img_rel = f"images/{base}{ext}"
+                        zf.write(img_path, img_rel)
+                    else:
+                        missing_images += 1
+                entry = dict(t)
+                entry["image"] = img_rel  # path within this zip, or null if unavailable
+                zf.writestr(f"{base}.json", json.dumps(entry, ensure_ascii=False, indent=2))
+        if missing_images:
+            logging.warning(f"zip_json export for dataset {dataset_id}: {missing_images} texts had no image file on disk")
         return Response(
             content=buf.getvalue(),
             media_type="application/zip",

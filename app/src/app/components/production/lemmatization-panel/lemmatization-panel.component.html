@@ -17,12 +17,6 @@
                 <span>Sync</span>
             </button>
 
-            <button class="toolbar-btn" (click)="aiSuggest()" [disabled]="isAiSuggesting || !productionId"
-                    matTooltip="Get AI-powered lemma suggestions">
-                <mat-icon [class.spinning]="isAiSuggesting">auto_awesome</mat-icon>
-                <span>AI Suggest</span>
-            </button>
-
             <button class="toolbar-btn" (click)="save()" [disabled]="isSaving || !lemmatization"
                     matTooltip="Save lemmatization">
                 <mat-icon>save</mat-icon>
@@ -76,10 +70,12 @@
                           [class.assigned]="getTokenStatus(line, tokenIdx) === 'assigned'"
                           [class.suggestion]="getTokenStatus(line, tokenIdx) === 'suggestion'"
                           [class.atf_suggestion]="getTokenStatus(line, tokenIdx) === 'atf_suggestion'"
+                          [class.ai_suggestion]="getTokenStatus(line, tokenIdx) === 'ai_suggestion'"
                           [class.ambiguous]="getTokenStatus(line, tokenIdx) === 'ambiguous'"
                           [class.unmatched]="getTokenStatus(line, tokenIdx) === 'unmatched'"
                           [class.skip]="getTokenStatus(line, tokenIdx) === 'skip'"
                           [class.selected]="selectedToken === token"
+                          [class.last-selected]="!selectedToken && lastSelectedToken === token"
                           (click)="onTokenClick($event, line, token, lineIdx, tokenIdx)"
                           [matTooltip]="getTokenLemma(line, tokenIdx) || token.cleaned">
                         <span class="token-text">{{ token.raw }}</span>
@@ -88,6 +84,10 @@
                         </span>
                     </span>
                 </div>
+                <div class="line-translation" *ngIf="getLineTranslation(line) as tr">
+                    <mat-icon class="tr-icon">translate</mat-icon>
+                    <span class="tr-text">{{ tr }}</span>
+                </div>
             </div>
 
             <!-- Structure/state lines (display only) -->
@@ -95,37 +95,52 @@
                 <span class="meta-text">{{ line.raw_text }}</span>
             </div>
         </ng-container>
+
+        <!-- Token overlay lives inside .lemma-lines so it scrolls with the
+             content — positioned absolute relative to the scroll container.
+             `popupY` is the line's offsetTop (panel-content coords). For the
+             "above" orientation, transform: translateY(-100%) flips the
+             dropdown so its bottom edge sits at popupY. -->
+        <div class="token-overlay" *ngIf="popupVisible && selectedToken"
+             [style.top.px]="popupY"
+             [style.transform]="popupOrientation === 'above' ? 'translateY(-100%)' : null">
+    <!-- Info header -->
+    <div class="overlay-header">
+        <div class="header-left">
+            <span class="popup-token">{{ selectedToken.raw }}</span>
+            <span class="popup-cleaned">{{ selectedToken.cleaned }}</span>
+            <span class="popup-complex" *ngIf="selectedToken.is_complex">Complex</span>
+            <span class="popup-enclitic" *ngIf="selectedToken.detected_enclitic">
+                Enclitic: -{{ selectedToken.detected_enclitic }}
+            </span>
+            <span class="popup-cleaned" *ngIf="selectedToken.match_level">
+                · {{ selectedToken.match_level }}
+            </span>
+        </div>
+        <div class="header-actions">
+            <button class="popup-action ai-action" (click)="toggleAiPanel()"
+                    [class.active]="aiPanelOpen"
+                    matTooltip="Ask AI for meaning and grammar analysis (informational only)">
+                <mat-icon>auto_awesome</mat-icon> Ask AI
+            </button>
+            <button class="popup-action" (click)="clearLemma()" matTooltip="Clear all assigned lemmas">
+                <mat-icon>delete_outline</mat-icon> No lemma
+            </button>
+            <button class="popup-close" (click)="closePopup()">
+                <mat-icon>close</mat-icon>
+            </button>
+        </div>
     </div>
 
-    <!-- Empty state -->
-    <div class="empty-state" *ngIf="!tokenizedText && !isTokenizing">
-        <mat-icon>spellcheck</mat-icon>
-        <p>No text to lemmatize. Switch to the Transliteration tab and enter some ATF text first.</p>
-    </div>
-</div>
-
-<!-- Token popup (positioned absolute) -->
-<div class="token-popup" *ngIf="popupVisible && selectedToken"
-     [style.left.px]="popupX" [style.top.px]="popupY"
-     (clickOutside)="closePopup()">
-    <div class="popup-header">
-        <span class="popup-token">{{ selectedToken.raw }}</span>
-        <span class="popup-cleaned">{{ selectedToken.cleaned }}</span>
-        <span class="popup-complex" *ngIf="selectedToken.is_complex">
-            Complex: +{{ selectedToken.detected_suffix }}
-        </span>
-        <span class="popup-enclitic" *ngIf="selectedToken.detected_enclitic">
-            Enclitic: -{{ selectedToken.detected_enclitic }}
-        </span>
-        <button class="popup-close" (click)="closePopup()">
-            <mat-icon>close</mat-icon>
-        </button>
-    </div>
-
-    <!-- ATF import suggestion -->
-    <div class="popup-section atf-suggestion-section" *ngIf="getAtfSuggestion(selectedLine, selectedTokenIdx) as atfSug">
+    <!-- ATF import suggestion (full width, above the columns) -->
+    <div class="overlay-section atf-suggestion-section"
+         [class.is-ai]="getAtfSuggestion(selectedLine, selectedTokenIdx)?.suggestion_source === 'ai'"
+         *ngIf="getAtfSuggestion(selectedLine, selectedTokenIdx) as atfSug">
         <div class="popup-label">
-            <span class="atf-import-badge">ATF import</span>
+            <span class="atf-import-badge"
+                  [class.is-ai]="atfSug.suggestion_source === 'ai'">
+                {{ atfSug.suggestion_source === 'ai' ? 'AI' : 'ATF import' }}
+            </span>
             Suggestion:
         </div>
         <div class="atf-suggestion-content">
@@ -150,123 +165,145 @@
         </div>
     </div>
 
-    <!-- Current assignment (for complex tokens, show both lemmas) -->
-    <div class="popup-section" *ngIf="getTokenLemma(selectedLine, selectedTokenIdx) && !getAtfSuggestion(selectedLine, selectedTokenIdx)">
-        <div class="popup-label">Current assignment:</div>
-        <div class="current-lemmas">
-            <span *ngFor="let lid of getTokenLemma(selectedLine, selectedTokenIdx).split(', ')" class="assigned-lemma">
-                {{ lid }}
-            </span>
-        </div>
-    </div>
-
-    <!-- Unified candidates with morph info -->
-    <div class="popup-section" *ngIf="candidateEntries.length > 0">
-        <div class="popup-label">{{ selectedToken.is_complex ? 'Base word:' : 'Candidates:' }}</div>
-        <div *ngFor="let entry of candidateEntries" class="candidate-entry" (click)="assignLemma(entry.word_id)">
-            <span class="candidate-id">{{ entry.word_id }}</span>
-            <span class="candidate-morph" *ngIf="getMorphForCandidate(entry.word_id) as morph">
-                {{ morph }}
-            </span>
-            <span class="candidate-pos" *ngIf="!getMorphForCandidate(entry.word_id)">{{ entry.pos.join(', ') }}</span>
-            <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
-        </div>
-    </div>
-
-    <!-- Suffix section (for complex tokens) -->
-    <div class="popup-section suffix-section" *ngIf="selectedToken.is_complex">
-        <div class="popup-label">Suffix: -{{ selectedToken.detected_suffix }}</div>
-        <div class="suffix-current">
-            <span class="suffix-lemma-badge">{{ selectedToken.suffix_lemma }}</span>
-            <span class="suffix-info">
-                {{ getSuffixDescription(selectedToken.detected_suffix) }}
-            </span>
-        </div>
-        <div class="suffix-alternatives">
-            <div *ngFor="let alt of getSuffixAlternatives(selectedToken.detected_suffix)"
-                 class="candidate-entry suffix-alt"
-                 (click)="assignLemma(alt.lemma_id, true)">
-                <span class="candidate-id">{{ alt.lemma_id }}</span>
-                <span class="candidate-meaning">{{ alt.description }}</span>
+    <!-- Per-word AI panel — informational only, does not modify lemmas. -->
+    <div class="overlay-section ai-suggest-section" *ngIf="aiPanelOpen">
+        <div class="ai-header-row">
+            <div class="popup-label">
+                <mat-icon class="ai-icon">auto_awesome</mat-icon>
+                Ask AI about "{{ selectedToken.raw }}"
+            </div>
+            <div class="ai-model-controls">
+                <label class="ai-model-select">
+                    <span>Provider:</span>
+                    <select [(ngModel)]="selectedAiProvider"
+                            (change)="onAiProviderChange()"
+                            [disabled]="aiLoading">
+                        <option *ngFor="let p of aiProviders" [value]="p.value">{{ p.label }}</option>
+                    </select>
+                </label>
+                <label class="ai-model-select">
+                    <span>Model:</span>
+                    <select [(ngModel)]="selectedAiSubModel"
+                            (change)="onAiSubModelChange()"
+                            [disabled]="aiLoading">
+                        <option *ngFor="let m of aiSubModels[selectedAiProvider] || []"
+                                [value]="m.value" [title]="m.description">{{ m.label }}</option>
+                    </select>
+                </label>
             </div>
         </div>
-        <!-- Free dictionary search for any suffix -->
-        <div class="suffix-search">
-            <div class="search-row">
-                <input type="text" [(ngModel)]="suffixSearchQuery"
-                       placeholder="Search any suffix (e.g., -ka, -ša)…"
-                       (keyup.enter)="searchSuffix()" class="search-input" />
-                <button class="search-btn" (click)="searchSuffix()" [disabled]="isSearchingSuffix">
-                    <mat-icon>search</mat-icon>
-                </button>
-                <button class="search-btn" (click)="browseAllSuffixes()" [disabled]="isSearchingSuffix"
-                        matTooltip="Browse all suffix entries">
-                    <mat-icon>list</mat-icon>
-                </button>
-            </div>
-            <div *ngFor="let entry of suffixSearchResults" class="candidate-entry suffix-alt"
-                 (click)="assignSuffixFromEntry(entry)">
-                <span class="candidate-id">{{ entry.word_id }}</span>
-                <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
-            </div>
+        <div class="ai-apikey-row">
+            <label class="ai-apikey-label">
+                <span>API key:</span>
+                <input type="password" [(ngModel)]="aiApiKey"
+                       placeholder="(saved in browser, shared with CuReD)"
+                       [disabled]="aiLoading" class="ai-apikey-input" />
+            </label>
         </div>
-    </div>
-
-    <div class="popup-section" *ngIf="selectedToken.lemma_candidates.length === 0 && candidateEntries.length === 0">
-        <div class="popup-label no-match">No dictionary match</div>
-    </div>
-
-    <!-- Manual search -->
-    <div class="popup-section search-section">
-        <div class="search-row">
-            <input type="text" [(ngModel)]="wordSearchQuery" placeholder="Search dictionary..."
-                   (keyup.enter)="searchDictionary()" class="search-input" />
-            <button class="search-btn" (click)="searchDictionary()" [disabled]="isSearching">
-                <mat-icon>search</mat-icon>
+        <textarea class="ai-prompt-textarea" [(ngModel)]="aiPrompt" rows="6"
+                  placeholder="Edit the prompt before sending…"></textarea>
+        <div class="ai-actions">
+            <button class="ai-submit-btn" type="button"
+                    (click)="submitAiSuggestion()"
+                    [disabled]="aiLoading || !aiPrompt?.trim()">
+                <mat-icon [class.spinning]="aiLoading">{{ aiLoading ? 'sync' : 'send' }}</mat-icon>
+                {{ aiLoading ? 'Asking…' : 'Ask' }}
+            </button>
+            <button class="ai-cancel-btn" type="button" (click)="aiPanelOpen = false">
+                <mat-icon>close</mat-icon> Close
             </button>
         </div>
-        <div *ngFor="let entry of searchResults" class="candidate-entry" (click)="assignLemma(entry.word_id)">
-            <span class="candidate-id">{{ entry.word_id }}</span>
-            <span class="candidate-pos">{{ entry.pos.join(', ') }}</span>
-            <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+        <div class="ai-response" *ngIf="aiResponse">
+            <div class="ai-response-label">Suggestion (informational):</div>
+            <markdown class="ai-response-text" [data]="aiResponse"></markdown>
         </div>
     </div>
 
-    <!-- Mark as complex (add suffix manually) -->
-    <div class="popup-section suffix-add-section" *ngIf="!selectedToken.is_complex">
-        <div class="popup-label">Add suffix:</div>
-        <div class="suffix-options">
-            <span *ngFor="let suf of getAllSuffixOptions()" class="suffix-option-btn"
-                  (click)="markAsComplex(suf.suffix, suf.lemma_id)">
-                -{{ suf.suffix }}
-            </span>
-        </div>
-        <!-- Free dictionary search for any suffix not in the quick-pick list -->
-        <div class="suffix-search">
-            <div class="search-row">
-                <input type="text" [(ngModel)]="suffixSearchQuery"
-                       placeholder="Search any suffix (e.g., -ka, -ša)…"
-                       (keyup.enter)="searchSuffix()" class="search-input" />
-                <button class="search-btn" (click)="searchSuffix()" [disabled]="isSearchingSuffix">
-                    <mat-icon>search</mat-icon>
-                </button>
-                <button class="search-btn" (click)="browseAllSuffixes()" [disabled]="isSearchingSuffix"
-                        matTooltip="Browse all suffix entries">
-                    <mat-icon>list</mat-icon>
-                </button>
+    <!-- Columns: base + one per existing suffix + one trailing empty column -->
+    <div class="overlay-columns">
+        <div class="overlay-column" *ngFor="let idx of getColumnIndices()">
+            <div class="column-header">
+                <span class="column-title" *ngIf="idx === 0">Base word</span>
+                <span class="column-title" *ngIf="idx > 0">Suffix {{ idx }}</span>
             </div>
-            <div *ngFor="let entry of suffixSearchResults" class="candidate-entry suffix-alt"
-                 (click)="assignSuffixFromEntry(entry)">
-                <span class="candidate-id">{{ entry.word_id }}</span>
-                <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
-            </div>
-        </div>
-    </div>
 
-    <!-- Clear button -->
-    <div class="popup-footer">
-        <button class="popup-action" (click)="clearLemma()">
-            <mat-icon>close</mat-icon> No lemma
+            <!-- Currently assigned at this position -->
+            <div class="column-current" *ngIf="getAssignedLemmas()[idx]">
+                <span class="assigned-lemma">
+                    {{ getAssignedLemmas()[idx] }}
+                    <button class="remove-part" (click)="removeLemmaPart(idx)"
+                            matTooltip="Remove this part" type="button">
+                        <mat-icon>close</mat-icon>
+                    </button>
+                </span>
+            </div>
+
+            <!-- Tokenizer candidates (base column only, with morph info) -->
+            <ng-container *ngIf="idx === 0 && candidateEntries.length > 0">
+                <div class="column-subhead">Candidates</div>
+                <div *ngFor="let entry of candidateEntries" class="candidate-entry"
+                     (click)="assignToColumn(0, entry.word_id)">
+                    <span class="candidate-id">{{ entry.word_id }}</span>
+                    <span class="candidate-morph" *ngIf="getMorphForCandidate(entry.word_id) as morph">
+                        {{ morph }}
+                    </span>
+                    <span class="candidate-pos" *ngIf="!getMorphForCandidate(entry.word_id)">
+                        {{ entry.pos.join(', ') }}
+                    </span>
+                    <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+                </div>
+            </ng-container>
+
+            <!-- Quick-pick suffixes (suffix columns) -->
+            <ng-container *ngIf="idx > 0">
+                <div class="column-subhead">Common</div>
+                <div class="suffix-options">
+                    <button *ngFor="let suf of getAllSuffixOptions()" type="button"
+                            class="suffix-option-btn"
+                            (mousedown)="$event.stopPropagation()"
+                            (click)="$event.stopPropagation(); assignToColumn(idx, suf.lemma_id)"
+                            [matTooltip]="suf.lemma_id + ' — ' + suf.description">
+                        -{{ suf.suffix }}
+                    </button>
+                </div>
+            </ng-container>
+
+            <!-- Per-column free dictionary search -->
+            <div class="column-search">
+                <div class="search-row">
+                    <input #columnSearchInput type="text" [(ngModel)]="columnQueries[idx]"
+                           [placeholder]="idx === 0 ? 'Search dictionary…' : 'Search any suffix…'"
+                           (keyup.enter)="searchColumn(idx)" class="search-input" />
+                    <button class="search-btn" (click)="searchColumn(idx)"
+                            [disabled]="columnSearching[idx]">
+                        <mat-icon>search</mat-icon>
+                    </button>
+                </div>
+                <div *ngFor="let entry of columnResults[idx] || []"
+                     class="candidate-entry"
+                     (click)="assignToColumn(idx, entry.word_id)">
+                    <span class="candidate-id">{{ entry.word_id }}</span>
+                    <span class="candidate-pos" *ngIf="entry.pos?.length">{{ entry.pos.join(', ') }}</span>
+                    <span class="candidate-meaning">"{{ entry.guide_word }}"</span>
+                </div>
+            </div>
+        </div>
+        <!-- "+ Add suffix" appears only when the trailing empty column is hidden
+             AND the user already has at least one part assigned. -->
+        <button class="add-column-btn" type="button"
+                *ngIf="!showExtraColumn && getAssignedLemmas().length > 0"
+                (click)="addAnotherColumn()"
+                matTooltip="Add another suffix">
+            <mat-icon>add</mat-icon>
+            <span>Add suffix</span>
         </button>
+    </div>
+</div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" *ngIf="!tokenizedText && !isTokenizing">
+        <mat-icon>spellcheck</mat-icon>
+        <p>No text to lemmatize. Switch to the Transliteration tab and enter some ATF text first.</p>
     </div>
 </div>

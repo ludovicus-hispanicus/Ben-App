@@ -85,7 +85,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     ],
     api: [
       { value: 'openai_gpt4o', label: 'GPT-4o (OpenAI)' },
-      { value: 'anthropic_claude', label: 'Claude 3.5 Sonnet (Anthropic)' }
+      { value: 'anthropic_claude', label: 'Claude Sonnet 4.6 (Anthropic)' }
     ]
   };
 

@@ -51,3 +51,8 @@ class ProductionText(BaseModel):
     uploader_id: str = ""
     notes: str = ""  # Optional scholarly notes
     is_exported: bool = False  # Whether the text has been exported to eBL
+    # Fragment number actually used for the eBL transliteration export — may
+    # differ from `identifier` (e.g., user has a CDLI P-number locally but
+    # eBL uses a publication number). Saved here so the lemmatization export
+    # can default to the same id without the user retyping it.
+    ebl_fragment_number: str = ""
