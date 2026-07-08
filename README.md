@@ -15,14 +15,40 @@ application backed by a local database, with pluggable cloud and local recogniti
 | `electron/` | Electron Forge | Desktop wrapper that bundles the frontend and Python server |
 | `docs/`, `dev-instructions/` | — | Deployment notes, roadmap, architecture references |
 
-## Main modules
+## Modular architecture
 
-- **CuReD** (Cuneiform Recognition Desktop) — the primary transliteration and curation tool.
+BEn is designed as a **modular app**: a small, always-present core plus optional modules
+that can be turned on or off (and, going forward, installed on demand) so each user runs only
+the tools they need.
+
+- **Core modules** ship with every install and cannot be disabled: **CuReD** and **Library**
+  (the storage backbone the other modules depend on). **Settings** hosts the module manager.
+- **Optional modules** — CuRe, Layout (YOLO), Segmentation, Batch Recognition, Production,
+  Training — can be enabled/disabled per install.
+- Each tool is a self-contained Angular feature module (`*.module.ts`), and the navigation
+  bar shows only the modules that are enabled.
+
+How it works:
+
+- A module registry (`APP_MODULES` in [app/src/app/services/module.service.ts](app/src/app/services/module.service.ts))
+  declares each module's `id`, display name, icon, whether it is `core`, and whether it is `installed`.
+- Enabled/disabled state is persisted server-side via `GET`/`PUT /settings/modules`
+  (see [server/src/api/routers/settings.py](server/src/api/routers/settings.py)); the nav bar and
+  routes are gated on that state.
+- The desktop installer ships a minimal core (CuReD + Library + Settings). Additional modules are
+  intended to be installed on demand from Settings, fetched from GitHub releases — the module
+  model already distinguishes installed vs. not-yet-installed modules to support this.
+
+### Main modules
+
+- **CuReD** (Cuneiform Recognition Desktop) — the primary transliteration and curation tool. *(core)*
+- **Library** — dataset and text browser; storage backbone for other modules. *(core)*
 - **CuRe** — cuneiform sign classifier.
-- **Library** — dataset and text browser.
+- **Layout** — YOLO layout detection & training.
+- **Segmentation** — line segmentation annotation tool.
 - **Production / Lemmatization** — ATF tokenization and AI-assisted lemmatization workflow.
 - **Batch Recognition** — bulk OCR across datasets using cloud batch APIs.
-- **Settings** — model configuration, API keys, and on-demand module installation.
+- **Settings** — model configuration, API keys, and the module manager.
 
 ## OCR / recognition architecture
 
