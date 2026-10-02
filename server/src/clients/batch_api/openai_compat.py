@@ -15,10 +15,12 @@ Docs: https://platform.openai.com/docs/guides/batch
 import io
 import json
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from openai import OpenAI
 
+from ..openai_client import openai_token_params
 from .base import BatchRequest, BatchResult, BatchState, ProviderBatchAdapter, text_to_lines
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,7 @@ _ENDPOINT = "/v1/chat/completions"
 class OpenAICompatBatchAdapter(ProviderBatchAdapter):
     provider = "openai"
     base_url: Optional[str] = None  # None => OpenAI default; subclasses override
+    supports_metadata = True  # OpenAI batch ``metadata``; unverified on xAI, so Grok opts out
 
     def __init__(self, api_key: str, model: str = None):
         super().__init__(api_key, model or "gpt-4o")
@@ -46,7 +49,7 @@ class OpenAICompatBatchAdapter(ProviderBatchAdapter):
                 "url": _ENDPOINT,
                 "body": {
                     "model": self.model,
-                    "max_tokens": self.max_tokens,
+                    **self._token_params(),
                     "messages": [
                         {
                             "role": "user",
@@ -65,7 +68,10 @@ class OpenAICompatBatchAdapter(ProviderBatchAdapter):
             }))
         return ("\n".join(lines)).encode("utf-8")
 
-    def submit(self, requests: List[BatchRequest]) -> str:
+    def _token_params(self) -> dict:
+        return openai_token_params(self.model, self.max_tokens)
+
+    def submit(self, requests: List[BatchRequest], label: str = "") -> str:
         jsonl = self._build_jsonl(requests)
         upload = self.client.files.create(
             file=("batch_requests.jsonl", io.BytesIO(jsonl)),
@@ -75,13 +81,13 @@ class OpenAICompatBatchAdapter(ProviderBatchAdapter):
             input_file_id=upload.id,
             endpoint=_ENDPOINT,
             completion_window=self.completion_window,
+            **({"metadata": {"ben_label": label[:512]}} if label and self.supports_metadata else {}),
         )
         logger.info(f"{self.provider} batch submitted: {batch.id} ({len(requests)} requests, input_file={upload.id})")
         return batch.id
 
-    def poll(self, batch_id: str) -> BatchState:
-        batch = self.client.batches.retrieve(batch_id)
-        status = batch.status
+    @staticmethod
+    def _state_of(status: str) -> BatchState:
         if status == "completed":
             return BatchState.DONE
         if status in ("failed", "expired"):
@@ -90,6 +96,26 @@ class OpenAICompatBatchAdapter(ProviderBatchAdapter):
             return BatchState.CANCELLED
         # validating | in_progress | finalizing
         return BatchState.RUNNING
+
+    def poll(self, batch_id: str) -> BatchState:
+        return self._state_of(self.client.batches.retrieve(batch_id).status)
+
+    def list_batches(self, limit: int = 50) -> List[dict]:
+        out: List[dict] = []
+        for b in self.client.batches.list(limit=min(limit, 100)):
+            counts = getattr(b, "request_counts", None)
+            out.append({
+                "id": b.id,
+                "state": self._state_of(b.status).value,
+                "status": b.status,
+                "created": datetime.fromtimestamp(b.created_at, tz=timezone.utc).isoformat() if b.created_at else "",
+                "label": (getattr(b, "metadata", None) or {}).get("ben_label", ""),
+                "model": getattr(b, "model", "") or "",
+                "request_count": getattr(counts, "total", None),
+            })
+            if len(out) >= limit:
+                break
+        return out
 
     def collect(self, batch_id: str) -> List[BatchResult]:
         batch = self.client.batches.retrieve(batch_id)
@@ -110,8 +136,18 @@ class OpenAICompatBatchAdapter(ProviderBatchAdapter):
                         out.append(BatchResult(custom_id=cid, error=str(err)))
                         continue
                     body = (obj.get("response") or {}).get("body") or {}
-                    content = body["choices"][0]["message"]["content"] or ""
-                    out.append(BatchResult(custom_id=cid, lines=text_to_lines(content)))
+                    usage = body.get("usage") or {}
+                    # completion_tokens already includes reasoning tokens
+                    tokens = {
+                        "input_tokens": usage.get("prompt_tokens", 0) or 0,
+                        "output_tokens": usage.get("completion_tokens", 0) or 0,
+                    }
+                    choice = body["choices"][0]
+                    if choice.get("finish_reason") not in (None, "stop"):
+                        out.append(BatchResult(custom_id=cid, error=f"incomplete response (finish_reason={choice['finish_reason']})", **tokens))
+                        continue
+                    content = choice["message"]["content"] or ""
+                    out.append(BatchResult(custom_id=cid, lines=text_to_lines(content), **tokens))
                 except Exception as e:
                     out.append(BatchResult(custom_id=cid, error=f"parse error: {e}"))
 
@@ -167,6 +203,10 @@ class GrokBatchAdapter(OpenAICompatBatchAdapter):
     """
     provider = "grok"
     base_url = "https://api.x.ai/v1"
+    supports_metadata = False
 
     def __init__(self, api_key: str, model: str = None):
         super().__init__(api_key, model or "grok-4-1-fast-non-reasoning")
+
+    def _token_params(self) -> dict:
+        return {"max_tokens": self.max_tokens}

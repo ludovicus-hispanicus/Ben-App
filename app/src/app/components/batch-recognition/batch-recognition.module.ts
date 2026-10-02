@@ -12,6 +12,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule } from '@angular/material/dialog';
 
 import { BatchRecognitionComponent } from './batch-recognition.component';
+import { LocalFileBrowserDialogComponent } from './local-file-browser-dialog/local-file-browser-dialog.component';
 
 @NgModule({
   imports: [
@@ -28,6 +29,7 @@ import { BatchRecognitionComponent } from './batch-recognition.component';
   ],
   declarations: [
     BatchRecognitionComponent,
+    LocalFileBrowserDialogComponent,
   ],
   exports: [
     BatchRecognitionComponent,

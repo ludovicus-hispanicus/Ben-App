@@ -8,6 +8,9 @@ import {
   BatchRecognitionStatus,
   BatchRecognitionJobSummary,
   LocalFolderInfo,
+  ProviderBatch,
+  ProviderModelsResponse,
+  RecoverBatchRequest,
   VllmStatus,
 } from '../models/batch-recognition';
 
@@ -48,6 +51,29 @@ export class BatchRecognitionService {
     return this.http.get<any[]>(
       `${environment.apiUrl}${this.baseUrl}/usage`,
       { params: { days: days.toString() } }
+    );
+  }
+
+  /** Live model list from the provider's own /models endpoint (cached server-side for 1h). */
+  getProviderModels(provider: string, apiKey: string, refresh = false): Observable<ProviderModelsResponse> {
+    return this.http.post<ProviderModelsResponse>(
+      `${environment.apiUrl}${this.baseUrl}/provider-models`,
+      { provider, api_key: apiKey, refresh }
+    );
+  }
+
+  /** Recent async batches on the provider account (for recovering lost jobs). */
+  listProviderBatches(model: string, apiKey: string): Observable<{ success: boolean; message?: string; batches: ProviderBatch[] }> {
+    return this.http.post<{ success: boolean; message?: string; batches: ProviderBatch[] }>(
+      `${environment.apiUrl}${this.baseUrl}/provider-batches`,
+      { model, api_key: apiKey }
+    );
+  }
+
+  recoverBatch(request: RecoverBatchRequest): Observable<BatchRecognitionResponse> {
+    return this.http.post<BatchRecognitionResponse>(
+      `${environment.apiUrl}${this.baseUrl}/recover`,
+      request
     );
   }
 

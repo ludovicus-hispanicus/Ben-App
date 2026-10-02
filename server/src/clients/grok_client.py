@@ -16,6 +16,7 @@ import logging
 from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
 from common.ocr_prompts import resolve_prompt, wrap_prompt_for_batch, parse_batch_response
+from .openai_client import record_chat_usage
 
 
 XAI_BASE_URL = "https://api.x.ai/v1"
@@ -51,6 +52,7 @@ class GrokOcrClient(BaseOcrClient):
                 max_tokens=2048,
             )
 
+            record_chat_usage(self.model_name, response)
             content = response.choices[0].message.content or ""
             text_lines = [line.strip() for line in content.split('\n') if line.strip()]
 
@@ -82,6 +84,7 @@ class GrokOcrClient(BaseOcrClient):
                 messages=[{"role": "user", "content": content}],
                 max_tokens=2048 * len(images),
             )
+            record_chat_usage(self.model_name, response)
             text = response.choices[0].message.content or ""
             return parse_batch_response(text, len(images), dims)
         except Exception as e:

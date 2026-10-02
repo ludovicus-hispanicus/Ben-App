@@ -19,7 +19,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from api.dto.submissions import TextIdentifiersDto, TransliterationSubmitDto
 from clients.anthropic_client import AnthropicCancelledError
@@ -98,6 +98,8 @@ SIZE_CATEGORIES = [
 TILE_TARGET_HEIGHT = 2500  # px — target height for each tile when splitting tall images
 TILE_OVERLAP = 100         # px — overlap between tiles to avoid cutting text mid-line
 TILE_MERGE_MARKER = "************************"  # inserted at tile merge points for manual review
+# Prompts whose images are always a single index card: tall images are never auto-tiled
+NO_AUTO_TILING_PROMPTS = {"zettelkasten"}
 
 # Structural markers that VLMs emit from prompt instructions —
 # if these are the ONLY content, the OCR effectively returned nothing.
@@ -229,6 +231,34 @@ def _detect_content_bbox(
         )
     except Exception:
         return fallback
+
+
+def _apply_exif_orientation(image_bytes: bytes) -> bytes:
+    """Rotate an image upright according to its EXIF orientation tag.
+
+    Scanners often store a landscape page as portrait pixels plus an EXIF
+    rotation flag. Viewers honour the flag, but PIL's .size and the OCR
+    models see the raw pixels, so the page would be treated as tall (and
+    tiled) and sent sideways. Returns the bytes unchanged if no rotation
+    is needed.
+    """
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        orientation = img.getexif().get(0x0112, 1)
+        if orientation in (None, 1):
+            img.close()
+            return image_bytes
+        fmt = img.format or "JPEG"
+        upright = ImageOps.exif_transpose(img)
+        buf = BytesIO()
+        if fmt == "JPEG":
+            upright.save(buf, format="JPEG", quality=95)
+        else:
+            upright.save(buf, format=fmt)
+        img.close()
+        return buf.getvalue()
+    except Exception:
+        return image_bytes
 
 
 def _split_image_into_tiles(
@@ -692,9 +722,15 @@ class BatchRecognitionHandler:
         if batch_size >= 0:
             batch_size = max(1, batch_size)
 
-        # Build effective model name
+        # Build effective model name. "latest:<family>" is resolved to a concrete
+        # model ID now, so the job record (and any retry) pins the exact model used.
         effective_model = model
         if sub_model and model in ("gemini_vision", "claude_vision", "gpt4_vision", "grok_xai"):
+            from services.model_catalog import resolve_sub_model
+            try:
+                sub_model = await resolve_sub_model(model, sub_model, api_key)
+            except Exception as e:
+                return {"success": False, "job_id": None, "message": f"Could not resolve '{sub_model}': {e}"}
             effective_model = f"{model}:{sub_model}"
 
         # Async Batch API mode is only valid for the four cloud providers that
@@ -722,6 +758,10 @@ class BatchRecognitionHandler:
         else:
             resolved_prompt = resolve_prompt(prompt)
             prompt_label = prompt
+
+        # One card per image: never auto-split tall (e.g. sideways-scanned) cards
+        if prompt_label in NO_AUTO_TILING_PROMPTS and tiling_mode == "none":
+            tiling_mode = "single"
 
         # Validate export folder if provided
         if destination_folder_path:
@@ -1013,6 +1053,7 @@ class BatchRecognitionHandler:
 
                         with open(file_path, "rb") as f:
                             image_bytes = f.read()
+                        image_bytes = _apply_exif_orientation(image_bytes)
 
                         # Get original dimensions before any resizing
                         orig_img = Image.open(BytesIO(image_bytes))
@@ -1043,7 +1084,8 @@ class BatchRecognitionHandler:
                     if len(chunk_images) == 1:
                         fn, fp, b64, w, h, ow, oh = chunk_images[0]
                         # Tiling: split images into multiple parts if requested or if very tall
-                        wants_tiling = tiling_mode != "none" or (dynamic_mode and h > TILE_TARGET_HEIGHT)
+                        wants_tiling = tiling_mode not in ("none", "single") or (
+                            tiling_mode == "none" and dynamic_mode and h > TILE_TARGET_HEIGHT)
                         
                         if wants_tiling:
                             # full_page_clipped produces a single tile (auto-cropped margins),
@@ -1683,6 +1725,7 @@ class BatchRecognitionHandler:
 
                     with open(file_path, "rb") as f:
                         image_bytes = f.read()
+                    image_bytes = _apply_exif_orientation(image_bytes)
                     orig_img = Image.open(BytesIO(image_bytes))
                     orig_w, orig_h = orig_img.size
                     orig_img.close()
@@ -1697,7 +1740,8 @@ class BatchRecognitionHandler:
                     rimg.close()
 
                     # Same tiling triggers as the live path: explicit mode or a tall image.
-                    wants_tiling = tiling_mode != "none" or ocr_h > TILE_TARGET_HEIGHT
+                    wants_tiling = tiling_mode not in ("none", "single") or (
+                        tiling_mode == "none" and ocr_h > TILE_TARGET_HEIGHT)
                     if wants_tiling:
                         tiles, boundary_ys = _split_image_into_tiles(image_bytes, ocr_w, ocr_h, mode=tiling_mode)
                         tile_label = "clipped" if tiling_mode == "full_page_clipped" else "tiled"
@@ -1732,7 +1776,7 @@ class BatchRecognitionHandler:
             self._update_status(job_id, "submitting",
                                 current_filename=f"Submitting {len(requests)} request(s) to provider...")
             adapter = get_batch_adapter(effective_model, api_key)
-            provider_batch_id = adapter.submit(requests)
+            provider_batch_id = adapter.submit(requests, label=f"{job_id} {source_name}")
 
             self._update_status(
                 job_id, "batch_submitted",
@@ -1783,7 +1827,25 @@ class BatchRecognitionHandler:
                     (export_folder / "images").mkdir(exist_ok=True)
 
             adapter = get_batch_adapter(effective_model, api_key)
-            results_by_cid = {r.custom_id: r for r in adapter.collect(provider_batch_id)}
+            collected = adapter.collect(provider_batch_id)
+            results_by_cid = {r.custom_id: r for r in collected}
+
+            input_tokens = sum(r.input_tokens for r in collected)
+            output_tokens = sum(r.output_tokens for r in collected)
+            try:
+                from services import usage_tracker
+                usage_tracker.record(
+                    model=f"{adapter.model} (batch)",
+                    inferences=len(collected),
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+            except Exception as e:
+                logger.warning(f"Batch job {job_id}: could not record usage: {e}")
+
+            if job.get("recovered") and not file_meta:
+                file_meta = self._rebuild_file_meta(job, results_by_cid.keys())
+                self._update_status(job_id, "collecting", file_meta=file_meta, total_images=len(file_meta))
 
             processed, failed = 0, 0
             results, failed_results = [], []
@@ -1795,13 +1857,21 @@ class BatchRecognitionHandler:
                     continue
 
                 n_tiles = meta.get("n_tiles", 1)
-                tile_dicts = []
+                tile_dicts, tile_errors = [], []
                 for ti in range(n_tiles):
-                    br = results_by_cid.get(f"{filename}::t{ti}")
+                    cid = f"{filename}::t{ti}"
+                    br = results_by_cid.get(cid) or results_by_cid.get(adapter.wire_id(cid))
                     if br is None or br.error:
                         tile_dicts.append({"lines": [], "dimensions": []})
+                        tile_errors.append(br.error if br else "no result returned")
                     else:
                         tile_dicts.append({"lines": br.lines, "dimensions": []})
+                # Any failed tile (e.g. a truncated response) fails the page with the
+                # provider's reason, so it can be re-run instead of saved partially.
+                if tile_errors:
+                    failed += 1
+                    failed_results.append({"filename": filename, "error": "; ".join(sorted(set(tile_errors)))})
+                    continue
                 merged = _merge_tile_results(tile_dicts) if n_tiles > 1 else tile_dicts[0]
                 text_lines = [ln.replace("\n", "") for ln in merged.get("lines", [])]
                 if correction_rules == "akkadian":
@@ -1848,6 +1918,7 @@ class BatchRecognitionHandler:
                 progress_percent=100, processed_images=processed, failed_images=failed,
                 results=results, failed_results=failed_results,
                 current_filename="", batch_api_key=None,
+                input_tokens=input_tokens, output_tokens=output_tokens,
             )
             logger.info(f"Batch job {job_id}: collected — {processed} processed, {failed} failed")
             try:
@@ -1868,34 +1939,166 @@ class BatchRecognitionHandler:
         DB-driven so it survives the UI being closed and (with the persisted key)
         a server restart."""
         import time as _time
-        from clients.batch_api import get_batch_adapter, BatchState
 
         while True:
             try:
                 jobs = self._db[self.BATCH_JOBS_COLLECTION].find_many({"status": "batch_submitted"})
                 for job in jobs:
-                    job_id = job["job_id"]
-                    if job_id in self._cancelled_jobs:
-                        continue
-                    try:
-                        adapter = get_batch_adapter(job.get("effective_model"), job.get("batch_api_key"))
-                        state = adapter.poll(job.get("provider_batch_id"))
-                    except Exception as e:
-                        logger.warning(f"Batch poller: poll failed for {job_id}: {e}")
-                        continue
-                    if state == BatchState.DONE:
-                        self._collect_batch_api_job(job)
-                    elif state == BatchState.FAILED:
-                        self._update_status(job_id, "failed",
-                                            error="Provider reported the batch failed or expired",
-                                            completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
-                    elif state == BatchState.CANCELLED:
-                        self._update_status(job_id, "cancelled",
-                                            completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
-                    # RUNNING / PENDING → keep waiting until the next tick
+                    if job["job_id"] not in self._cancelled_jobs:
+                        self._poll_batch_api_job(job)
             except Exception as e:
                 logger.error(f"Batch poller loop error: {e}")
             _time.sleep(self._POLL_INTERVAL_SECONDS)
+
+    def _poll_batch_api_job(self, job: Dict):
+        """One poll of a submitted provider batch; collects it if finished."""
+        from clients.batch_api import get_batch_adapter, BatchState
+
+        job_id = job["job_id"]
+        try:
+            adapter = get_batch_adapter(job.get("effective_model"), job.get("batch_api_key"))
+            state = adapter.poll(job.get("provider_batch_id"))
+        except Exception as e:
+            logger.warning(f"Batch poller: poll failed for {job_id}: {e}")
+            return
+        if state == BatchState.DONE:
+            self._collect_batch_api_job(job)
+        elif state == BatchState.FAILED:
+            self._update_status(job_id, "failed",
+                                error="Provider reported the batch failed or expired",
+                                completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+        elif state == BatchState.CANCELLED:
+            self._update_status(job_id, "cancelled",
+                                completed_at=datetime.utcnow().isoformat(), batch_api_key=None)
+        # RUNNING / PENDING → keep waiting until the next tick
+
+    # ─────────────────────────────────────────────────────────────────────
+    #  Recovery: re-attach a provider batch whose local job record was lost
+    # ─────────────────────────────────────────────────────────────────────
+
+    _ACTIVE_BATCH_STATES = ("submitting", "batch_submitted", "collecting")
+
+    def _tracked_provider_batches(self) -> Dict[str, Dict]:
+        """provider batch id (each ``|`` part) -> local job record."""
+        tracked: Dict[str, Dict] = {}
+        for job in self._db[self.BATCH_JOBS_COLLECTION].find_many({"execution_mode": "batch_api"}):
+            for part in (job.get("provider_batch_id") or "").split("|"):
+                if part:
+                    tracked[part] = job
+        return tracked
+
+    def list_provider_batches(self, model: str, api_key: str, limit: int = 50) -> Dict:
+        """List recent batches on the provider account, flagging ones BEn already tracks."""
+        from clients.batch_api import get_batch_adapter
+        try:
+            batches = get_batch_adapter(model, api_key).list_batches(limit)
+        except Exception as e:
+            return {"success": False, "message": str(e), "batches": []}
+        tracked = self._tracked_provider_batches()
+        for b in batches:
+            job = tracked.get(b["id"])
+            b["local_job_id"] = job["job_id"] if job else None
+            b["local_status"] = job.get("status") if job else None
+        return {"success": True, "batches": batches}
+
+    def recover_batch(
+        self, *, model: str, api_key: str, provider_batch_ids: List[str],
+        source_project_id: Optional[str] = None, source_folder_path: Optional[str] = None,
+        destination_dataset_id: Optional[int] = None, destination_folder_path: Optional[str] = None,
+        export_images: bool = False, box_mode: Optional[str] = None,
+        correction_rules: Optional[str] = None, user_id: str = "admin",
+    ) -> Dict:
+        """Create a job record for existing provider batch(es) so the poller collects them.
+
+        The source must be the same folder/project the batch was submitted from:
+        results are keyed by filename, and the images are copied from there. Per-file
+        metadata is rebuilt from the results at collection time (_rebuild_file_meta).
+        """
+        from clients.batch_api import supports_batch_api
+
+        ids = [i.strip() for i in provider_batch_ids if i and i.strip()]
+        if not ids:
+            return {"success": False, "job_id": None, "message": "No provider batch selected"}
+        if not supports_batch_api(model):
+            return {"success": False, "job_id": None, "message": f"Model '{model}' has no Batch API"}
+        if len(ids) > 1 and not model.startswith("gemini"):
+            return {"success": False, "job_id": None, "message": "Only Gemini jobs can span several provider batches"}
+        if not api_key:
+            return {"success": False, "job_id": None, "message": "An API key is required"}
+
+        tracked = self._tracked_provider_batches()
+        for i in ids:
+            job = tracked.get(i)
+            if job and job.get("status") in self._ACTIVE_BATCH_STATES:
+                return {"success": False, "job_id": job["job_id"],
+                        "message": f"Batch {i} is already tracked by job {job['job_id']}"}
+
+        if source_folder_path:
+            folder = Path(source_folder_path)
+            if not folder.is_dir():
+                return {"success": False, "job_id": None, "message": f"Folder not found: {source_folder_path}"}
+            source_name, local_folder = folder.name, str(folder)
+        elif source_project_id:
+            project = PagesHandler().get_project(source_project_id)
+            if project is None:
+                return {"success": False, "job_id": None, "message": f"Source project '{source_project_id}' not found"}
+            source_name, local_folder = project.name, None
+        else:
+            return {"success": False, "job_id": None,
+                    "message": "Select the source the batch was submitted from (images are copied from there)"}
+
+        job_id = str(uuid.uuid4())[:8]
+        now = datetime.utcnow().isoformat()
+        job_record = {
+            "_id": job_id, "job_id": job_id,
+            "source_project_id": source_project_id, "source_folder_path": local_folder,
+            "source_project_name": source_name,
+            "destination_dataset_id": destination_dataset_id,
+            "destination_folder_path": destination_folder_path, "export_images": export_images,
+            "include_classes": None, "model": model.split(":")[0], "effective_model": model,
+            "prompt": "recovered", "batch_size": 1, "status": "batch_submitted",
+            "current_image": 0, "total_images": 0, "processed_images": 0, "failed_images": 0,
+            "progress_percent": 0, "current_filename": "", "results": [], "failed_results": [],
+            "error": None, "user_id": user_id, "created_at": now, "started_at": now, "completed_at": None,
+            "image_scale": None, "target_dpi": None, "correction_rules": correction_rules,
+            "box_mode": box_mode or "estimate", "tiling_mode": "none", "execution_mode": "batch_api",
+            "provider": None, "provider_batch_id": "|".join(ids), "batch_api_key": api_key,
+            "file_meta": None, "submitted_at": now, "recovered": True,
+        }
+        self._db[self.BATCH_JOBS_COLLECTION].insert_one(job_record)
+        logger.info(f"Batch job {job_id}: recovered provider batch {job_record['provider_batch_id']}")
+        # Check right away instead of waiting for the next poller tick
+        self._executor.submit(self._poll_batch_api_job, job_record)
+        return {"success": True, "job_id": job_id, "message": f"Recovered as job {job_id}"}
+
+    def _rebuild_file_meta(self, job: Dict, custom_ids) -> Dict[str, Dict]:
+        """Recovered jobs have no submit-time metadata: rebuild it from the result
+        custom_ids (``<filename>::t<tile>``) plus the source images on disk."""
+        n_tiles: Dict[str, int] = {}
+        for cid in custom_ids:
+            filename, sep, tile = cid.rpartition("::t")
+            if not sep or not tile.isdigit():
+                continue
+            n_tiles[filename] = max(n_tiles.get(filename, 0), int(tile) + 1)
+
+        local_folder = job.get("source_folder_path")
+        pages_handler = None if local_folder else PagesHandler()
+        file_meta: Dict[str, Dict] = {}
+        for filename, n in sorted(n_tiles.items()):
+            if local_folder:
+                file_path = os.path.join(local_folder, filename)
+            else:
+                file_path = pages_handler.get_file_path(job.get("source_project_id"), filename)
+            if not file_path or not os.path.isfile(file_path):
+                file_meta[filename] = {"error": "Source image not found (was the right source selected?)"}
+                continue
+            with Image.open(file_path) as img:
+                w, h = img.size
+            file_meta[filename] = {
+                "file_path": file_path, "orig_w": w, "orig_h": h, "ocr_h": h,
+                "n_tiles": n, "boundary_ys": [], "tile_label": "tiled" if n > 1 else None,
+            }
+        return file_meta
 
     def _build_dynamic_chunks(
         self,

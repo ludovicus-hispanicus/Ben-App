@@ -1,0 +1,86 @@
+<div class="lfb">
+  <div class="lfb-top">
+    <h2>Browse Computer</h2>
+    <span class="lfb-spacer"></span>
+    <button mat-button (click)="cancel()">Cancel</button>
+  </div>
+  <p class="lfb-hint">
+    Tick any mix of folders and images (Shift+click ticks a range), and move between folders: ticks are kept.
+    Files are read from disk in place, nothing is added to the Library.
+  </p>
+
+  <!-- Location bar -->
+  <div class="lfb-nav">
+    <button mat-icon-button (click)="goUp()" [disabled]="!info?.parent || loading" matTooltip="Up one folder">
+      <mat-icon>arrow_upward</mat-icon>
+    </button>
+    <input class="lfb-path" [(ngModel)]="pathInput" (keyup.enter)="open(pathInput)"
+           placeholder="Type or paste a folder path and press Enter" spellcheck="false" />
+    <button mat-icon-button (click)="open('')" matTooltip="Home folder">
+      <mat-icon>home</mat-icon>
+    </button>
+  </div>
+  <div class="lfb-drives" *ngIf="info?.drives?.length">
+    <button *ngFor="let d of info?.drives" class="lfb-drive" (click)="open(d)"
+            [class.active]="info?.path?.toUpperCase()?.startsWith(d.toUpperCase())">
+      <mat-icon>storage</mat-icon>{{ d }}
+    </button>
+  </div>
+
+  <div class="lfb-toolbar">
+    <input class="lfb-filter" [(ngModel)]="filter" placeholder="Filter this folder..." />
+    <button mat-stroked-button class="lfb-small-btn" (click)="toggleCurrentFolder()" [disabled]="!info?.image_count"
+            matTooltip="Use every image in this folder">
+      <mat-icon>{{ currentFolderSelected ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+      This whole folder ({{ info?.image_count || 0 }})
+    </button>
+  </div>
+
+  <!-- Listing -->
+  <div class="lfb-list">
+    <div class="lfb-empty" *ngIf="loading">Loading…</div>
+    <ng-container *ngIf="!loading && info">
+      <div class="lfb-empty" *ngIf="!visibleFolders.length && !visibleFiles.length">
+        No subfolders or images here
+      </div>
+
+      <div class="lfb-row" *ngFor="let f of visibleFolders" [class.selected]="selectedFolders.has(f.path)">
+        <mat-icon class="lfb-check" (click)="toggleFolder(f.path, $event)"
+                  [class.disabled]="!f.image_count"
+                  [matTooltip]="f.image_count ? 'Use all ' + f.image_count + ' images in this folder' : 'No images directly in this folder'">
+          {{ selectedFolders.has(f.path) ? 'check_box' : 'check_box_outline_blank' }}
+        </mat-icon>
+        <div class="lfb-name lfb-open" (click)="open(f.path)" matTooltip="Open folder">
+          <mat-icon class="lfb-icon folder">folder</mat-icon>
+          <span>{{ f.name }}</span>
+        </div>
+        <span class="lfb-count" *ngIf="f.image_count">{{ f.image_count }} images</span>
+        <mat-icon class="lfb-chevron" (click)="open(f.path)">chevron_right</mat-icon>
+      </div>
+
+      <div class="lfb-files-header" *ngIf="visibleFiles.length">
+        <mat-icon class="lfb-check" (click)="toggleAllVisibleFiles()">
+          {{ allVisibleFilesSelected ? 'check_box' : 'check_box_outline_blank' }}
+        </mat-icon>
+        <span>Images ({{ visibleFiles.length }})</span>
+      </div>
+      <div class="lfb-row" *ngFor="let name of visibleFiles" [class.selected]="isFileSelected(name)"
+           (click)="toggleFile(name, $event)">
+        <mat-icon class="lfb-check">{{ isFileSelected(name) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+        <div class="lfb-name">
+          <mat-icon class="lfb-icon">image</mat-icon>
+          <span>{{ name }}</span>
+        </div>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Confirm -->
+  <div class="lfb-footer">
+    <span class="lfb-summary">{{ selectionSummary }}</span>
+    <button mat-button *ngIf="selectionCount" (click)="clearSelection()">Clear</button>
+    <button mat-flat-button color="primary" [disabled]="!selectionCount" (click)="confirm()">
+      <mat-icon>add</mat-icon> Add to batch
+    </button>
+  </div>
+</div>

@@ -46,6 +46,10 @@ class BatchResult:
     custom_id: str
     lines: List[str] = field(default_factory=list)
     error: Optional[str] = None
+    # Billed tokens (output includes hidden reasoning). Set on failed results too:
+    # a truncated response is still charged.
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 def text_to_lines(text: str) -> List[str]:
@@ -83,8 +87,12 @@ class ProviderBatchAdapter(ABC):
         self.model = model
 
     @abstractmethod
-    def submit(self, requests: List[BatchRequest]) -> str:
-        """Submit all requests as one batch. Returns the provider batch id."""
+    def submit(self, requests: List[BatchRequest], label: str = "") -> str:
+        """Submit all requests as one batch. Returns the provider batch id.
+
+        ``label`` (BEn job id + source name) is attached where the provider
+        supports it, so the batch is recognisable in ``list_batches``.
+        """
 
     @abstractmethod
     def poll(self, batch_id: str) -> BatchState:
@@ -101,6 +109,18 @@ class ProviderBatchAdapter(ABC):
     @abstractmethod
     def cancel(self, batch_id: str) -> None:
         """Best-effort cancel of an in-flight batch."""
+
+    def wire_id(self, custom_id: str) -> str:
+        """The id actually sent to the provider for ``custom_id``. Identity by
+        default; adapters whose API restricts id characters/length override it."""
+        return custom_id
+
+    def list_batches(self, limit: int = 50) -> List[dict]:
+        """Recent batches on the provider account, newest first — used to recover
+        jobs whose local record was lost. Each entry:
+        ``{"id", "state" (BatchState value), "status" (raw), "created", "label", "model", "request_count"}``.
+        """
+        raise NotImplementedError(f"{self.provider} does not support listing batches")
 
     def cleanup(self, batch_id: str) -> None:
         """Delete any provider-side artefacts (uploaded input/output files).

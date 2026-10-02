@@ -70,18 +70,20 @@ class GeminiBatchAdapter(ProviderBatchAdapter):
                     ],
                 )
             ],
-            config=types.GenerateContentConfig(max_output_tokens=self.max_tokens),
+            # No max_output_tokens, same as the live GeminiOcrClient: on thinking
+            # models the cap includes hidden reasoning, and a low cap truncates the
+            # answer mid-thought (the reasoning tail then leaks out as "text").
             metadata={"key": r.custom_id},
         )
 
-    def submit(self, requests: List[BatchRequest]) -> str:
+    def submit(self, requests: List[BatchRequest], label: str = "") -> str:
         names: List[str] = []
         try:
             for chunk in self._chunk(requests):
                 job = self.client.batches.create(
                     model=self.model,
                     src=[self._to_inlined(r) for r in chunk],
-                    config=types.CreateBatchJobConfig(display_name="ben-batch-ocr"),
+                    config=types.CreateBatchJobConfig(display_name=f"ben-batch-ocr {label}".strip()[:128]),
                 )
                 names.append(job.name)
             logger.info(f"Gemini batch submitted: {len(names)} job(s), {len(requests)} requests")
@@ -119,6 +121,23 @@ class GeminiBatchAdapter(ProviderBatchAdapter):
             return BatchState.CANCELLED
         return BatchState.DONE
 
+    def list_batches(self, limit: int = 50) -> List[dict]:
+        out: List[dict] = []
+        for job in self.client.batches.list(config={"page_size": min(limit, 100)}):
+            create_time = getattr(job, "create_time", None)
+            out.append({
+                "id": job.name,
+                "state": self._state_of(job).value,
+                "status": getattr(job.state, "name", str(job.state)),
+                "created": create_time.isoformat() if create_time else "",
+                "label": getattr(job, "display_name", "") or "",
+                "model": (getattr(job, "model", "") or "").removeprefix("models/"),
+                "request_count": None,
+            })
+            if len(out) >= limit:
+                break
+        return out
+
     # ── collect ─────────────────────────────────────────────────────────
     @staticmethod
     def _text_of(response) -> str:
@@ -131,7 +150,15 @@ class GeminiBatchAdapter(ProviderBatchAdapter):
             pass
         try:
             parts = response.candidates[0].content.parts
-            return "".join(getattr(p, "text", "") or "" for p in parts)
+            return "".join(getattr(p, "text", "") or "" for p in parts if not getattr(p, "thought", False))
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _finish_reason(response) -> str:
+        try:
+            fr = response.candidates[0].finish_reason
+            return getattr(fr, "name", str(fr)) if fr is not None else ""
         except Exception:
             return ""
 
@@ -150,7 +177,19 @@ class GeminiBatchAdapter(ProviderBatchAdapter):
                 if resp is None:
                     out.append(BatchResult(custom_id=cid, error="no response"))
                     continue
-                out.append(BatchResult(custom_id=cid, lines=text_to_lines(self._text_of(resp))))
+                meta = getattr(resp, "usage_metadata", None)
+                tokens = {
+                    "input_tokens": getattr(meta, "prompt_token_count", 0) or 0,
+                    "output_tokens": (getattr(meta, "candidates_token_count", 0) or 0)
+                                     + (getattr(meta, "thoughts_token_count", 0) or 0),
+                }
+                finish = self._finish_reason(resp)
+                if finish and finish != "STOP":
+                    # MAX_TOKENS / SAFETY / RECITATION...: the text is partial or not
+                    # an answer at all, so fail the page rather than save it.
+                    out.append(BatchResult(custom_id=cid, error=f"incomplete response (finish_reason={finish})", **tokens))
+                    continue
+                out.append(BatchResult(custom_id=cid, lines=text_to_lines(self._text_of(resp)), **tokens))
         return out
 
     # ── cancel / cleanup ────────────────────────────────────────────────

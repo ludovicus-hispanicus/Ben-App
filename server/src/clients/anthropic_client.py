@@ -6,6 +6,11 @@ from typing import Dict, Any, List, Tuple, Optional
 from .base_ocr_client import BaseOcrClient
 from entities.dimensions import Dimensions
 from common.ocr_prompts import resolve_prompt, wrap_prompt_for_batch, parse_batch_response
+from services import usage_tracker
+
+# Room for thinking + answer (thinking counts toward max_tokens). Kept at 16K so
+# non-streaming requests stay under the SDK's long-request limit.
+_MAX_TOKENS = 16000
 
 
 class AnthropicCancelledError(Exception):
@@ -42,6 +47,23 @@ class AnthropicOcrClient(BaseOcrClient):
         """Set an event that, when set, will abort processing."""
         self._cancel_event = event
 
+    def _create(self, **kwargs):
+        """messages.create + usage tracking; returns (message, text)."""
+        message = self.client.messages.create(model=self.model_id, **kwargs)
+        try:
+            usage_tracker.record(
+                model=self.model_id,
+                input_tokens=message.usage.input_tokens or 0,
+                output_tokens=message.usage.output_tokens or 0,
+            )
+        except Exception:
+            pass  # never let tracking break OCR
+        if message.stop_reason == "max_tokens":
+            logging.warning(f"Claude hit max_tokens ({self.model_id}); output is truncated")
+        # Thinking models return a thinking block first: join only the text blocks
+        text = "".join(b.text for b in message.content if b.type == "text")
+        return message, text
+
     def _check_cancelled(self):
         if self._cancel_event and self._cancel_event.is_set():
             raise AnthropicCancelledError("OCR cancelled")
@@ -52,9 +74,8 @@ class AnthropicOcrClient(BaseOcrClient):
 
         try:
             # Create message with image
-            message = self.client.messages.create(
-                model=self.model_id,
-                max_tokens=2048,
+            message, response_text = self._create(
+                max_tokens=_MAX_TOKENS,
                 messages=[
                     {
                         "role": "user",
@@ -76,8 +97,6 @@ class AnthropicOcrClient(BaseOcrClient):
                 ],
             )
 
-            # Extract text from response
-            response_text = message.content[0].text
             text_lines = [line.strip() for line in response_text.split('\n') if line.strip()]
 
             # Anthropic doesn't return bounding boxes, so create estimated full-width boxes
@@ -112,12 +131,10 @@ class AnthropicOcrClient(BaseOcrClient):
 
         try:
             self._check_cancelled()
-            message = self.client.messages.create(
-                model=self.model_id,
-                max_tokens=2048 * len(images),
+            message, text = self._create(
+                max_tokens=_MAX_TOKENS,
                 messages=[{"role": "user", "content": content}],
             )
-            text = message.content[0].text
             return parse_batch_response(text, len(images), dims)
         except AnthropicCancelledError:
             raise

@@ -73,7 +73,9 @@ class GeminiOcrClient(BaseOcrClient):
                 try:
                     meta = getattr(response, 'usage_metadata', None)
                     input_tokens = getattr(meta, 'prompt_token_count', 0) or 0 if meta else 0
-                    output_tokens = getattr(meta, 'candidates_token_count', 0) or 0 if meta else 0
+                    # Thinking tokens are billed as output, so count them too
+                    output_tokens = ((getattr(meta, 'candidates_token_count', 0) or 0)
+                                     + (getattr(meta, 'thoughts_token_count', 0) or 0)) if meta else 0
                     usage_tracker.record(
                         model=self.model_id,
                         inferences=1,

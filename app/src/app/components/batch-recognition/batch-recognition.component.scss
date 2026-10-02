@@ -330,6 +330,7 @@
     background: #fafafa;
 
     .file-item {
+      user-select: none;  // Shift+click range selection
       display: flex;
       align-items: center;
       padding: 2px 8px;
@@ -397,6 +398,67 @@
   padding: 4px 16px;
   min-height: 32px;
   line-height: 32px;
+}
+
+.recover-toggle {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.recover-panel {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+
+  .recover-empty {
+    font-size: 12px;
+    color: #757575;
+    padding: 4px 0;
+  }
+
+  .recover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .recover-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .recover-label {
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recover-meta {
+    font-size: 11px;
+    color: #757575;
+  }
+}
+
+.start-blocked-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -8px 0 16px;
+  font-size: 12px;
+  color: #b26a00;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
 }
 
 // ============== Progress Section ==============
@@ -1193,6 +1255,24 @@
 .sub-model-select {
   width: 100%;
   margin-top: 8px;
+
+  .sub-model-error {
+    color: #c62828;
+  }
+
+  .spinning {
+    animation: sub-model-spin 1s linear infinite;
+  }
+}
+
+.sub-model-resolves {
+  opacity: 0.6;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+@keyframes sub-model-spin {
+  to { transform: rotate(360deg); }
 }
 
 // ============== Processing mode toggle (Live vs Batch API) ==============
@@ -1359,4 +1439,16 @@
   tr:last-child td {
     border-bottom: none;
   }
+}
+
+.usage-day-cost {
+  margin-left: 8px;
+  font-weight: 500;
+  color: #2e7d32;
+}
+
+.usage-cost-note {
+  font-size: 11px;
+  color: #757575;
+  margin-top: 8px;
 }

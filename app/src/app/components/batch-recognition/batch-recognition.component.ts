@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { Subject, Subscription, interval } from 'rxjs';
-import { switchMap, takeUntil } from 'rxjs/operators';
+import { filter, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 import { environment } from '../../../environments/environment';
 import { BatchRecognitionService } from '../../services/batch-recognition.service';
@@ -12,15 +12,28 @@ import { DatasetService } from '../../services/dataset.service';
 import { NotificationService } from '../../services/notification.service';
 import { FolderPickerDialogComponent, FolderPickerResult } from '../common/folder-picker-dialog/folder-picker-dialog.component';
 import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.component';
+import { LocalFileBrowserDialogComponent, LocalBrowseResult } from './local-file-browser-dialog/local-file-browser-dialog.component';
+import { rangeToggle } from './local-file-browser-dialog/range-toggle';
 import {
   BatchRecognitionRequest,
   BatchRecognitionStatus,
   BatchRecognitionJobSummary,
+  LatestModelAlias,
+  ProviderBatch,
+  ProviderModel,
   VllmStatus,
 } from '../../models/batch-recognition';
 import { DatasetPreview } from '../../models/cured';
 
 type SourceMode = 'library' | 'local';
+
+/** One folder on this computer and the image files chosen in it. */
+interface LocalSource {
+  path: string;
+  name: string;
+  files: string[];       // image filenames (not paths) inside `path`
+  wholeFolder: boolean;  // added via "Folder…" (vs. picked file by file)
+}
 type DestinationMode = 'library' | 'export';
 
 @Component({
@@ -36,10 +49,9 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   sourceProjectId: string = '';
   sourceProjectName: string = '';
 
-  // Local folder source (via Upload Folder button)
-  localFolderPath: string = '';
-  localFolderName: string = '';
-  localFolderImageCount: number = 0;
+  // Local source ("Browse Computer"): folders and/or individual files, read in place
+  // from disk and never copied into the Library. One entry per folder.
+  localSources: LocalSource[] = [];
 
   // Class filtering (extracted from source filenames)
   availableClasses: Array<{ name: string; count: number }> = [];
@@ -76,6 +88,19 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   // Only valid for cloud providers (see supportsBatchApi()).
   executionMode: 'live' | 'batch_api' = 'live';
 
+  // Recovering provider batches whose local job record was lost
+  showRecoverPanel = false;
+  providerBatches: ProviderBatch[] = [];
+  loadingProviderBatches = false;
+  recoveringBatchId: string | null = null;
+
+  // Live model lists fetched from each provider's /models endpoint (keyed by selectedModel).
+  // When present they replace the static apiSubModels fallback below in the dropdown.
+  liveSubModels: { [key: string]: { latest: LatestModelAlias[]; models: ProviderModel[] } } = {};
+  subModelsLoading = false;
+  subModelsError = '';
+
+  // Offline fallback, shown until a live list loads (or if the fetch fails).
   apiSubModels: { [key: string]: Array<{value: string; label: string; description: string}> } = {
     'gemini_vision': [
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
@@ -213,7 +238,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   rightTab: 'settings' | 'report' | 'usage' = 'settings';
 
   // Usage stats
-  usageData: Array<{ date: string; models: { [model: string]: { inferences: number; input_tokens: number; output_tokens: number; data_bytes: number } } }> = [];
+  usageData: Array<{ date: string; models: { [model: string]: { inferences: number; input_tokens: number; output_tokens: number; data_bytes: number; cost_usd?: number | null } } }> = [];
 
   // Job tracking (supports multiple concurrent jobs)
   activeJobIds: Set<string> = new Set();
@@ -262,106 +287,135 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         this.sourceMode = 'library';
         this.sourceProjectId = result.project_id;
         this.sourceProjectName = result.project_name;
-        this.localFolderPath = '';
-        this.localFolderName = '';
-        this.localFolderImageCount = 0;
+        this.localSources = [];
         this.detectClassesFromLibrary(result.project_id);
       }
     });
   }
 
-  /**
-   * Select a local source folder. Prefers the native Electron folder dialog
-   * (works regardless of Electron version); falls back to the hidden
-   * <input webkitdirectory> for plain-browser dev.
-   */
-  async pickLocalFolder(inputEl?: HTMLInputElement): Promise<void> {
-    const api = (window as any).electronAPI;
-    if (api && typeof api.pickDirectory === 'function') {
-      try {
-        const folderPath: string | null = await api.pickDirectory();
-        if (!folderPath) return; // user cancelled
-        this.applyLocalFolder(folderPath);
-        return;
-      } catch {
-        // fall through to the input fallback
-      }
-    }
-    if (inputEl) { inputEl.click(); }
+  // ============== Browse Computer (local folders / files) ==============
+
+  /** "Browse Computer": pick any mix of folders and image files in one window. */
+  openLocalBrowser(): void {
+    const startPath = this.localSources.length ? this.localSources[this.localSources.length - 1].path : undefined;
+    this.dialog.open(LocalFileBrowserDialogComponent, {
+      width: '640px',
+      maxWidth: '95vw',
+      data: { startPath },
+    }).afterClosed().subscribe((result?: LocalBrowseResult) => {
+      if (!result) return;
+      result.folders.forEach(folder => this.addLocalFolder(folder));
+      this.addLocalFilePaths(result.files);
+    });
   }
 
-  /** Resolve a chosen folder path into source state via the backend scan. */
-  private applyLocalFolder(folderPath: string): void {
+  /** Add a whole folder; the backend lists its images (non-recursive). */
+  private addLocalFolder(folderPath: string): void {
     this.batchService.browseLocalFolder(folderPath).subscribe({
       next: (info) => {
+        const name = info.path.split(/[/\\]/).pop() || info.path;
         if (info.error) {
           this.notificationService.showError(`Cannot read folder: ${info.error}`);
           return;
         }
         if (!info.image_count) {
-          this.notificationService.showError('No supported image files found in that folder (PNG, JPG, TIFF, BMP, WebP)');
+          this.notificationService.showError(`No supported images in "${name}" (PNG, JPG, TIFF, BMP, WebP)`);
           return;
         }
-        this.sourceMode = 'local';
-        this.localFolderPath = info.path;
-        this.localFolderName = info.path.split(/[/\\]/).pop() || info.path;
-        this.localFolderImageCount = info.image_count;
-        this.sourceProjectId = '';
-        this.sourceProjectName = '';
-        this.detectClassesFromFilenames(info.image_files || []);
-        this.notificationService.showInfo(`Selected folder: ${this.localFolderName} (${info.image_count} images)`);
+        this.mergeLocalSource(info.path, info.image_files || [], true);
+        this.notificationService.showInfo(`Added folder: ${name} (${info.image_count} images)`);
       },
       error: () => this.notificationService.showError('Failed to read the selected folder')
     });
   }
 
-  handleFolderInput(event: any): void {
-    const files: FileList = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const supportedExts = ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp'];
-    let imageCount = 0;
-    let folderPath = '';
-    const imageNames: string[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const name = file.name.toLowerCase();
-      if (supportedExts.some(ext => name.endsWith(ext))) {
-        imageCount++;
-        imageNames.push(file.name);
-        // In Electron, File objects have a .path property with the full filesystem path
-        if (!folderPath && (file as any).path) {
-          const fullPath: string = (file as any).path;
-          // Extract the folder path (parent of the file)
-          const sep = fullPath.includes('\\') ? '\\' : '/';
-          folderPath = fullPath.substring(0, fullPath.lastIndexOf(sep));
-        }
-      }
-    }
-
-    // Reset the input so the same folder can be re-selected
-    event.target.value = '';
-
-    if (imageCount === 0) {
-      this.notificationService.showError('No supported image files found (PNG, JPG, TIFF, BMP, WebP)');
+  /** Add individual files, grouped by the folder they live in. */
+  private addLocalFilePaths(paths: string[]): void {
+    if (!paths || paths.length === 0) return;  // cancelled
+    const images = paths.filter(p => this.isImageFile(p));
+    if (images.length === 0) {
+      this.notificationService.showError('No supported image files selected (PNG, JPG, TIFF, BMP, WebP)');
       return;
     }
-
-    if (!folderPath) {
-      this.notificationService.showError('Could not determine folder path. This feature requires the desktop app.');
-      return;
+    const byFolder = new Map<string, string[]>();
+    for (const p of images) {
+      const cut = Math.max(p.lastIndexOf('\\'), p.lastIndexOf('/'));
+      const folder = p.substring(0, cut);
+      byFolder.set(folder, [...(byFolder.get(folder) || []), p.substring(cut + 1)]);
     }
+    byFolder.forEach((files, folder) => this.mergeLocalSource(folder, files, false));
+    const skipped = paths.length - images.length;
+    this.notificationService.showInfo(
+      `Added ${images.length} file(s)` + (skipped ? ` — ${skipped} non-image file(s) skipped` : '')
+    );
+  }
 
-    this.sourceMode = 'local';
-    this.localFolderPath = folderPath;
-    this.localFolderName = folderPath.split(/[/\\]/).pop() || folderPath;
-    this.localFolderImageCount = imageCount;
-    this.sourceProjectId = '';
-    this.sourceProjectName = '';
-    this.detectClassesFromFilenames(imageNames);
+  private isImageFile(name: string): boolean {
+    return /\.(png|jpe?g|tiff?|bmp|webp)$/i.test(name);
+  }
 
-    this.notificationService.showInfo(`Selected folder: ${this.localFolderName} (${imageCount} images)`);
+  /** Add files of one folder to the local source list, merging with an existing entry. */
+  private mergeLocalSource(folder: string, files: string[], wholeFolder: boolean): void {
+    if (this.sourceMode !== 'local') {  // switching away from a Library source
+      this.sourceProjectId = '';
+      this.sourceProjectName = '';
+      this.localSources = [];
+      this.sourceMode = 'local';
+    }
+    const existing = this.localSources.find(src => src.path === folder);
+    if (existing) {
+      existing.files = Array.from(new Set([...existing.files, ...files])).sort();
+      existing.wholeFolder = existing.wholeFolder || wholeFolder;
+    } else {
+      this.localSources.push({
+        path: folder,
+        name: folder.split(/[/\\]/).pop() || folder,
+        files: [...files].sort(),
+        wholeFolder,
+      });
+    }
+    this.localSources = [...this.localSources];
+    this.refreshLocalFileList();
+  }
+
+  removeLocalSource(source: LocalSource): void {
+    this.localSources = this.localSources.filter(src => src !== source);
+    if (this.localSources.length) {
+      this.refreshLocalFileList();
+    } else {
+      this.clearSource();
+    }
+  }
+
+  get localImageCount(): number {
+    return this.localSources.reduce((n, src) => n + src.files.length, 0);
+  }
+
+  /** Rebuild the class/file lists from all local sources, keeping earlier checklist choices. */
+  private refreshLocalFileList(): void {
+    const previousSelected = this.showFileSelector ? new Set(this.selectedFilenames) : null;
+    const previousAll = new Set(this.allFilenames);
+    const keys: string[] = [];
+    for (const src of this.localSources) {
+      for (const f of src.files) { keys.push(this.localKey(src.path, f)); }
+    }
+    this.detectClassesFromFilenames(keys);
+    if (previousSelected) {
+      // Deselected files stay deselected; newly added files start selected
+      this.selectedFilenames = new Set(keys.filter(k => previousSelected.has(k) || !previousAll.has(k)));
+    }
+  }
+
+  /** File-list key for a local file: its full path, unique across folders. */
+  private localKey(folder: string, file: string): string {
+    return folder + (folder.includes('\\') ? '\\' : '/') + file;
+  }
+
+  /** Name shown in the file checklist: "folder/file" once several folders are involved. */
+  fileLabel(key: string): string {
+    if (this.sourceMode !== 'local') return key;
+    const parts = key.split(/[/\\]/);
+    return this.localSources.length > 1 ? parts.slice(-2).join('/') : parts[parts.length - 1];
   }
 
   // ============== Destination ==============
@@ -470,9 +524,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   clearSource(): void {
     this.sourceProjectId = '';
     this.sourceProjectName = '';
-    this.localFolderPath = '';
-    this.localFolderName = '';
-    this.localFolderImageCount = 0;
+    this.localSources = [];
     this.availableClasses = [];
     this.selectedClasses = new Set();
     this.allFilenames = [];
@@ -482,19 +534,20 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   }
 
   get hasSource(): boolean {
-    return !!this.sourceProjectId || !!this.localFolderPath;
+    return !!this.sourceProjectId || this.localSources.length > 0;
   }
 
   get sourceDisplayName(): string {
     if (this.sourceMode === 'library') return this.sourceProjectName;
-    return this.localFolderName;
+    return this.localSources.length === 1 ? this.localSources[0].name : `${this.localSources.length} folders`;
   }
 
   // ============== Class Filtering ==============
 
   private extractClassName(filename: string): string {
     // Extract class from YOLO snippet filename: "ahw-d-0001-005-mainEntry.png" → "mainEntry"
-    const stem = filename.replace(/\.[^/.]+$/, ''); // remove extension
+    const base = filename.split(/[/\\]/).pop() || filename;  // local keys are full paths
+    const stem = base.replace(/\.[^/.]+$/, ''); // remove extension
     const lastHyphen = stem.lastIndexOf('-');
     return lastHyphen >= 0 ? stem.substring(lastHyphen + 1) : '';
   }
@@ -556,7 +609,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   get filteredFilenames(): string[] {
     if (!this.fileFilter) return this.allFilenames;
     const q = this.fileFilter.toLowerCase();
-    return this.allFilenames.filter(f => f.toLowerCase().includes(q));
+    return this.allFilenames.filter(f => this.fileLabel(f).toLowerCase().includes(q));
   }
 
   toggleFileSelector(): void {
@@ -568,12 +621,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     }
   }
 
-  toggleFile(filename: string): void {
-    if (this.selectedFilenames.has(filename)) {
-      this.selectedFilenames.delete(filename);
-    } else {
-      this.selectedFilenames.add(filename);
-    }
+  /** Last clicked checklist entry: anchor for Shift+click ranges. */
+  private fileAnchor: string | null = null;
+
+  toggleFile(filename: string, event?: MouseEvent): void {
+    this.fileAnchor = rangeToggle(this.filteredFilenames, filename, this.fileAnchor, !!event?.shiftKey, this.selectedFilenames);
     this.selectedFilenames = new Set(this.selectedFilenames);
   }
 
@@ -601,7 +653,48 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         this.selectedSubModel = '';
       }
       this.syncExecutionMode();
+      this.loadProviderModels();
     }
+  }
+
+  /** Fetch the provider's current model list live (needs the API key). */
+  loadProviderModels(refresh = false): void {
+    const provider = this.selectedModel;
+    if (!this.hasSubModels() || !this.apiKey) {
+      return;
+    }
+    if (this.liveSubModels[provider] && !refresh) {
+      return;
+    }
+    this.subModelsLoading = true;
+    this.subModelsError = '';
+    this.batchService.getProviderModels(provider, this.apiKey, refresh)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.subModelsLoading = false;
+          if (!res.success || !res.models.length) {
+            this.subModelsError = res.message || 'No vision models returned';
+            return;
+          }
+          this.liveSubModels[provider] = { latest: res.latest, models: res.models };
+          // Keep the saved choice if the provider still offers it, else track the newest model.
+          const valid = [...res.latest, ...res.models].some(m => m.value === this.selectedSubModel);
+          if (provider === this.selectedModel && !valid && res.latest.length) {
+            this.selectedSubModel = res.latest[0].value;
+            this.onSubModelChange();
+          }
+        },
+        error: () => {
+          this.subModelsLoading = false;
+          this.subModelsError = 'Could not reach the provider — showing built-in list';
+        },
+      });
+  }
+
+  onApiKeyChange(): void {
+    delete this.liveSubModels[this.selectedModel];
+    this.loadProviderModels();
   }
 
   isModelAvailable(modelValue: string): boolean {
@@ -845,12 +938,19 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   public static readonly MAX_CONCURRENT_BATCHES = 20;
 
   get canStart(): boolean {
-    return this.hasSource
-      && !!this.selectedModel
-      && !this.isStarting
-      && this.activeJobIds.size < BatchRecognitionComponent.MAX_CONCURRENT_BATCHES
-      && (!this.requiresApiKey() || !!this.apiKey)
-      && (this.selectedPrompt !== 'custom' || !!this.customPromptText.trim());
+    return !this.startBlockedReason && !this.isStarting;
+  }
+
+  /** Why the Start button is disabled (shown under it), or '' when ready. */
+  get startBlockedReason(): string {
+    if (!this.hasSource) return 'Select a source: Browse Server or Browse Computer (left panel)';
+    if (!this.selectedModel) return 'Select a model';
+    if (this.requiresApiKey() && !this.apiKey) return 'Enter an API key';
+    if (this.selectedPrompt === 'custom' && !(this.customPromptText || '').trim()) return 'Enter a custom prompt';
+    if (this.activeJobIds.size >= BatchRecognitionComponent.MAX_CONCURRENT_BATCHES) {
+      return `${BatchRecognitionComponent.MAX_CONCURRENT_BATCHES} jobs already running`;
+    }
+    return '';
   }
 
   get isRunning(): boolean {
@@ -903,11 +1003,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       ? Array.from(this.selectedFilenames)
       : undefined;
 
-    const request: BatchRecognitionRequest = {
-      source_project_id: this.sourceMode === 'library' ? this.sourceProjectId : undefined,
-      source_folder_path: this.sourceMode === 'local' ? this.localFolderPath : undefined,
-      include_classes: includeClasses,
-      include_filenames: includeFilenames,
+    const base: BatchRecognitionRequest = {
       destination_dataset_id: this.destinationMode === 'library' && this.destinationDatasetId ? this.destinationDatasetId : undefined,
       destination_folder_path: this.destinationMode === 'export' && this.destinationFolderPath ? this.destinationFolderPath : undefined,
       export_images: this.destinationMode === 'export' ? this.exportImages : undefined,
@@ -925,25 +1021,133 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       execution_mode: this.supportsBatchApi() ? this.executionMode : 'live',
     };
 
-    this.batchService.startBatch(request).subscribe({
-      next: (response) => {
-        this.isStarting = false;
-        if (response.success) {
-          this.activeJobIds.add(response.job_id);
-          this.selectedJobId = response.job_id;
-          this.rightTab = 'report';
-          this.notificationService.showInfo(
-            `Batch started: ${response.total_images} images with ${this.selectedModel}`
-          );
-          this.startPoll(response.job_id);
-        } else {
-          this.notificationService.showError(response.message);
+    const requests = this.sourceMode === 'library'
+      ? [{ ...base, source_project_id: this.sourceProjectId, include_classes: includeClasses, include_filenames: includeFilenames }]
+      : this.buildLocalRequests(base);
+    this.submitBatchRequests(requests);
+  }
+
+  /** One request per local folder, limited to the files left after the class and checklist filters. */
+  private buildLocalRequests(base: BatchRecognitionRequest): BatchRecognitionRequest[] {
+    const classFiltered = this.availableClasses.length > 0 && this.selectedClasses.size < this.availableClasses.length;
+    const requests: BatchRecognitionRequest[] = [];
+    for (const src of this.localSources) {
+      const files = src.files.filter(f =>
+        (!classFiltered || this.selectedClasses.has(this.extractClassName(f)))
+        && (!this.showFileSelector || this.selectedFilenames.has(this.localKey(src.path, f))));
+      // Never send an empty list: the backend reads "no include_filenames" as "whole folder"
+      if (files.length) {
+        requests.push({ ...base, source_folder_path: src.path, include_filenames: files });
+      }
+    }
+    return requests;
+  }
+
+  private submitBatchRequests(requests: BatchRecognitionRequest[]): void {
+    if (requests.length === 0) {
+      this.isStarting = false;
+      this.notificationService.showError('No files selected');
+      return;
+    }
+    let pending = requests.length;
+    const done = () => { if (--pending === 0) { this.isStarting = false; } };
+    for (const request of requests) {
+      const folder = request.source_folder_path ? request.source_folder_path.split(/[/\\]/).pop() + ': ' : '';
+      const prefix = requests.length > 1 ? folder : '';
+      this.batchService.startBatch(request).subscribe({
+        next: (response) => {
+          done();
+          if (response.success) {
+            this.activeJobIds.add(response.job_id);
+            this.selectedJobId = response.job_id;
+            this.rightTab = 'report';
+            this.notificationService.showInfo(
+              `${prefix}Batch started: ${response.total_images} images with ${this.selectedModel}`
+            );
+            this.startPoll(response.job_id);
+          } else {
+            this.notificationService.showError(prefix + response.message);
+          }
+        },
+        error: (err) => {
+          done();
+          this.notificationService.showError(`${prefix}Failed to start batch: ` + (err.error?.message || err.message));
         }
+      });
+    }
+  }
+
+  // ============== Recover provider batches ==============
+
+  toggleRecoverPanel(): void {
+    this.showRecoverPanel = !this.showRecoverPanel;
+    if (this.showRecoverPanel) {
+      this.loadProviderBatches();
+    }
+  }
+
+  loadProviderBatches(): void {
+    if (!this.apiKey) return;
+    this.loadingProviderBatches = true;
+    this.batchService.listProviderBatches(this.selectedModel, this.apiKey)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.loadingProviderBatches = false;
+          this.providerBatches = res.batches;
+          if (!res.success) {
+            this.notificationService.showError('Could not list provider batches: ' + res.message);
+          }
+        },
+        error: (err) => {
+          this.loadingProviderBatches = false;
+          this.notificationService.showError('Could not list provider batches: ' + (err.error?.message || err.message));
+        },
+      });
+  }
+
+  /** Re-attach a provider batch as a local job, using the source/destination selected on the left. */
+  recoverProviderBatch(batch: ProviderBatch): void {
+    if (!this.hasSource) {
+      this.notificationService.showError('First select the source the batch was submitted from (Browse Server or Browse Computer)');
+      return;
+    }
+    if (this.sourceMode === 'local' && this.localSources.length !== 1) {
+      this.notificationService.showError('Recovery needs exactly one source folder (the one the batch was submitted from)');
+      return;
+    }
+    this.recoveringBatchId = batch.id;
+    this.batchService.recoverBatch({
+      model: this.selectedSubModel && !this.selectedSubModel.startsWith('latest:')
+        ? `${this.selectedModel}:${this.selectedSubModel}` : this.selectedModel,
+      api_key: this.apiKey,
+      provider_batch_ids: [batch.id],
+      source_project_id: this.sourceMode === 'library' ? this.sourceProjectId : undefined,
+      source_folder_path: this.sourceMode === 'local' ? this.localSources[0].path : undefined,
+      destination_dataset_id: this.destinationMode === 'library' && this.destinationDatasetId ? this.destinationDatasetId : undefined,
+      destination_folder_path: this.destinationMode === 'export' && this.destinationFolderPath ? this.destinationFolderPath : undefined,
+      export_images: this.destinationMode === 'export' ? this.exportImages : undefined,
+      box_mode: this.boxMode || undefined,
+      correction_rules: this.correctionRules || undefined,
+    }).subscribe({
+      next: (res) => {
+        this.recoveringBatchId = null;
+        if (!res.success) {
+          this.notificationService.showError(res.message);
+          return;
+        }
+        this.notificationService.showInfo(res.message);
+        this.activeJobIds.add(res.job_id);
+        this.selectedJobId = res.job_id;
+        this.rightTab = 'report';
+        this.startPoll(res.job_id);
+        this.loadRecentJobs();
+        this.loadProviderBatches();
       },
       error: (err) => {
-        this.isStarting = false;
-        this.notificationService.showError('Failed to start batch: ' + (err.error?.message || err.message));
-      }
+        this.recoveringBatchId = null;
+        this.notificationService.showError('Recovery failed: ' + (err.error?.message || err.message));
+      },
     });
   }
 
@@ -969,7 +1173,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   private startPoll(jobId: string): void {
     // Stop existing poll for this job if any
     this.stopPoll(jobId);
+    let lastFetch = 0;
     const sub = interval(2000).pipe(
+      // A provider batch can wait for hours: check it every 30s instead of every 2s.
+      filter(() => this.jobStatuses.get(jobId)?.status !== 'batch_submitted' || Date.now() - lastFetch >= 30000),
+      tap(() => lastFetch = Date.now()),
       switchMap(() => this.batchService.getJobStatus(jobId)),
       takeUntil(this.destroy$),
     ).subscribe({
@@ -1161,6 +1369,17 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
 
   getUsageModels(entry: any): string[] {
     return Object.keys(entry.models || {});
+  }
+
+  /** Sum of the day's estimated costs (models without a known price are skipped). */
+  getDayCost(entry: any): number {
+    return Object.values(entry.models || {}).reduce((sum: number, m: any) => sum + (m.cost_usd || 0), 0) as number;
+  }
+
+  formatCost(usd: number): string {
+    if (usd === 0) return '$0';
+    if (usd < 0.01) return '<$0.01';
+    return '$' + usd.toFixed(usd < 1 ? 3 : 2);
   }
 
   formatBytes(bytes: number): string {

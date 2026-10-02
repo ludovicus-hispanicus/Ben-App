@@ -5,9 +5,11 @@ Batch Recognition Router - REST endpoints for batch OCR processing.
 import logging
 import os
 from pathlib import Path
+from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 from api.dto.batch_recognition import BatchRecognitionRequest
 from handlers.batch_recognition_handler import batch_recognition_handler
@@ -73,9 +75,15 @@ async def cancel_batch(job_id: str):
 
 @router.get("/usage")
 async def get_usage(days: int = 7):
-    """Get API usage stats for the last N days."""
+    """Get API usage stats for the last N days, with an estimated USD cost per model
+    (``cost_usd``, None when the model's price is unknown)."""
     from services import usage_tracker
-    return usage_tracker.get_usage(days=days)
+    from services.model_pricing import estimate_cost
+    usage = usage_tracker.get_usage(days=days)
+    for day in usage:
+        for model, entry in day["models"].items():
+            entry["cost_usd"] = estimate_cost(model, day["date"], entry["input_tokens"], entry["output_tokens"])
+    return usage
 
 
 @router.get("/usage/reset-hours")
@@ -91,6 +99,66 @@ async def set_reset_hour(provider: str, hour: int):
     from services import usage_tracker
     usage_tracker.set_reset_hour(provider, hour)
     return {"provider": provider, "reset_hour": max(0, min(23, hour))}
+
+
+class ProviderModelsRequest(BaseModel):
+    provider: str
+    api_key: str
+    refresh: bool = False
+
+
+@router.post("/provider-models")
+async def get_provider_models(body: ProviderModelsRequest):
+    """List the provider's current vision models live, plus ``latest:<family>`` aliases.
+
+    POST (not GET) so the API key never lands in a URL / access log.
+    """
+    from services import model_catalog
+    try:
+        models = await model_catalog.list_models(body.provider, body.api_key, refresh=body.refresh)
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        msg = "Invalid API key" if status in (401, 403) else f"Provider returned HTTP {status}"
+        return {"success": False, "message": msg, "models": [], "latest": []}
+    except Exception as e:
+        return {"success": False, "message": str(e), "models": [], "latest": []}
+    return {
+        "success": True,
+        "models": models,
+        "latest": model_catalog.latest_aliases(models),
+    }
+
+
+class ProviderBatchesRequest(BaseModel):
+    model: str            # e.g. "gemini_vision" or "gemini_vision:gemini-3.8-flash"
+    api_key: str
+    limit: int = 50
+
+
+@router.post("/provider-batches")
+async def list_provider_batches(body: ProviderBatchesRequest):
+    """List recent async batches on the provider account (for recovering lost jobs)."""
+    return batch_recognition_handler.list_provider_batches(body.model, body.api_key, body.limit)
+
+
+class RecoverBatchRequest(BaseModel):
+    model: str
+    api_key: str
+    provider_batch_ids: List[str]
+    source_project_id: Optional[str] = None
+    source_folder_path: Optional[str] = None
+    destination_dataset_id: Optional[int] = None
+    destination_folder_path: Optional[str] = None
+    export_images: bool = False
+    box_mode: Optional[str] = None
+    correction_rules: Optional[str] = None
+
+
+@router.post("/recover")
+async def recover_batch(request: Request, body: RecoverBatchRequest):
+    """Re-attach an existing provider batch as a local job; the poller collects it."""
+    user_id = getattr(request.state, "user_id", "admin")
+    return batch_recognition_handler.recover_batch(user_id=user_id, **body.dict())
 
 
 @router.get("/vllm-status")
@@ -115,11 +183,13 @@ async def browse_local_folder(path: str = ""):
     if not path:
         # Return filesystem roots / home directory
         home = str(Path.home())
-        return {"path": home, "folders": _list_folders(home), "image_count": _count_images(home)}
+        return {"path": home, "folders": _list_folders(home), "image_count": _count_images(home),
+                "image_files": _list_image_files(home), "drives": _list_drives()}
 
     folder = Path(path)
     if not folder.exists() or not folder.is_dir():
-        return {"path": path, "folders": [], "image_count": 0, "image_files": [], "error": "Directory not found"}
+        return {"path": path, "folders": [], "image_count": 0, "image_files": [], "drives": _list_drives(),
+                "error": "Directory not found"}
 
     image_files = _list_image_files(str(folder))
     return {
@@ -128,7 +198,16 @@ async def browse_local_folder(path: str = ""):
         "folders": _list_folders(str(folder)),
         "image_count": len(image_files),
         "image_files": image_files,
+        "drives": _list_drives(),
     }
+
+
+def _list_drives():
+    """Windows drive roots that exist (C:\, D:\, ...); empty elsewhere."""
+    if os.name != "nt":
+        return []
+    import string
+    return [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
 
 
 def _list_image_files(directory: str):

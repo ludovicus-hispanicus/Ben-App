@@ -7,31 +7,46 @@
       <h3>Batch Recognition</h3>
     </div>
 
-    <!-- Source Folder -->
+    <!-- Source -->
     <div class="config-section">
-      <label class="config-label">Source Folder</label>
+      <label class="config-label">
+        Source
+        <span class="optional" *ngIf="sourceMode === 'local' && localSources.length">({{ localImageCount }} images)</span>
+      </label>
 
-      <!-- Selected source display -->
-      <div class="folder-display" *ngIf="hasSource">
-        <mat-icon>{{ sourceMode === 'local' ? 'computer' : 'folder' }}</mat-icon>
-        <span [matTooltip]="sourceMode === 'local' ? localFolderPath : ''">{{ sourceDisplayName }}</span>
-        <span class="folder-image-count" *ngIf="sourceMode === 'local' && localFolderImageCount">{{ localFolderImageCount }} images</span>
+      <!-- Library source -->
+      <div class="folder-display" *ngIf="sourceMode === 'library' && sourceProjectId">
+        <mat-icon>folder</mat-icon>
+        <span>{{ sourceProjectName }}</span>
         <button mat-icon-button (click)="clearSource()" matTooltip="Clear">
           <mat-icon>close</mat-icon>
         </button>
       </div>
 
-      <!-- Browse Server + Upload Folder buttons -->
-      <div class="sidebar-btn-row" *ngIf="!hasSource">
-        <button mat-stroked-button class="browse-server-btn" (click)="browseSource()">
+      <!-- Local sources: folders / files read in place from this computer (not saved to the Library) -->
+      <ng-container *ngIf="sourceMode === 'local'">
+        <div class="folder-display" *ngFor="let src of localSources">
+          <mat-icon>{{ src.wholeFolder ? 'folder' : 'image' }}</mat-icon>
+          <span [matTooltip]="src.path">{{ src.name }}</span>
+          <span class="folder-image-count">{{ src.files.length }} {{ src.wholeFolder ? 'images' : (src.files.length === 1 ? 'file' : 'files') }}</span>
+          <button mat-icon-button (click)="removeLocalSource(src)" matTooltip="Remove">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </ng-container>
+
+      <!-- Browse Server + Browse Computer -->
+      <div class="sidebar-btn-row" *ngIf="!hasSource || sourceMode === 'local'">
+        <button mat-stroked-button class="browse-server-btn" *ngIf="!hasSource" (click)="browseSource()">
           <mat-icon>folder_open</mat-icon> Browse Server
         </button>
-        <button mat-stroked-button class="upload-folder-btn" (click)="pickLocalFolder(uploadFolder)"
-                matTooltip="Select a local folder of images">
-          <mat-icon>snippet_folder</mat-icon> Upload Folder
+        <button mat-stroked-button class="upload-folder-btn" (click)="openLocalBrowser()"
+                matTooltip="Use folders and/or files from this computer without adding them to the Library">
+          <mat-icon>{{ hasSource ? 'add' : 'computer' }}</mat-icon> {{ hasSource ? 'Add more' : 'Browse Computer' }}
         </button>
-        <input #uploadFolder (change)="handleFolderInput($event)" type="file"
-               webkitdirectory directory multiple style="display:none"/>
+        <button mat-icon-button *ngIf="localSources.length > 1" (click)="clearSource()" matTooltip="Remove all">
+          <mat-icon>clear_all</mat-icon>
+        </button>
       </div>
     </div>
 
@@ -74,9 +89,9 @@
           <div *ngFor="let f of filteredFilenames"
                class="file-item"
                [class.selected]="isFileSelected(f)"
-               (click)="toggleFile(f)">
+               (click)="toggleFile(f, $event)">
             <mat-icon class="file-check">{{ isFileSelected(f) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
-            <span class="file-name">{{ f }}</span>
+            <span class="file-name" [matTooltip]="sourceMode === 'local' ? f : ''">{{ fileLabel(f) }}</span>
           </div>
         </div>
       </div>
@@ -159,7 +174,7 @@
            style="cursor: pointer;"
            matTooltip="Click to view report">
         <div class="progress-header">
-          <span class="progress-label">{{ status.source_project_name || 'Processing...' }} ({{ status.model }})</span>
+          <span class="progress-label">{{ status.source_project_name || 'Processing...' }} ({{ status.effective_model || status.model }})</span>
           <span class="progress-count" *ngIf="status.execution_mode !== 'batch_api'">{{ status.current_image }} / {{ status.total_images }}</span>
           <span class="progress-count" *ngIf="status.execution_mode === 'batch_api'">{{ getStatusLabel(status.status) }}</span>
         </div>
@@ -396,7 +411,8 @@
       <mat-form-field appearance="outline" class="api-key-input">
         <mat-label>API Key</mat-label>
         <input matInput [(ngModel)]="apiKey" type="password"
-               [placeholder]="getApiKeyPlaceholder()">
+               [placeholder]="getApiKeyPlaceholder()"
+               (change)="onApiKeyChange()">
         <mat-icon matSuffix>key</mat-icon>
         <mat-hint>Required for cloud models. Saved locally per model.</mat-hint>
       </mat-form-field>
@@ -405,10 +421,33 @@
       <mat-form-field appearance="outline" class="sub-model-select" *ngIf="hasSubModels()">
         <mat-label>Model Version</mat-label>
         <mat-select [(ngModel)]="selectedSubModel" (selectionChange)="onSubModelChange()">
-          <mat-option *ngFor="let subModel of apiSubModels[selectedModel]" [value]="subModel.value">
-            {{ subModel.label }} - {{ subModel.description }}
-          </mat-option>
+          <ng-container *ngIf="liveSubModels[selectedModel] as live; else staticSubModels">
+            <mat-optgroup label="Always latest">
+              <mat-option *ngFor="let alias of live.latest" [value]="alias.value">
+                {{ alias.label }} <span class="sub-model-resolves">→ {{ alias.resolves_to }}</span>
+              </mat-option>
+            </mat-optgroup>
+            <mat-optgroup label="Pinned version">
+              <mat-option *ngFor="let m of live.models" [value]="m.value">
+                {{ m.label }}<span class="sub-model-resolves" *ngIf="m.label !== m.value"> {{ m.value }}</span>
+              </mat-option>
+            </mat-optgroup>
+          </ng-container>
+          <ng-template #staticSubModels>
+            <mat-option *ngFor="let subModel of apiSubModels[selectedModel]" [value]="subModel.value">
+              {{ subModel.label }} - {{ subModel.description }}
+            </mat-option>
+          </ng-template>
         </mat-select>
+        <button mat-icon-button matSuffix type="button"
+                [disabled]="!apiKey || subModelsLoading"
+                (click)="loadProviderModels(true); $event.stopPropagation()"
+                matTooltip="Refresh model list from provider">
+          <mat-icon [class.spinning]="subModelsLoading">refresh</mat-icon>
+        </button>
+        <mat-hint *ngIf="subModelsError" class="sub-model-error">{{ subModelsError }}</mat-hint>
+        <mat-hint *ngIf="!subModelsError && !liveSubModels[selectedModel]">Enter an API key to load the provider's current models</mat-hint>
+        <mat-hint *ngIf="!subModelsError && liveSubModels[selectedModel]">Live from provider · "Latest" auto-upgrades when new models ship</mat-hint>
       </mat-form-field>
     </div>
 
@@ -435,6 +474,40 @@
         Submits the whole job to the provider and collects results asynchronously (up to ~24h)
         at half price, with no per-minute rate limits. You can close this page — it keeps running.
       </p>
+
+      <button mat-button type="button" class="recover-toggle"
+              [disabled]="!apiKey"
+              (click)="toggleRecoverPanel()">
+        <mat-icon>history</mat-icon> Recover batch from provider
+      </button>
+      <div class="recover-panel" *ngIf="showRecoverPanel">
+        <p class="exec-mode-hint">
+          Batches on this provider account. Recovering re-attaches one as a job and saves its results using
+          the <b>source and destination selected on the left</b>. Pick the same source the batch was submitted from.
+        </p>
+        <div class="recover-empty" *ngIf="loadingProviderBatches">Loading…</div>
+        <div class="recover-empty" *ngIf="!loadingProviderBatches && !providerBatches.length">
+          No batches on the provider. Finished batches are deleted there once BEn has collected them.
+        </div>
+        <div class="recover-row" *ngFor="let b of providerBatches">
+          <div class="recover-info">
+            <span class="recover-label" [matTooltip]="b.id">{{ b.label || b.id }}</span>
+            <span class="recover-meta">
+              {{ b.status }} · {{ b.created | date:'short' }}<ng-container *ngIf="b.request_count"> · {{ b.request_count }} requests</ng-container>
+              <ng-container *ngIf="b.local_job_id"> · job {{ b.local_job_id }} ({{ b.local_status }})</ng-container>
+            </span>
+          </div>
+          <button mat-stroked-button type="button"
+                  *ngIf="!b.local_job_id || !isActiveStatus(b.local_status || '')"
+                  [disabled]="recoveringBatchId === b.id || b.state === 'failed' || b.state === 'cancelled'"
+                  (click)="recoverProviderBatch(b)">
+            {{ recoveringBatchId === b.id ? 'Recovering…' : 'Recover' }}
+          </button>
+        </div>
+        <button mat-button type="button" (click)="loadProviderBatches()" [disabled]="loadingProviderBatches">
+          <mat-icon>refresh</mat-icon> Refresh
+        </button>
+      </div>
     </div>
 
     <!-- Start Button -->
@@ -446,6 +519,9 @@
           ? 'Starting...'
           : (supportsBatchApi() && executionMode === 'batch_api' ? 'Submit Batch Job' : 'Start Batch') }}
     </button>
+    <p class="start-blocked-hint" *ngIf="!isStarting && startBlockedReason">
+      <mat-icon>info</mat-icon> {{ startBlockedReason }}
+    </p>
 
     </div><!-- /settings tab -->
 
@@ -471,7 +547,7 @@
           <div class="report-section-label">Overview</div>
           <table class="report-table">
             <tr><td>Status</td><td>{{ reportStatus.status | titlecase }}</td></tr>
-            <tr><td>Model</td><td>{{ reportStatus.model }}</td></tr>
+            <tr><td>Model</td><td>{{ reportStatus.effective_model || reportStatus.model }}</td></tr>
             <tr><td>Prompt</td><td>{{ reportStatus.prompt }}</td></tr>
             <tr><td>Images</td><td>{{ reportStatus.processed_images }} / {{ reportStatus.total_images }} processed<span *ngIf="reportStatus.failed_images > 0">, {{ reportStatus.failed_images }} failed</span></td></tr>
             <tr><td>Batch Mode</td><td>{{ reportStatus.batch_size && reportStatus.batch_size < 0 ? 'Dynamic' : 'Fixed (' + (reportStatus.batch_size || 1) + ')' }}</td></tr>
@@ -582,10 +658,13 @@
       </div>
 
       <div class="usage-day" *ngFor="let day of usageData">
-        <div class="usage-day-header">{{ day.date }}</div>
+        <div class="usage-day-header">
+          {{ day.date }}
+          <span class="usage-day-cost" *ngIf="getDayCost(day) as cost">≈ {{ formatCost(cost) }}</span>
+        </div>
         <table class="report-table report-table-full">
           <thead>
-            <tr><th>Model</th><th>Inferences</th><th>Input Tokens</th><th>Output Tokens</th><th>Data Sent</th></tr>
+            <tr><th>Model</th><th>Inferences</th><th>Input Tokens</th><th>Output Tokens</th><th>Data Sent</th><th>Est. Cost</th></tr>
           </thead>
           <tbody>
             <tr *ngFor="let model of getUsageModels(day)">
@@ -594,10 +673,17 @@
               <td>{{ formatTokens(day.models[model].input_tokens) }}</td>
               <td>{{ formatTokens(day.models[model].output_tokens) }}</td>
               <td>{{ formatBytes(day.models[model].data_bytes) }}</td>
+              <td [matTooltip]="day.models[model].cost_usd == null ? 'No price known for this model' : ''">
+                {{ day.models[model].cost_usd == null ? '—' : formatCost(day.models[model].cost_usd) }}
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <p class="usage-cost-note" *ngIf="usageData.length">
+        Estimated from list prices (checked 2026-09-29); "(batch)" rows at the 50% Batch API rate.
+        Your provider's billing page is authoritative.
+      </p>
     </div><!-- /usage tab -->
 
   </div>
