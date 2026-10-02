@@ -71,6 +71,15 @@ class LemmatizationHandler:
                     token.match_level = "skip"
                     continue
 
+                # A month first. {iti} says the sign is a date, and the ordinary
+                # path strips the determinative and answers about the bare sign:
+                # {iti}BARA₂ would come back parakku, "cult dais".
+                month = self._dictionary.lookup_month(token.raw)
+                if month:
+                    token.lemma_candidates = month
+                    token.match_level = "exact"
+                    continue
+
                 if token.is_logogram:
                     # Strip brackets/flags from raw but keep digits (sign indices)
                     raw_clean = re.sub(r'[\[\]()<>°\\#?!*]', '', token.raw)

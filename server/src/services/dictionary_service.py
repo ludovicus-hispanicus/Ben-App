@@ -162,6 +162,87 @@ class DictionaryService:
             logger.warning(f"Failed to build conjugator: {e}")
             self._conjugator = None
 
+    # ── Months ──
+    #
+    # A month is written {iti} plus a sign, and the sign has more than one
+    # accepted reading: {iti}BARA₂ and {iti}BAR₂ are the same month, written by
+    # different editors. The eBL index keys only one reading of each, so the
+    # others are spelled out here.
+    #
+    # This has to run before the ordinary lookup, which strips the determinative
+    # and asks about the bare sign. That gives the right answer for the sign and
+    # the wrong one for the date: {iti}BARA₂ comes back parakku, "cult dais".
+    #
+    # The determinative itself is ITI = |UD×(U.U.U)| (ABZ 52) — UD holding three
+    # U signs, thirty days.
+    MONTH_FORMS = {
+        'bara2': 'bar2', 'bara': 'bar2', 'bar2': 'bar2', 'bar': 'bar',
+        'gu4': 'gu4', 'gud': 'gu4',
+        'sig4': 'sig4', 'sig': 'sig',
+        'šu': 'šu', 'su': 'šu',
+        'ne': 'ne', 'izi': 'ne',
+        'kin': 'kin',
+        'du6': 'du6', 'dul': 'du6',
+        'apin': 'apin',
+        'gan': 'gan', 'gan2': 'gan',
+        'ab': 'ab', 'ab2': 'ab',
+        'ziz2': 'ziz2', 'ziz': 'ziz2',
+        'še': 'še', 'sze': 'še',
+        'diri-še': 'diri-še', 'diri': 'diri-še',
+    }
+
+    MONTH_NAMES = {
+        'nisanu', 'nisannu', 'ayyāru', 'ayyaru', 'simānu', 'simanu',
+        "du'ūzu", 'duʾūzu', 'abu', 'elūnu', 'ulūlu', 'tašrītu', 'tašritu',
+        'arahsamna', 'araḫsamna', 'kislīmu', 'kislimu', 'ṭebētu', 'tebetu',
+        'šabāṭu', 'šabatu', 'adaru', 'addaru', 'diri-addari',
+    }
+
+    _DET_RE = re.compile(r'^[^{]*\{([^}]*)\}(.*)$')
+    _FLAGS_RE = re.compile(r'[#?!*\[\]()<>°⸢⸣]')
+
+    def _looks_like_month(self, lemma_id: str) -> bool:
+        entry = self.get_word_entry(lemma_id)
+        if entry is not None and 'month' in (getattr(entry, 'guide_word', '') or '').lower():
+            return True
+        name = re.sub(r' [IVX]+$', '', lemma_id or '').lower()
+        return name in self.MONTH_NAMES
+
+    def lookup_month(self, raw: str) -> List[str]:
+        """Lemma ids for a month written {iti}SIGN, or [] if this is not one.
+
+        Ranked so the month leads: eBL lists {iti}ab under the brazier before
+        ṭebētu, and a date is not talking about a brazier.
+        """
+        if not raw or not self._logogram_index:
+            return []
+        m = self._DET_RE.match(raw)
+        if not m:
+            return []
+        det = self._normalize_logogram(self._FLAGS_RE.sub('', m.group(1)))
+        if det != 'iti':
+            return []
+        body = self._normalize_logogram(self._FLAGS_RE.sub('', m.group(2)))
+        if not body:
+            return []
+
+        keys = []
+        alias = self.MONTH_FORMS.get(body)
+        if alias:
+            keys.append('{iti}' + alias)
+        if body != alias:
+            # A fuller writing, {iti}gu4-si-sa2 beside {iti}gu4.
+            keys.append('{iti}' + body)
+
+        out: List[str] = []
+        for key in keys:
+            # The determinative writings live in the logogram index.
+            for lemma_id in (self._logogram_index.get(key)
+                             or self._index.get(key) or []):
+                if lemma_id not in out:
+                    out.append(lemma_id)
+        return sorted(out, key=lambda i: 0 if self._looks_like_month(i) else 1)
+
     def lookup_logogram(self, logogram: str) -> List[str]:
         """Look up a logogram (e.g., LUGAL, E₂.GAL) and return Akkadian lemma IDs."""
         if not self._logogram_index:
