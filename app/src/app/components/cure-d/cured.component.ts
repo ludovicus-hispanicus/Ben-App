@@ -558,10 +558,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       document.removeEventListener('touchmove', this.resizeHandler);
       document.removeEventListener('touchend', this.resizeEndHandler);
 
-      // Update canvas size to fit new container width, keeping current zoom
+      // Resize canvas to the new panel width and re-fit the image
       if (this.canvas) {
         setTimeout(() => {
-          this.canvas.setCanvasSize();
+          this.canvas.fitToView();
         }, 100);
       }
     };
@@ -1906,15 +1906,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
   setCanvasImage(imageToShow) {
     this.backgroundImage = imageToShow;
     this.canvas.props.canvasImage = imageToShow;
-    this.canvas.setCanvasImage();
+    this.canvas.setCanvasImage(() => this.canvas.fitToView());
     const dims = this.getCanvasDimensions();
     this.canvas.props.canvasHeight = dims.height;
     this.canvas.props.canvasWidth = dims.width;
     this.canvas.forceCanvasSize();
-    this.canvas.forceZoomOut(0.5);  // 50% zoom
   }
 
   onImageRotated(rotatedDataUrl: string): void {
+    this.canvas.fitToView();
     this.uploadedImageBlob = this.dataUrlToFile(rotatedDataUrl, 'rotated-image.png');
     this.hasUnsavedChanges = true;
     this.notificationService.showInfo('Image rotated — save to persist');
@@ -2006,12 +2006,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       let imageToShow: any = reader.result;
       this.backgroundImage = imageToShow;
       this.canvas.props.canvasImage = imageToShow;
-      this.canvas.setCanvasImage();
+      this.canvas.setCanvasImage(() => this.canvas.fitToView());
       const dims = this.getCanvasDimensions();
       this.canvas.props.canvasHeight = dims.height;
       this.canvas.props.canvasWidth = dims.width;
       this.canvas.forceCanvasSize();
-      this.canvas.forceZoomOut();
       this.stage = 2;
       this.updateUrl();
       this.updateToolbarButtons();
@@ -2121,12 +2120,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
             this.backgroundImage = imageToShow;
             if (this.canvas) {
               this.canvas.props.canvasImage = imageToShow;
-              this.canvas.setCanvasImage();
+              this.canvas.setCanvasImage(() => this.canvas.fitToView());
               const dims = this.getCanvasDimensions();
               this.canvas.props.canvasHeight = dims.height;
               this.canvas.props.canvasWidth = dims.width;
               this.canvas.forceCanvasSize();
-              this.canvas.forceZoomOut();
               this.canvas.allowedActions = [this.canvas.panMode, this.canvas.addMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.guideMode];
               this.canvas.changeMode(CanvasMode.Pan);
             }

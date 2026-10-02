@@ -457,6 +457,44 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.canvas.renderAll();
   }
 
+  /**
+   * Resize the canvas to the on-screen size of its container, minus anything
+   * rendered above the canvas (e.g. the mode toggle group). Returns false if
+   * the container has no layout yet.
+   */
+  resizeToContainer(): boolean {
+    const el = this.canvasContainer?.nativeElement as HTMLElement;
+    if (!el || !el.clientWidth || !el.clientHeight) return false;
+    const wrapper = (this.canvas as any).wrapperEl as HTMLElement;
+    const topOffset = wrapper ? Math.max(0, wrapper.getBoundingClientRect().top - el.getBoundingClientRect().top) : 0;
+    const height = el.clientHeight - topOffset;
+    if (height <= 0) return false;
+    this.props.canvasWidth = el.clientWidth;
+    this.props.canvasHeight = height;
+    this.forceCanvasSize();
+    return true;
+  }
+
+  /** Scale and center the background image so the whole image is visible in the canvas. */
+  fitToView(padding = 16) {
+    const bgImage = this.canvas?.backgroundImage as fabric.Image;
+    if (!bgImage) return;
+    this.resizeToContainer();
+    const canvasWidth = this.canvas.getWidth();
+    const canvasHeight = this.canvas.getHeight();
+    const imgWidth = bgImage.getScaledWidth();
+    const imgHeight = bgImage.getScaledHeight();
+    if (!imgWidth || !imgHeight) return;
+    let zoom = Math.min((canvasWidth - 2 * padding) / imgWidth, (canvasHeight - 2 * padding) / imgHeight);
+    zoom = Math.max(this.props.minZoom, Math.min(this.props.maxZoom, zoom));
+    this.canvas.setViewportTransform([
+      zoom, 0, 0, zoom,
+      (canvasWidth - imgWidth * zoom) / 2,
+      (canvasHeight - imgHeight * zoom) / 2
+    ]);
+    this.canvas.renderAll();
+  }
+
   getViewportTransform(): number[] | null {
     return this.canvas?.viewportTransform ? [...this.canvas.viewportTransform] : null;
   }
@@ -690,9 +728,13 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
     this.canvas.freeDrawingBrush.width = event.value;
   }
 
-  setCanvasImage() {
+  /** Set props.canvasImage as the background; onLoaded runs once the image has loaded. */
+  setCanvasImage(onLoaded?: () => void) {
     if (this.props.canvasImage) {
-      this.canvas.setBackgroundImage(this.props.canvasImage, this.canvas.renderAll.bind(this.canvas), {excludeFromExport: false});
+      this.canvas.setBackgroundImage(this.props.canvasImage, () => {
+        this.canvas.renderAll();
+        onLoaded?.();
+      }, {excludeFromExport: false});
       // this.canvas.renderAll();
     }
   }
