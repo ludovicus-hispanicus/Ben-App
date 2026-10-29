@@ -120,6 +120,7 @@ The audit found that the backend already boots without the heavy ML libraries, b
 3. Base spec with Kraken + CPU torch + Ultralytics; fix the build script; build and measure installer size; boot-test.
    - The base spec must leave out the code of modules that aren't in the base (`api.routers.cure`, `api.routers.segmentation`, `services.qwen_training_service`): "installed" is detected from the module's code plus its libraries (`common/module_status.py`), and CPU torch + Ultralytics alone would make CuRe look installed.
 4. Measure CPU training time (Kraken tiny, YOLO26n).
+   - YOLO26n, measured 2026-10-29 (laptop CPU): ~90 s per epoch for 73 training / 18 validation pages at image size 1024 (3 epochs: 271 s). BEn's default of 100 epochs ≈ 2.5 h (early stopping often ends sooner). Larger base models, or fine-tuning the YOLOv8m-based AHw/CAD models, take several times longer. Detection with YOLO26n: 0.22 s per page on CPU. Kraken tiny on CPU: still to measure.
 5. UI gating: hide Qwen, gate YOLO calls and links, report installed modules. (Nemotron and TrOCR were removed outright.)
    - **Done 2026-10-29.** `GET /settings/modules/installed`; `ModuleService` combines installed + switched on; Qwen is its own module; nav, route guard, Training tab, model menus, Library and dashboard links follow it; OCR with a missing module returns HTTP 400 "The … module is not installed."; menu groups renamed Kraken (local) / Qwen (local) / Ollama (local). The Settings "Install" button is still a placeholder.
 6. Ollama: capability-based model discovery.
@@ -129,6 +130,7 @@ The audit found that the backend already boots without the heavy ML libraries, b
    - **Done 2026-10-29.** The page editor uses the same live list as Batch (`POST /batch-recognition/provider-models`, cached 1 h): "Always latest" aliases plus pinned versions, refresh button; the built-in list remains as fallback. Single-page OCR resolves `latest:<family>` like Batch does at job start. A wrong key is reported as "Invalid API key" for all four providers (Gemini answers 400).
    - Ollama (item 6 follow-up): one shared dropdown on the editor and Batch lists installed models, Ollama Cloud models and downloadable library models (from ollama.com, cached 12 h), "Suggested for OCR" first; downloads only after confirming the size.
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.
+   - **Done 2026-10-29.** Layout tab in the CuReD hub (the existing layout tool), "Layout" removed from the top bar (`/yolo-training` still works; Library/dashboard links use `/cured?view=layout`). Page editor: "Find regions (layout)" detects regions with any trained layout model and makes a clicked region the OCR box. YOLO26 n–x offered first as base models (YOLO26 Small default); local base weights are used before downloading.
 9. Frontend update (§6), including the further add/remove list.
 10. README: base-version notice (§7).
 
