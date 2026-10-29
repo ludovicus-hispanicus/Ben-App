@@ -124,4 +124,9 @@ on demand from Settings via GitHub releases.
 
 ## License
 
-See individual package manifests. Authored by DigPasts.
+BEn is free software for academic, non-profit use, released under the
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0). Authored by DigPasts.
+
+BEn bundles third-party components under their own licences, among them
+[Kraken](https://github.com/mittagessen/kraken) (Apache-2.0) and
+[Ultralytics YOLO](https://github.com/ultralytics/ultralytics) (AGPL-3.0).

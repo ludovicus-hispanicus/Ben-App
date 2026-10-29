@@ -17,7 +17,7 @@
     "vlm"
   ],
   "author": "DigPasts",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-deb": "^7.11.1",
