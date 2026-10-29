@@ -41,7 +41,7 @@
       <div class="empty" *ngIf="summary.recent_texts.length === 0">No texts yet. Start with a new OCR.</div>
       <button class="row-link" *ngFor="let t of summary.recent_texts" (click)="openText(t)">
         <span class="row-main">{{ t.label }}</span>
-        <span class="row-meta">{{ t.dataset || 'Unassigned' }} · {{ t.lines }} lines · {{ t.last_modified | date:'d MMM, HH:mm' }}</span>
+        <span class="row-meta">{{ t.dataset || 'Unassigned' }} · {{ t.lines }} {{ t.lines === 1 ? 'line' : 'lines' }} · {{ t.last_modified | date:'d MMM, HH:mm' }}</span>
       </button>
     </section>
 

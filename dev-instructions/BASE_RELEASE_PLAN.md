@@ -132,6 +132,7 @@ The audit found that the backend already boots without the heavy ML libraries, b
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.
    - **Done 2026-10-29.** Layout tab in the CuReD hub (the existing layout tool), "Layout" removed from the top bar (`/yolo-training` still works; Library/dashboard links use `/cured?view=layout`). Page editor: "Find regions (layout)" detects regions with any trained layout model and makes a clicked region the OCR box. YOLO26 n–x offered first as base models (YOLO26 Small default); local base weights are used before downloading.
 9. Frontend update (§6), including the further add/remove list.
+   - **Dashboard done 2026-10-29** (`/dashboard/summary`, `/dashboard/news`, `NEWS.md`, Settings › Modules › Dashboard news). Open: the further add/remove list (to be specified).
 10. README: base-version notice (§7).
 
 ## 6. Frontend update
