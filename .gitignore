@@ -35,6 +35,8 @@ Thumbs.db
 *.onnx
 *.bin
 models/
+# ...but not the Angular data types
+!app/src/app/models/
 
 # Training data, predictions & results
 yolo_snippets/
@@ -74,6 +76,9 @@ server/src/data/dictionary/
 server/src/build/
 server/src/data/kraken_training_history.json
 server/src/data/qwen_training_history.json
+server/src/data/trocr_training_history.json
+server/src/data/trocr_models/
+server/src/data/ocr_debug.txt
 server/src/ebl_config.json
 **/unsloth_compiled_cache/
 **/vlm-training/
