@@ -1131,6 +1131,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     } else {
       // Dashboard
       this.returnTo = this.returnLabel = null;
+      // "Back" from a text returns to its folder; any other way here (the CuReD
+      // link in the header, a fresh start) shows the start page with all datasets.
+      if (!this.keepDatasetOnReturn && this.selectedDataset) {
+        this.backToDatasets();
+      }
+      this.keepDatasetOnReturn = false;
       this.resetToCleanState();
       this.stage = 0;
       this.loadDatasets();
@@ -2421,6 +2427,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // ── Navigation (top-bar back button + breadcrumb) ──────────────────
 
   private navSignature: string | null = null;
+  // Set by "back to folder" so the next visit to /cured keeps the dataset open
+  private keepDatasetOnReturn = false;
 
   /** Short name of the open text for the breadcrumb. */
   get currentTextLabel(): string {
@@ -2520,7 +2528,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
 
   /** Go to the CuReD start screen showing the current dataset's text list. */
   private showDatasetTexts(): void {
+    this.keepDatasetOnReturn = true;
     this.router.navigate(['/cured']).then(() => {
+      this.keepDatasetOnReturn = false;  // in case the navigation did not happen
       // A text opened directly (link, reload) knows its dataset but never opened its list
       if (this.selectedDataset && this.showDatasetList) {
         this.openDataset(this.selectedDataset);

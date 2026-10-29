@@ -30,11 +30,10 @@
 
     <!-- Dynamic toolbar area -->
     <div class="navbar-toolbar" *ngIf="toolbarState$ | async as state">
-      <!-- Back button (labelled with its destination) -->
+      <!-- Back button (its destination is in the tooltip; the breadcrumb shows the path) -->
       <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()"
-              [matTooltip]="isDesktop ? 'Back (Alt+←)' : 'Back'">
+              [matTooltip]="(state.backLabel ? 'Back to ' + state.backLabel : 'Back') + (isDesktop ? ' (Alt+←)' : '')">
         <mat-icon>arrow_back</mat-icon>
-        <span *ngIf="state.backLabel">{{ state.backLabel }}</span>
       </button>
 
       <!-- Breadcrumb trail -->

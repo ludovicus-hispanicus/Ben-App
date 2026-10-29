@@ -284,9 +284,6 @@
     <!-- Selected dataset view (text list) -->
     <div *ngIf="!showDatasetList" class="main-panel">
       <div class="text-list-header">
-        <button mat-icon-button (click)="backToDatasets()" matTooltip="Back to datasets">
-          <mat-icon>arrow_back</mat-icon>
-        </button>
         <h3>{{ selectedDataset?.name }}</h3>
         <span class="item-count" *ngIf="curedTexts.length > 0">{{ filteredTexts.length }} of {{ textsTotal }} items</span>
 
