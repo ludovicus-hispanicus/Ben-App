@@ -123,6 +123,8 @@ The audit found that the backend already boots without the heavy ML libraries, b
 5. UI gating: hide Qwen, gate YOLO calls and links, report installed modules. (Nemotron and TrOCR were removed outright.)
    - **Done 2026-10-29.** `GET /settings/modules/installed`; `ModuleService` combines installed + switched on; Qwen is its own module; nav, route guard, Training tab, model menus, Library and dashboard links follow it; OCR with a missing module returns HTTP 400 "The … module is not installed."; menu groups renamed Kraken (local) / Qwen (local) / Ollama (local). The Settings "Install" button is still a placeholder.
 6. Ollama: capability-based model discovery.
+   - **Done 2026-10-29.** `GET /cured/ollama/vision-models` lists installed models whose Ollama capabilities include `vision` (local and cloud); models Ollama can't run are reported with its reason. Menus use `ollama:<exact name>`; a model can also be typed in by name. The fixed Ollama Cloud entries were removed: Ollama retired `qwen3-vl:235b-cloud` (16 June 2026). Ollama is now reached at 127.0.0.1 (localhost cost ~1 s per request on Windows).
+   - Open: `qwen3-vl:4b` is slow on a CAD snippet (86–258 s) because it reasons at length before answering, even with `think: false`. Worth comparing with `qwen3.5:4b` when the data budget allows.
 7. Cloud APIs: live model catalog in CuReD.
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.
 9. Frontend update (§6), including the further add/remove list.

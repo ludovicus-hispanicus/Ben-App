@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, NgZone, ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { OllamaVisionModel, OllamaVisionModels, ollamaModelValue } from 'src/app/services/cured.service';
 import { Subscription } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { ReplacementMappingsService, ReplacementMapping } from 'src/app/services/replacement-mappings.service';
@@ -76,11 +77,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
     kraken: [
       { value: 'kraken', label: 'Kraken' }
     ],
-    local: [] as { value: string; label: string }[],
-    ollamaCloud: [
-      { value: 'qwen3_vl_235b_cloud', label: 'Qwen3 VL 235B Cloud' },
-      { value: 'qwen3_vl_235b_thinking', label: 'Qwen3 VL 235B Thinking' }
-    ],
     api: [
       { value: 'openai_gpt4o', label: 'GPT-4o (OpenAI)' },
       { value: 'anthropic_claude', label: 'Claude Sonnet 4.6 (Anthropic)' }
@@ -97,8 +93,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
   newPromptText: string = '';
   creatingPrompt = false;
 
-  // Available Ollama models
-  availableOllamaModels: string[] = [];
+  // Installed Ollama models that accept images (as Ollama reports them)
+  availableOllamaModels: OllamaVisionModel[] = [];
+  // Installed entries Ollama can't run, with its reason (e.g. a retired cloud model)
+  unavailableOllamaModels: Array<{ name: string; error: string }> = [];
   loadingModels = false;
   ollamaStatus: 'checking' | 'available' | 'unavailable' = 'checking';
 
@@ -264,15 +262,17 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   loadOllamaModels(): void {
     this.loadingModels = true;
-    this.http.get<string[]>(`${environment.apiUrl}/cured/ollama/models`)
+    this.http.get<OllamaVisionModels>(`${environment.apiUrl}/cured/ollama/vision-models`)
       .subscribe({
-        next: (models) => {
-          this.availableOllamaModels = models;
+        next: (response) => {
+          this.availableOllamaModels = response.models;
+          this.unavailableOllamaModels = response.unavailable;
           this.loadingModels = false;
           this.buildOcrModelGroups();
         },
         error: () => {
           this.availableOllamaModels = [];
+          this.unavailableOllamaModels = [];
           this.loadingModels = false;
           this.buildOcrModelGroups();
         }
@@ -283,37 +283,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
    * Build the OCR model groups based on installed Ollama models
    */
   private buildOcrModelGroups(): void {
-    // Map Ollama model names to friendly labels
-    const ollamaModelLabels: { [key: string]: string } = {
-      'deepseek-ocr': 'DeepSeek OCR',
-      'deepseek-ocr:latest': 'DeepSeek OCR',
-      'qwen3-vl:4b': 'Qwen3 VL 4B',
-      'qwen3-vl:8b': 'Qwen3 VL 8B',
-      'qwen3-vl:32b': 'Qwen3 VL 32B',
-      'llama4:scout': 'Llama 4 Scout',
-      'mistral-small3.1': 'Mistral Small 3.1',
-      'llava:34b': 'LLaVA 34B'
-    };
-
-    // Build local models from installed Ollama models (excluding cloud models)
-    const localOllamaModels = this.availableOllamaModels
-      .filter(name => !name.toLowerCase().includes('cloud'))
-      .map(name => ({
-        value: `ollama_${name.replace(/[:\-\.]/g, '_')}`,
-        label: ollamaModelLabels[name] || name
-      }));
-
-    // Combine base local models with installed Ollama local models
-    const localModels = [
-      ...this.baseModels.local,
-      ...localOllamaModels
-    ];
-
-    // Build groups
+    const toOption = (m: OllamaVisionModel) => ({ value: ollamaModelValue(m.name), label: m.name });
     this.ocrModelGroups = [
       { label: 'Kraken (local)', models: this.baseModels.kraken },
-      { label: 'Ollama (local)', models: localModels },
-      { label: 'Ollama Cloud', models: this.baseModels.ollamaCloud },
+      { label: 'Ollama (local)', models: this.availableOllamaModels.filter(m => !m.cloud).map(toOption) },
+      { label: 'Ollama Cloud', models: this.availableOllamaModels.filter(m => m.cloud).map(toOption) },
       { label: 'API', models: this.baseModels.api }
     ];
   }

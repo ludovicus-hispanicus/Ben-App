@@ -3,7 +3,7 @@ import { MatMenuTrigger } from '@angular/material/menu';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
 import { PDFDocumentProxy } from 'ng2-pdf-viewer';
 import { Dimensions, Index, Letter, LetterHover, RectData } from 'src/app/models/letter';
-import { CuredService, TranslationLookupResult } from 'src/app/services/cured.service';
+import { CuredService, TranslationLookupResult, ollamaModelValue } from 'src/app/services/cured.service';
 import { NotificationService } from 'src/app/services/notification.service';
 import { CanvasMode, CanvasType, FabricCanvasComponent } from '../fabric-canvas/fabric-canvas.component';
 import { saveAs } from 'file-saver';
@@ -433,14 +433,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     {
       name: 'Ollama (local)',
       models: [
-        // Additional models populated dynamically from Ollama
+        // Installed Ollama models that accept images (from /ollama/vision-models)
       ]
     },
     {
       name: 'Ollama Cloud',
       models: [
-        { value: 'qwen3_vl_235b_cloud', label: 'Qwen3 VL 235B', description: 'Free, best quality' },
-        { value: 'qwen3_vl_235b_thinking', label: 'Qwen3 VL 235B Thinking', description: 'STEM/math reasoning' },
+        // Ollama cloud models the user has added, if they accept images
       ]
     },
     {
@@ -454,12 +453,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     },
   ];
 
-  // Available Ollama models from server (for Settings page)
-  public availableOllamaModels: string[] = [];
+  // Ollama: running at all, and a model name typed in by the user
+  public ollamaAvailable = false;
+  public customOllamaModel = '';
   // Track which models are locally available
   public modelAvailability: { [key: string]: boolean } = {
-    'qwen3_vl_235b_cloud': true,
-    'qwen3_vl_235b_thinking': true,
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
@@ -677,6 +675,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
           this.hasUnsavedChanges = true;
         }
       }, 50);
+    }, () => {
+      // The error interceptor already shows the server's message (e.g. a missing model)
+      this.isLoading = false;
+      this.toolbarService.setLoading(false);
     });
   }
 
@@ -4033,7 +4035,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // Check if the selected model requires an API key
   requiresApiKey(modelValue?: string): boolean {
     const model = modelValue || this.selectedOcrModel;
-    const apiModels = ['gpt4_vision', 'claude_vision', 'gemini_vision', 'qwen3_vl_cloud', 'grok_xai'];
+    const apiModels = ['gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'];
     return apiModels.includes(model);
   }
 
@@ -4094,55 +4096,49 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
 
   // Get tooltip for model button
   getModelTooltip(model: {value: string; label: string; description?: string}): string {
-    if (this.isModelAvailable(model.value)) {
-      return model.description || model.label;
-    } else {
-      return `Not installed - Run: ollama pull ${this.getOllamaModelName(model.value)}`;
-    }
+    return this.isModelAvailable(model.value) ? (model.description || model.label) : 'Not available';
   }
 
-  // Get Ollama model name for download instruction
-  private getOllamaModelName(modelValue: string): string {
-    const ollamaNames: { [key: string]: string } = {
-      'deepseek_ocr': 'deepseek-ocr',
-      'llama4_vision': 'llama4:scout',
-      'qwen3_vl_32b': 'qwen3-vl:32b',
-      'qwen3_vl_8b': 'qwen3-vl:8b',
-      'qwen3_vl_4b': 'qwen3-vl:4b',
-      'mistral_small_vision': 'mistral-small3.1',
-      'llava_34b': 'llava:34b',
-      // Cloud models (no download needed)
-      'qwen3_vl_235b_cloud': 'qwen3-vl:235b-cloud',
-      'qwen3_vl_235b_thinking': 'qwen3-vl:235b-thinking-cloud',
-    };
-    return ollamaNames[modelValue] || modelValue;
-  }
-
-  // Load available Ollama models from backend
+  /** List the installed Ollama models that accept images, as Ollama reports them (no fixed list). */
   loadAvailableOllamaModels() {
-    this.curedService.getRecommendedModels().subscribe(
+    this.curedService.getOllamaVisionModels().subscribe(
       response => {
-        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
-        if (!gpuCategory) return;
-
-        // Append installed Ollama models to the category
-        const existingValues = new Set(gpuCategory.models.map(m => m.value));
+        this.ollamaAvailable = response.ollama_available;
+        const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+        const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
+        if (!local || !cloud) return;
+        // Keep a model typed in by name; replace the discovered ones
+        const typedIn = local.models.filter(m => m.description === CuredComponent.TYPED_IN_OLLAMA_MODEL);
+        local.models = [...typedIn];
+        cloud.models = [];
         for (const m of response.models) {
-          if (!m.installed) continue;
-          const value = m.id.replace(/[-:]/g, '_');
-          if (existingValues.has(value)) continue;
-          gpuCategory.models.push({
-            value,
-            label: m.name,
-            description: m.description,
-          });
+          const value = ollamaModelValue(m.name);
+          if (local.models.some(x => x.value === value)) continue;
+          const description = [m.parameter_size, m.size_gb ? `${m.size_gb} GB` : null, m.cloud ? 'runs on Ollama servers' : null]
+            .filter(Boolean).join(' · ');
+          (m.cloud ? cloud : local).models.push({ value, label: m.name, description });
           this.modelAvailability[value] = true;
         }
       },
-      () => {
-        // Ollama not available
-      }
+      () => { this.ollamaAvailable = false; }
     );
+  }
+
+  private static readonly TYPED_IN_OLLAMA_MODEL = 'Entered by name';
+
+  /** Use any Ollama model by its name (e.g. one that doesn't report image support yet). */
+  useCustomOllamaModel(): void {
+    const name = this.customOllamaModel.trim();
+    if (!name) return;
+    const value = ollamaModelValue(name);
+    const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+    const known = this.ocrModelCategories.some(c => c.models.some(m => m.value === value));
+    if (local && !known) {
+      local.models.push({ value, label: name, description: CuredComponent.TYPED_IN_OLLAMA_MODEL });
+    }
+    this.modelAvailability[value] = true;
+    this.selectedOcrModel = value;
+    this.customOllamaModel = '';
   }
 
   // ============================================

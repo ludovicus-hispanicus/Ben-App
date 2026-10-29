@@ -6,7 +6,7 @@ import { filter, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 import { environment } from '../../../environments/environment';
 import { BatchRecognitionService } from '../../services/batch-recognition.service';
-import { CuredService } from '../../services/cured.service';
+import { CuredService, ollamaModelValue } from '../../services/cured.service';
 import { PagesService } from '../../services/pages.service';
 import { DatasetService } from '../../services/dataset.service';
 import { NotificationService } from '../../services/notification.service';
@@ -142,14 +142,13 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     {
       name: 'Ollama (local)',
       models: [
-        // Additional models populated dynamically from Ollama
+        // Installed Ollama models that accept images (from /ollama/vision-models)
       ]
     },
     {
       name: 'Ollama Cloud',
       models: [
-        { value: 'qwen3_vl_235b_cloud', label: 'Qwen3 VL 235B', description: 'Free, best quality' },
-        { value: 'qwen3_vl_235b_thinking', label: 'Qwen3 VL 235B Thinking', description: 'STEM/math reasoning' },
+        // Ollama cloud models the user has added, if they accept images
       ]
     },
     {
@@ -164,8 +163,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   ];
 
   modelAvailability: { [key: string]: boolean } = {
-    'qwen3_vl_235b_cloud': true,
-    'qwen3_vl_235b_thinking': true,
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
@@ -769,23 +766,20 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** List the installed Ollama models that accept images, as Ollama reports them (no fixed list). */
   private loadOllamaModels(): void {
-    this.curedService.getRecommendedModels().subscribe({
+    this.curedService.getOllamaVisionModels().subscribe({
       next: (response) => {
-        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
-        if (!gpuCategory) return;
-
-        // Append installed Ollama models to the category
-        const existingValues = new Set(gpuCategory.models.map(m => m.value));
+        const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+        const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
+        if (!local || !cloud) return;
+        local.models = [];
+        cloud.models = [];
         for (const m of response.models) {
-          if (!m.installed) continue;
-          const value = m.id.replace(/[-:]/g, '_');
-          if (existingValues.has(value)) continue;
-          gpuCategory.models.push({
-            value,
-            label: m.name,
-            description: m.description,
-          });
+          const value = ollamaModelValue(m.name);
+          const description = [m.parameter_size, m.size_gb ? `${m.size_gb} GB` : null, m.cloud ? 'runs on Ollama servers' : null]
+            .filter(Boolean).join(' · ');
+          (m.cloud ? cloud : local).models.push({ value, label: m.name, description });
           this.modelAvailability[value] = true;
         }
       },

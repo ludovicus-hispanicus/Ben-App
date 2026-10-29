@@ -92,6 +92,9 @@ class CuredHandler:
         ocr_error = result.get("error")
         if ocr_error:
             logging.error(f"OCR returned error: {ocr_error}")
+            if not text_lines:
+                # Nothing recognised: report why (e.g. "Model 'x' not found. Run: ollama pull x")
+                raise ValueError(ocr_error)
         logging.info(f"OCR result: {len(text_lines)} lines, {len(boxes)} boxes")
 
         # Clean up newlines in text

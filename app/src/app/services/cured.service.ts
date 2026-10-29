@@ -137,6 +137,11 @@ export class CuredService {
         );
     }
 
+    /** Installed Ollama models that accept images (local and cloud), as Ollama reports them. */
+    getOllamaVisionModels(): Observable<OllamaVisionModels> {
+        return this.http.get<OllamaVisionModels>(`${environment.apiUrl}${this.baseUrl}/ollama/vision-models`);
+    }
+
     getOllamaModels(): Observable<string[]> {
         return this.http.get<string[]>(`${environment.apiUrl}${this.baseUrl}/ollama/models`);
     }
@@ -462,6 +467,25 @@ export interface ActiveModelInfo {
     is_pretrained: boolean;
     size_mb: number;
     last_modified: string | null;
+}
+
+export interface OllamaVisionModel {
+    name: string;            // exact Ollama name, e.g. "qwen3-vl:4b"
+    cloud: boolean;          // runs on Ollama's servers
+    family?: string;
+    parameter_size?: string; // e.g. "4.4B"
+    size_gb?: number;        // download size (local models)
+}
+
+export interface OllamaVisionModels {
+    ollama_available: boolean;
+    models: OllamaVisionModel[];
+    unavailable: Array<{ name: string; cloud: boolean; error: string }>;
+}
+
+/** OCR model value for an Ollama model ("ollama:<exact name>", see OCRFactory). */
+export function ollamaModelValue(name: string): string {
+    return `ollama:${name}`;
 }
 
 export interface BaseModelOption {

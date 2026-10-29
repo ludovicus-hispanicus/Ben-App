@@ -222,8 +222,15 @@
               <span *ngIf="availableOllamaModels.length === 0" class="no-models">
                 No vision models found. Install models below or run: <code>ollama pull qwen3-vl:4b</code>
               </span>
-              <div class="model-chip" *ngFor="let model of availableOllamaModels">
-                {{ model }}
+              <div class="model-chip" *ngFor="let model of availableOllamaModels"
+                   [title]="(model.parameter_size || '') + (model.cloud ? ' · runs on Ollama servers' : '')">
+                {{ model.name }}<span *ngIf="model.cloud"> (cloud)</span>
+              </div>
+            </div>
+            <div class="ollama-unavailable" *ngIf="!loadingModels && unavailableOllamaModels.length > 0">
+              <small>Installed but not usable:</small>
+              <div *ngFor="let model of unavailableOllamaModels">
+                <small><code>{{ model.name }}</code>: {{ model.error }} Remove it with <code>ollama rm {{ model.name }}</code>.</small>
               </div>
             </div>
             <div *ngIf="loadingModels" class="loading">Loading models...</div>

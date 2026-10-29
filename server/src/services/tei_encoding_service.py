@@ -18,7 +18,7 @@ from services.tei_prompt_builder import tei_prompt_builder
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first (slow per request)
 
 
 class TeiEncodingService:

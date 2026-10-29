@@ -79,21 +79,20 @@ async def get_gpu_status():
     return result
 
 
+@router.get("/ollama/vision-models")
+def get_ollama_vision_models():
+    """Installed Ollama models that accept images (local and cloud), from Ollama's own
+    capability report. Models Ollama can't describe (e.g. retired cloud models) are
+    listed under "unavailable" with the reason."""
+    from services.ollama_ocr_service import list_vision_models
+    return list_vision_models()
+
+
 @router.get("/ollama/models")
-async def get_ollama_models():
-    """Get list of available Ollama vision models."""
-    from services.ollama_ocr_service import OllamaOcrService
-    service = OllamaOcrService()
-    if not service.is_available():
-        return []
-    models = service.list_models()
-    # Filter for vision-capable models
-    vision_models = []
-    for m in models:
-        name = m.get("name", "")
-        if any(v in name.lower() for v in ["llava", "qwen", "minicpm", "bakllava", "moondream", "deepseek", "llama4", "mistral"]):
-            vision_models.append(name)
-    return vision_models
+def get_ollama_models():
+    """Names of the installed Ollama vision models (kept for older clients)."""
+    from services.ollama_ocr_service import list_vision_models
+    return [m["name"] for m in list_vision_models()["models"]]
 
 
 @router.get("/ollama/recommended-models")

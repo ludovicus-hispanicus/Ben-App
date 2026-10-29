@@ -777,6 +777,8 @@ class BatchRecognitionHandler:
         _no_gpu_lock_prefixes = ("gemini", "openai", "gpt", "anthropic", "claude", "grok", "xai", "vllm")
         model_lower = effective_model.lower().split(":")[0]
         uses_gpu = not any(model_lower.startswith(prefix) for prefix in _no_gpu_lock_prefixes)
+        if effective_model.lower().startswith("ollama:") and effective_model.lower().endswith("-cloud"):
+            uses_gpu = False  # Ollama cloud model: runs on Ollama's servers
         job_record = {
             "_id": job_id,
             "job_id": job_id,

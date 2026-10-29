@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Default Ollama configuration
-DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first (slow per request)
 DEFAULT_MODEL = "deepseek-ocr"
 
 
@@ -76,6 +76,21 @@ class OllamaOcrService:
         except Exception as e:
             logger.error(f"Failed to list models: {e}")
             return []
+
+    def show_model(self, name: str) -> Dict[str, Any]:
+        """Model details from Ollama (/api/show): capabilities, family, parameters.
+
+        Returns {"error": "..."} when Ollama can't describe the model (for example
+        a cloud model that has been retired).
+        """
+        try:
+            response = self.client.post(f"{self.base_url}/api/show", json={"model": name})
+            data = response.json()
+            if response.status_code != 200 and "error" not in data:
+                data = {"error": f"HTTP {response.status_code}"}
+            return data
+        except Exception as e:
+            return {"error": str(e)}
 
     def get_running_models(self) -> List[Dict[str, Any]]:
         """Get currently running/loaded models with GPU info."""
@@ -296,6 +311,67 @@ ollama_ocr_service = OllamaOcrService()
 
 
 # Convenience functions for direct use
+# ── Vision-model discovery ──────────────────────────────────────────
+
+# name|digest -> description; failures are kept only briefly (a cloud model can come back)
+_model_info_cache: Dict[str, Dict[str, Any]] = {}
+_FAILED_INFO_TTL = 600
+
+
+def _describe_model(service: "OllamaOcrService", tag: Dict[str, Any]) -> Dict[str, Any]:
+    name = tag.get("name", "")
+    details = tag.get("details") or {}
+    cloud = bool(tag.get("remote_host"))
+    entry = {
+        "name": name,
+        "cloud": cloud,
+        "family": details.get("family"),
+        "parameter_size": details.get("parameter_size"),
+        "size_gb": None if cloud else round((tag.get("size") or 0) / 1e9, 1),
+    }
+    info = service.show_model(name)
+    if "error" in info:
+        entry["error"] = str(info["error"])
+        return entry
+    capabilities = info.get("capabilities")
+    if capabilities is None:
+        # Ollama before capabilities were reported: vision models carry a CLIP/mllama projector
+        families = (info.get("details") or {}).get("families") or []
+        capabilities = ["vision"] if any(f in ("clip", "mllama") for f in families) else []
+    entry["vision"] = "vision" in capabilities
+    entry["capabilities"] = capabilities
+    return entry
+
+
+def list_vision_models() -> Dict[str, Any]:
+    """Installed Ollama models that accept images, as Ollama reports them (no fixed list).
+
+    Returns {"ollama_available", "models": [...], "unavailable": [{"name", "cloud", "error"}]}.
+    """
+    import time
+    service = OllamaOcrService()
+    if not service.is_available():
+        return {"ollama_available": False, "models": [], "unavailable": []}
+
+    models, unavailable = [], []
+    now = time.time()
+    for tag in service.list_models():
+        key = f"{tag.get('name', '')}|{tag.get('digest', '')}"
+        entry = _model_info_cache.get(key)
+        if entry is None or ("error" in entry and now - entry["_checked"] > _FAILED_INFO_TTL):
+            entry = _describe_model(service, tag)
+            entry["_checked"] = now
+            _model_info_cache[key] = entry
+        public = {k: v for k, v in entry.items() if not k.startswith("_")}
+        if "error" in entry:
+            unavailable.append({k: public[k] for k in ("name", "cloud", "error")})
+        elif entry.get("vision"):
+            models.append(public)
+    service.close()
+    models.sort(key=lambda m: (m["cloud"], m["name"]))
+    return {"ollama_available": True, "models": models, "unavailable": unavailable}
+
+
 def is_available() -> bool:
     """Check if Ollama is available."""
     return ollama_ocr_service.is_available()

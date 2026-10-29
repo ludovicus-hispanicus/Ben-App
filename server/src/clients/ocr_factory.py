@@ -24,7 +24,7 @@ class OCRFactory:
         # Cloud API providers - support provider:submodel format (e.g., gemini_vision:gemini-3-pro)
         # Parse sub-model if present
         sub_model = None
-        if ":" in provider_name and not provider_name.startswith("kraken") and not provider_name.startswith("cure") and not provider_name.startswith("qwen_lora") and not provider_name.startswith("vllm"):
+        if ":" in provider_name and not provider_name.startswith("kraken") and not provider_name.startswith("cure") and not provider_name.startswith("qwen_lora") and not provider_name.startswith("vllm") and not provider_name.startswith("ollama:"):
             provider_name, sub_model = provider_name.split(":", 1)
             provider_name = provider_name.lower().strip()
             logging.info(f"Parsed sub-model: {sub_model} for provider: {provider_name}")
@@ -52,6 +52,13 @@ class OCRFactory:
             if not api_key:
                 raise ValueError("API Key is required for xAI Grok.")
             return GrokOcrClient(api_key, model=sub_model)
+
+        # Ollama model by its exact name, e.g. "ollama:qwen3-vl:4b" (from /ollama/vision-models)
+        elif provider_name.startswith("ollama:"):
+            from .ollama_client import OllamaOcrClient
+            model_name = original_provider_name.split(":", 1)[1]
+            logging.info(f"Using Ollama OCR with model: {model_name}")
+            return OllamaOcrClient(model=model_name)
 
         # Kraken models - supports multiple formats:
         # - "kraken_latest", "kraken_dillard" (underscore format from static UI)
