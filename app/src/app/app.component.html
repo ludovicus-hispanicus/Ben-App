@@ -36,15 +36,6 @@
         <mat-icon>arrow_back</mat-icon>
       </button>
 
-      <!-- Breadcrumb trail -->
-      <nav *ngIf="state.breadcrumbs?.length" class="breadcrumbs" aria-label="Breadcrumb">
-        <ng-container *ngFor="let crumb of state.breadcrumbs; let last = last">
-          <button *ngIf="crumb.action && !last; else currentCrumb" class="crumb crumb-link" (click)="crumb.action()">{{ crumb.label }}</button>
-          <ng-template #currentCrumb><span class="crumb crumb-current">{{ crumb.label }}</span></ng-template>
-          <mat-icon *ngIf="!last" class="crumb-sep">chevron_right</mat-icon>
-        </ng-container>
-      </nav>
-
       <!-- Message -->
       <span *ngIf="state.message" class="toolbar-message">{{state.message}}</span>
 
@@ -63,6 +54,15 @@
         <mat-icon *ngIf="btn.icon">{{btn.icon}}</mat-icon>
         <span>{{btn.label}}</span>
       </button>
+
+      <!-- Breadcrumb trail (right end of the bar, next to Settings / About) -->
+      <nav *ngIf="state.breadcrumbs?.length" class="breadcrumbs" aria-label="Breadcrumb">
+        <ng-container *ngFor="let crumb of state.breadcrumbs; let last = last">
+          <button *ngIf="crumb.action && !last; else currentCrumb" class="crumb crumb-link" (click)="crumb.action()">{{ crumb.label }}</button>
+          <ng-template #currentCrumb><span class="crumb crumb-current">{{ crumb.label }}</span></ng-template>
+          <mat-icon *ngIf="!last" class="crumb-sep">chevron_right</mat-icon>
+        </ng-container>
+      </nav>
     </div>
 
     <ul class="navbar-nav ml-auto" style="margin-right: 16px;">

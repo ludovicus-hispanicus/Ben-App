@@ -77,6 +77,16 @@
   }
 
   // Dynamic navbar toolbar buttons
+  // Bootstrap's collapse container won't shrink below its content by default, which
+  // pushed Settings / About off screen in narrow windows. The path shrinks instead.
+  .navbar-collapse {
+    min-width: 0;
+  }
+
+  .navbar-nav {
+    flex-shrink: 0;
+  }
+
   .navbar-toolbar {
     display: flex;
     align-items: center;
@@ -84,6 +94,7 @@
     margin-left: 1em;
     margin-right: 1em;
     flex: 1;
+    min-width: 0;  // let the path shrink instead of pushing Settings / About off screen
   }
 
   .toolbar-message {
@@ -101,47 +112,66 @@
     }
   }
 
+  // Path at the right end of the bar: monospace, solid colours (no transparency)
   .breadcrumbs {
     display: flex;
     align-items: center;
     min-width: 0;
     overflow: hidden;
     margin-left: 0.5em;
-    font-size: 0.9em;
+    padding: 0.25em 0.6em;
+    border-radius: 4px;
+    background-color: #0b2545;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85em;
+    flex-shrink: 1;
 
     .crumb {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 22em;
-      color: rgba(255, 255, 255, 0.95);
+      min-width: 3em;
+      max-width: 24em;
+      flex-shrink: 1;
+      font-family: inherit;
+      font-size: inherit;
+    }
+
+    .crumb:first-child {
+      flex-shrink: 0;  // "CuReD" stays readable; folder and file names shrink
+      min-width: auto;
     }
 
     .crumb-link {
       background: none;
       border: none;
-      padding: 0.2em 0.3em;
+      padding: 0.1em 0.25em;
       border-radius: 3px;
       cursor: pointer;
-      color: rgba(255, 255, 255, 0.8);
+      color: #8ec5ff;
 
       &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-        color: white;
+        background-color: #1b3d66;
+        color: #ffffff;
         text-decoration: underline;
       }
     }
 
+    .crumb-link:not(:first-child) {
+      flex-shrink: 4;  // in tight space the folder name gives way before the current item
+    }
+
     .crumb-current {
-      padding: 0.2em 0.3em;
-      font-weight: 500;
+      padding: 0.1em 0.25em;
+      color: #ffffff;
+      font-weight: 600;
     }
 
     .crumb-sep {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-      color: rgba(255, 255, 255, 0.6);
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      color: #5f86b3;
       flex-shrink: 0;
     }
   }
