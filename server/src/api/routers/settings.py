@@ -13,6 +13,7 @@ router = APIRouter(
 
 class SettingsUpdateRequest(BaseModel):
     image_scale: Optional[float] = None
+    news_enabled: Optional[bool] = None
 
 
 class ModulesUpdateRequest(BaseModel):

@@ -1,65 +1,125 @@
-<!-- Admin Panel - Global Activities -->
-<div class="admin-dashboard">
+<div class="dashboard" *ngIf="moduleService.enabledModules$ | async as modules">
+
   <div class="dashboard-header">
-    <h1>Admin Panel</h1>
-    <span class="subtitle">Global Activities & System Overview</span>
+    <h1>Babylonian Engine</h1>
+    <span class="version" *ngIf="news">Version {{ news.installed_version }}</span>
+    <a class="update-badge" *ngIf="news?.update_available" [href]="news?.release_url" target="_blank" rel="noopener">
+      <mat-icon>system_update</mat-icon> Version {{ news?.latest_version }} is available
+    </a>
   </div>
 
-  <!-- Placeholder sections -->
-  <div class="placeholder-grid">
-    <!-- User Activity -->
-    <div class="placeholder-card">
-      <div class="card-icon">
-        <mat-icon>people</mat-icon>
-      </div>
-      <h3>User Activity</h3>
-      <p class="placeholder-text">User statistics and activity logs will be displayed here.</p>
-      <span class="coming-soon">Coming Soon</span>
-    </div>
-
-    <!-- System Stats -->
-    <div class="placeholder-card">
-      <div class="card-icon">
-        <mat-icon>analytics</mat-icon>
-      </div>
-      <h3>System Statistics</h3>
-      <p class="placeholder-text">Database metrics, storage usage, and performance data.</p>
-      <span class="coming-soon">Coming Soon</span>
-    </div>
-
-    <!-- Recent Actions -->
-    <div class="placeholder-card">
-      <div class="card-icon">
-        <mat-icon>history</mat-icon>
-      </div>
-      <h3>Recent Actions</h3>
-      <p class="placeholder-text">Timeline of recent system events and user actions.</p>
-      <span class="coming-soon">Coming Soon</span>
-    </div>
-
-    <!-- Model Management -->
-    <div class="placeholder-card">
-      <div class="card-icon">
-        <mat-icon>model_training</mat-icon>
-      </div>
-      <h3>Model Management</h3>
-      <p class="placeholder-text">OCR model versions, deployment status, and performance metrics.</p>
-      <span class="coming-soon">Coming Soon</span>
-    </div>
+  <!-- Start something -->
+  <div class="start-row">
+    <a class="start-tile" routerLink="/cured">
+      <mat-icon>document_scanner</mat-icon><span>New OCR</span><small>Upload a page in CuReD</small>
+    </a>
+    <a class="start-tile" routerLink="/library">
+      <mat-icon>photo_library</mat-icon><span>Library</span><small>Books, PDFs and page images</small>
+    </a>
+    <a class="start-tile" routerLink="/cured" [queryParams]="{ view: 'batch' }">
+      <mat-icon>batch_prediction</mat-icon><span>Batch OCR</span><small>Many pages at once</small>
+    </a>
+    <a class="start-tile" routerLink="/cured" [queryParams]="{ view: 'training' }">
+      <mat-icon>model_training</mat-icon><span>Train a model</span><small>Kraken from your curated lines</small>
+    </a>
+    <a class="start-tile" *ngIf="modules['yolo']" routerLink="/cured" [queryParams]="{ view: 'layout' }">
+      <mat-icon>grid_view</mat-icon><span>Layout</span><small>Detect and train page regions</small>
+    </a>
+    <a class="start-tile" routerLink="/cured" [queryParams]="{ view: 'production' }">
+      <mat-icon>publish</mat-icon><span>Export &amp; eBL</span><small>Editions, ATF, eBL upload</small>
+    </a>
   </div>
 
-  <!-- Quick Links -->
-  <div class="quick-links">
-    <h2>Quick Access</h2>
-    <div class="links-row">
-      <button mat-stroked-button routerLink="/cured">
-        <mat-icon>auto_stories</mat-icon>
-        CuReD
+  <div class="loading" *ngIf="!summary && !summaryError">Loading…</div>
+  <div class="loading" *ngIf="summaryError">The dashboard data could not be loaded. Is the BEn server running?</div>
+
+  <div class="card-grid" *ngIf="summary">
+
+    <!-- Continue working -->
+    <section class="card">
+      <h2><mat-icon>history</mat-icon> Continue working</h2>
+      <div class="empty" *ngIf="summary.recent_texts.length === 0">No texts yet. Start with a new OCR.</div>
+      <button class="row-link" *ngFor="let t of summary.recent_texts" (click)="openText(t)">
+        <span class="row-main">{{ t.label }}</span>
+        <span class="row-meta">{{ t.dataset || 'Unassigned' }} · {{ t.lines }} lines · {{ t.last_modified | date:'d MMM, HH:mm' }}</span>
       </button>
-      <button mat-stroked-button routerLink="/cured" [queryParams]="{ view: 'layout' }" *ngIf="(moduleService.enabledModules$ | async)?.yolo">
-        <mat-icon>grid_view</mat-icon>
-        Layout Training
+    </section>
+
+    <!-- Your data -->
+    <section class="card">
+      <h2><mat-icon>dataset</mat-icon> Your data</h2>
+      <div class="figures">
+        <div><strong>{{ summary.data.datasets }}</strong><span>datasets</span></div>
+        <div><strong>{{ summary.data.texts | number }}</strong><span>texts</span></div>
+        <div><strong>{{ summary.data.curated_texts | number }}</strong><span>curated</span></div>
+        <div><strong>{{ summary.data.curated_lines | number }}</strong><span>curated lines</span></div>
+      </div>
+      <button class="row-link progress-row" *ngFor="let d of summary.data.per_dataset" (click)="openDataset(d.dataset_id)">
+        <span class="row-main">{{ d.name }}</span>
+        <span class="row-meta">{{ d.curated }}/{{ d.texts }} curated</span>
+        <span class="bar"><span [style.width.%]="percent(d.curated, d.texts)"></span></span>
       </button>
-    </div>
+    </section>
+
+    <!-- Engines -->
+    <section class="card">
+      <h2><mat-icon>memory</mat-icon> Engines</h2>
+      <div class="engine">
+        <mat-icon [class.ok]="summary.engines.kraken?.active_model">{{ summary.engines.kraken?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
+        <span class="row-main">Kraken</span>
+        <span class="row-meta">{{ summary.engines.kraken?.active_model || 'no active model' }}</span>
+      </div>
+      <div class="engine" *ngIf="modules['yolo'] && summary.engines.layout">
+        <mat-icon [class.ok]="summary.engines.layout?.active_model">{{ summary.engines.layout?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
+        <span class="row-main">Layout</span>
+        <span class="row-meta">{{ summary.engines.layout?.active_model || 'no active model' }}</span>
+      </div>
+      <div class="engine">
+        <mat-icon [class.ok]="summary.engines.ollama?.running && summary.engines.ollama?.vision_models">
+          {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models ? 'check_circle' : 'error_outline') : 'radio_button_unchecked' }}
+        </mat-icon>
+        <span class="row-main">Ollama</span>
+        <span class="row-meta">
+          {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models + ' model(s) that read images') : 'not running' }}
+        </span>
+      </div>
+      <div class="engine">
+        <mat-icon [class.ok]="apiKeysSet.length">{{ apiKeysSet.length ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+        <span class="row-main">Cloud APIs</span>
+        <span class="row-meta">{{ apiKeysSet.length ? ('keys set: ' + apiKeysSet.join(', ')) : 'no API key entered' }}</span>
+      </div>
+      <p class="hint">If OCR fails, check here first.</p>
+    </section>
+
+    <!-- Recent activity -->
+    <section class="card">
+      <h2><mat-icon>schedule</mat-icon> Recent activity</h2>
+      <div class="empty" *ngIf="summary.activity.length === 0">No trainings or batch jobs yet.</div>
+      <div class="activity" *ngFor="let a of summary.activity">
+        <mat-icon>{{ activityIcon(a.kind) }}</mat-icon>
+        <div>
+          <span class="row-main">{{ a.title }}</span>
+          <span class="row-meta">{{ a.detail }} · {{ a.when | date:'d MMM yyyy' }}</span>
+        </div>
+        <span class="status" [attr.data-status]="a.status">{{ a.status }}</span>
+      </div>
+    </section>
+
+    <!-- News -->
+    <section class="card news" *ngIf="news?.enabled">
+      <h2><mat-icon>campaign</mat-icon> News</h2>
+      <div class="empty" *ngIf="news?.entries?.length === 0">
+        {{ news?.error ? 'News could not be loaded (offline?).' : 'No news yet.' }}
+      </div>
+      <article *ngFor="let n of news?.entries">
+        <h3>
+          {{ n.title }}
+          <span class="new-badge" *ngIf="isNewNews(n.date)">new</span>
+        </h3>
+        <span class="row-meta">{{ n.date | date:'d MMMM yyyy' }}</span>
+        <markdown [data]="n.body"></markdown>
+      </article>
+      <p class="hint">News from the BEn project on GitHub, checked once a day. You can switch it off in Settings.</p>
+    </section>
   </div>
 </div>

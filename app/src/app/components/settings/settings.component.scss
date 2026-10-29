@@ -1186,3 +1186,11 @@
     font-size: 0.8em;
   }
 }
+
+// Dashboard news switch (Modules tab)
+.news-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+}

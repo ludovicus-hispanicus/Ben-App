@@ -49,6 +49,19 @@
             </button>
           </div>
         </div>
+
+        <!-- Dashboard news (contacts GitHub once a day) -->
+        <div class="settings-section">
+          <h3>Dashboard news</h3>
+          <p class="section-description">
+            The dashboard shows news from the BEn project and tells you when a new version is out.
+            For this, BEn contacts GitHub once a day. Switch it off to keep BEn fully offline.
+          </p>
+          <label class="news-toggle">
+            <input type="checkbox" [(ngModel)]="settings.newsEnabled" (change)="saveNewsSetting()">
+            Show news and check for new versions
+          </label>
+        </div>
       </div>
     </mat-tab>
 

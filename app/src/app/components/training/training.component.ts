@@ -266,6 +266,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       } else if (params['view'] === 'layout' && this.ocrViewMode !== OcrViewMode.Layout) {
         // Layout (e.g. "Open in Layout" from the Library, which also passes the page)
         this.ocrViewMode = OcrViewMode.Layout;
+      } else if (params['view'] === 'batch' || params['view'] === 'training') {
+        // Entry points on the dashboard
+        this.setOcrViewMode(params['view'] === 'batch' ? OcrViewMode.Batch : OcrViewMode.Training);
       }
     });
   }

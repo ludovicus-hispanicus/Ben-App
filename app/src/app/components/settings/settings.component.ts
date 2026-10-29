@@ -60,6 +60,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     ollamaUrl: 'http://localhost:11434',
     autoSave: true,
     imageScale: 1.0,
+    newsEnabled: true,
   };
 
   imageScaleOptions: Array<{value: number; label: string}> = [
@@ -478,6 +479,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
         if (settings.image_scale !== undefined) {
           this.settings.imageScale = settings.image_scale;
         }
+        this.settings.newsEnabled = settings.news_enabled !== false;
       },
       error: () => {} // Use defaults
     });
@@ -494,6 +496,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
         console.error('Failed to save settings:', err);
         alert('Failed to save settings');
       }
+    });
+  }
+
+  saveNewsSetting(): void {
+    this.http.put<any>(`${environment.apiUrl}/settings`, { news_enabled: this.settings.newsEnabled }).subscribe({
+      error: () => alert('Failed to save the news setting'),
     });
   }
 

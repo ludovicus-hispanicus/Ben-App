@@ -286,7 +286,8 @@ function startPythonServer() {
         APP_PORT: PYTHON_SERVER_PORT.toString(),
         STORAGE_PATH: storagePath,
         ALGORITHM: 'HS256',
-        LOG_LEVEL: 'INFO'
+        LOG_LEVEL: 'INFO',
+        BEN_VERSION: app.getVersion()  // shown on the dashboard, compared with the latest release
     };
 
     if (IS_PACKAGED) {

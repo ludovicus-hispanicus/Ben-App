@@ -21,7 +21,7 @@ from common.env_vars import LOG_LEVEL
 from init_db import init_the_db
 # Core routers — no heavy ML dependencies (torch / kraken / ultralytics).
 from api.routers import cured, about, production, ebl, datasets, pages, batch_recognition, settings, lemmatization, destitch, destitch_batch
-from api.routers import users, text
+from api.routers import users, text, dashboard
 from utils.storage_utils import StorageUtils
 
 origins = [
@@ -44,6 +44,7 @@ app.include_router(users.router)
 app.include_router(cured.router)
 app.include_router(text.router)
 app.include_router(about.router)
+app.include_router(dashboard.router)
 app.include_router(production.router)
 app.include_router(ebl.router)  # eBL (Electronic Babylonian Literature) Integration
 app.include_router(datasets.router)
@@ -175,6 +176,10 @@ def startup_event():
 
     from common.app_settings import init_settings
     init_settings()
+
+    # Dashboard news and update check: in the background, at most once a day
+    from services.news_service import refresh_in_background
+    refresh_in_background()
 
 
 if __name__ == '__main__':

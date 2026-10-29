@@ -23,6 +23,7 @@ _DEFAULTS = {
         "line_segmentation": True,  # Line segmentation annotation
         "qwen": True,         # Local Qwen3-VL (LoRA training & inference)
     },
+    "news_enabled": True,  # dashboard news + update check (contacts GitHub once a day)
 }
 
 _settings: dict = {}
