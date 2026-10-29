@@ -38,6 +38,7 @@ export enum OcrViewMode {
   Models = 'models',
   Training = 'training',
   Batch = 'batch',
+  Layout = 'layout',
   Export = 'export'
 }
 
@@ -262,6 +263,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.ocrViewMode = OcrViewMode.Datasets;
       } else if (params['view'] === 'production' && this.ocrViewMode !== OcrViewMode.Export) {
         this.ocrViewMode = OcrViewMode.Export;
+      } else if (params['view'] === 'layout' && this.ocrViewMode !== OcrViewMode.Layout) {
+        // Layout (e.g. "Open in Layout" from the Library, which also passes the page)
+        this.ocrViewMode = OcrViewMode.Layout;
       }
     });
   }

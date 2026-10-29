@@ -863,6 +863,32 @@
             </div>
           </div>
 
+          <!-- Layout detection: find the regions on the page, pick one as the OCR box -->
+          <div class="layout-regions" *ngIf="layoutAvailable && !appendingOcr">
+            <h3>Find regions (layout)</h3>
+            <div class="layout-controls">
+              <mat-form-field appearance="outline" class="layout-model-select">
+                <mat-label>Layout model</mat-label>
+                <mat-select [(ngModel)]="layoutModel">
+                  <mat-option *ngFor="let m of layoutModels" [value]="m.name" [matTooltip]="m.classes" matTooltipPosition="right">
+                    {{ m.name }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+              <button mat-stroked-button (click)="detectLayoutRegions()" [disabled]="layoutDetecting || !layoutModel">
+                <mat-icon>grid_view</mat-icon> {{ layoutDetecting ? 'Detecting…' : 'Detect' }}
+              </button>
+            </div>
+            <div class="layout-region-list" *ngIf="layoutRegions.length > 0">
+              <span class="layout-hint">Click a region to OCR it (or draw a box yourself):</span>
+              <button *ngFor="let r of layoutRegions" class="layout-region" type="button"
+                      [style.border-color]="r.color" (click)="useLayoutRegion(r)"
+                      [matTooltip]="'Confidence ' + (r.confidence * 100 | number:'1.0-0') + '%'">
+                <span class="layout-swatch" [style.background]="r.color"></span>{{ r.label }}
+              </button>
+            </div>
+          </div>
+
           <h3>Select OCR Model</h3>
 
           <!-- Categorized Model Selection -->

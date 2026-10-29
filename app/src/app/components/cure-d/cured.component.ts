@@ -23,7 +23,7 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, take } from 'rxjs/operators';
 import { ToolbarService } from 'src/app/services/toolbar.service';
 import { AtfConverterService } from 'src/app/services/atf-converter.service';
 import { TextService } from 'src/app/services/text.service';
@@ -37,6 +37,8 @@ import { UnsavedChangesService } from 'src/app/services/unsaved-changes.service'
 import { Breadcrumb } from 'src/app/services/toolbar.service';
 import { BatchRecognitionService } from 'src/app/services/batch-recognition.service';
 import { LatestModelAlias, ProviderModel } from 'src/app/models/batch-recognition';
+import { YoloTrainingService } from 'src/app/services/yolo-training.service';
+import { ModuleService } from 'src/app/services/module.service';
 
 export class SelectedPdf {
   constructor(public pdf: File,
@@ -271,6 +273,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // Sub-model selection for API providers (e.g., gemini-3.1-flash-preview vs gemini-3.1-pro-preview)
   public selectedSubModel: string = '';
 
+  // Layout detection (optional Layout module): regions found on the page; one becomes the OCR box
+  public layoutAvailable = false;
+  public layoutModels: Array<{ name: string; classes: string; colors: Map<string, string> }> = [];
+  public layoutModel = '';
+  public layoutDetecting = false;
+  public layoutRegions: Array<{ label: string; color: string; confidence: number;
+                                bbox: { x: number; y: number; width: number; height: number } }> = [];
+  private layoutOverlays: Rect[] = [];
+
   // Live model lists from each provider's /models endpoint (keyed by provider), as in Batch.
   // When present they replace the built-in apiSubModels list below.
   public liveSubModels: { [key: string]: { latest: LatestModelAlias[]; models: ProviderModel[] } } = {};
@@ -328,6 +339,87 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   }
 
   // Save sub-model selection
+  // ── Layout detection: find regions on the page, pick one as the OCR box ──
+
+  /** Layout models of the optional Layout module (none: the section stays hidden). */
+  private loadLayoutModels(): void {
+    this.moduleService.enabledModules$.pipe(take(1)).subscribe(modules => {
+      if (modules['yolo'] === false) return;
+      this.yoloService.listModels().subscribe({
+        next: (res) => {
+          this.layoutModels = (res.models || []).map(m => ({
+            name: m.name,
+            classes: (m.classes || []).map(c => c.name).join(', '),
+            colors: new Map((m.classes || []).map(c => [c.name, c.color] as [string, string])),
+          }));
+          this.layoutAvailable = this.layoutModels.length > 0;
+          this.yoloService.getActiveModel().subscribe({
+            next: (active) => {
+              const preferred = active.active && this.layoutModels.some(m => m.name === active.model_name);
+              this.layoutModel = preferred ? active.model_name : (this.layoutModels[0]?.name || '');
+            },
+            error: () => { this.layoutModel = this.layoutModels[0]?.name || ''; },
+          });
+        },
+        error: () => { this.layoutAvailable = false; },
+      });
+    });
+  }
+
+  /** Run the layout model on the whole page and outline the regions it finds. */
+  detectLayoutRegions(): void {
+    const bgImage = this.canvas?.getCanvas().backgroundImage as unknown as FabricImage;
+    if (!bgImage || !this.layoutModel) {
+      return;
+    }
+    const base64 = bgImage.toDataURL({}).split(',')[1];
+    this.layoutDetecting = true;
+    this.clearLayoutRegions();
+    this.yoloService.predict(base64, this.layoutModel).subscribe({
+      next: (res) => {
+        this.layoutDetecting = false;
+        // Region colours as defined for the model's classes (the prediction doesn't carry them)
+        const colors = this.layoutModels.find(m => m.name === this.layoutModel)?.colors || new Map<string, string>();
+        const counts = new Map<string, number>();
+        // Reading order: top to bottom, then left to right
+        const detections = [...res.detections].sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x);
+        for (const d of detections) {
+          const n = (counts.get(d.class_name) || 0) + 1;
+          counts.set(d.class_name, n);
+          const color = colors.get(d.class_name) || '#ff9800';
+          this.layoutRegions.push({ label: `${d.class_name} ${n}`, color, confidence: d.confidence, bbox: d.bbox });
+          const outline = this.canvas.makeRectangle(d.bbox.x, d.bbox.y, d.bbox.width, d.bbox.height,
+                                                    'rgba(0,0,0,0)', color, false, null, true);
+          outline.set({ selectable: false, evented: false, strokeDashArray: [6, 4], strokeWidth: 2 });
+          this.canvas.getCanvas().add(outline);
+          this.layoutOverlays.push(outline);
+        }
+        this.canvas.getCanvas().renderAll();
+        if (!detections.length) {
+          this.notificationService.showInfo('No regions found on this page with this layout model');
+        }
+      },
+      error: () => { this.layoutDetecting = false; },  // the error interceptor shows the message
+    });
+  }
+
+  /** Make a detected region the OCR box, like a box drawn by hand (it can still be adjusted). */
+  useLayoutRegion(region: { bbox: { x: number; y: number; width: number; height: number } }): void {
+    const box = this.canvas.makeRectangle(region.bbox.x, region.bbox.y, region.bbox.width, region.bbox.height,
+                                          undefined, undefined, true, null, true);
+    this.canvas.getCanvas().add(box);
+    this.boxAdded(box);
+  }
+
+  private clearLayoutRegions(): void {
+    const fabricCanvas = this.canvas?.getCanvas();
+    for (const outline of this.layoutOverlays) {
+      fabricCanvas?.remove(outline);
+    }
+    this.layoutOverlays = [];
+    this.layoutRegions = [];
+  }
+
   /** Fetch the provider's current model list live (needs the API key), as Batch does. */
   loadProviderModels(refresh = false): void {
     const provider = this._selectedOcrModel;
@@ -663,6 +755,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       }
 
       // Set stage to 5 FIRST so lineEditor gets rendered
+      this.clearLayoutRegions();
       this.stage = 5;
       this.updateUrl();
       this.isLoading = false;
@@ -916,6 +1009,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       this.selectedBox = null;
     }
     this.ocrCropArea = null;
+    this.clearLayoutRegions();
     this.stage = 5;
     this.updateUrl();
     this.canvas.allowedActions = [this.canvas.panMode, this.canvas.adjustMode, this.canvas.deleteMode, this.canvas.addMode, this.canvas.guideMode];
@@ -946,7 +1040,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     private linkedPageService: LinkedPageService,
     private unsavedChanges: UnsavedChangesService,
     public guideLineService: GuideLineService,
-    private batchRecognitionService: BatchRecognitionService) {
+    private batchRecognitionService: BatchRecognitionService,
+    private yoloService: YoloTrainingService,
+    private moduleService: ModuleService) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];
@@ -994,6 +1090,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     // Load curated stats and OCR models
     this.loadCuratedStats();
     this.loadAvailableOcrModels();
+    this.loadLayoutModels();
     this.loadAvailableOllamaModels();
 
     // Subscribe to query param changes to handle navigation within the same route
@@ -2452,6 +2549,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     }
     if (this.stage == 2) {
       // From visualizer back to thumbnails or upload
+      this.clearLayoutRegions();
       this.backgroundImage = null;
       this.selectedBox = null;
       this.canvas.hardReset();

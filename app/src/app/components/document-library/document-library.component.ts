@@ -1048,6 +1048,18 @@ export class DocumentLibraryComponent implements OnInit {
 
   // ============== Open in Tool ==============
 
+  /** Layout lives in the CuReD hub (Layout tab), which loads the page from these parameters. */
+  openInLayout(): void {
+    if (!this.viewerPage || !this.openProject) { return; }
+    this.router.navigate(['/cured'], {
+      queryParams: {
+        view: 'layout',
+        library_project: this.openProject.project_id,
+        library_page: this.viewerPage.page_number
+      }
+    });
+  }
+
   openInTool(route: string): void {
     if (!this.viewerPage || !this.openProject) { return; }
     this.router.navigate(['/' + route], {

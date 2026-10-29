@@ -18,6 +18,9 @@
     <button [class.active]="ocrViewMode === OcrViewMode.Batch" (click)="setOcrViewMode(OcrViewMode.Batch)">
       <mat-icon>batch_prediction</mat-icon> Batch
     </button>
+    <button *ngIf="yoloEnabled" [class.active]="ocrViewMode === OcrViewMode.Layout" (click)="setOcrViewMode(OcrViewMode.Layout)">
+      <mat-icon>grid_view</mat-icon> Layout
+    </button>
     <button [class.active]="ocrViewMode === OcrViewMode.Export" (click)="setOcrViewMode(OcrViewMode.Export)">
       <mat-icon>publish</mat-icon> Export
     </button>
@@ -616,6 +619,11 @@
   <!-- ====== BATCH VIEW ====== -->
   <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Batch">
     <app-batch-recognition></app-batch-recognition>
+  </div>
+
+  <!-- ====== LAYOUT VIEW (optional Layout module: detect, annotate, train) ====== -->
+  <div class="view-content" *ngIf="ocrViewMode === OcrViewMode.Layout && yoloEnabled">
+    <app-yolo-training></app-yolo-training>
   </div>
 
   <!-- ====== EXPORT VIEW ====== -->
