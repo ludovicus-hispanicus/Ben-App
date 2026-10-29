@@ -651,11 +651,11 @@
 
   <!-- Left Toolbar -->
   <div class="visualizer-toolbar">
-    <button class="tool-btn" *ngIf="!isLoadedFromServer && !viewOnly"
-            (click)="goBack()" matTooltip="Back">
+    <button class="tool-btn" (click)="navigateBack()"
+            [matTooltip]="backTooltip">
       <mat-icon>arrow_back</mat-icon>
     </button>
-    <div class="toolbar-divider" *ngIf="!isLoadedFromServer && !viewOnly"></div>
+    <div class="toolbar-divider"></div>
     <button class="tool-btn" [class.active]="canvas?.selectedMode === CanvasMode.Pan"
             (click)="canvas?.changeMode(CanvasMode.Pan)" matTooltip="Pan (Alt+Z, double-click-hold to draw)">
       <mat-icon>pan_tool</mat-icon>

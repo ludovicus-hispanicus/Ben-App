@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, OnInit, OnDestroy, Output, QueryList, ViewChild, ViewChildren } from '@angular/core';
+import { AfterViewInit, Component, DoCheck, ElementRef, EventEmitter, HostListener, OnInit, OnDestroy, Output, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
 import { PDFDocumentProxy } from 'ng2-pdf-viewer';
@@ -33,6 +33,8 @@ import { GuideLineService } from 'src/app/services/guide-line.service';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ProductionService, KwicResult } from 'src/app/services/production.service';
 import { LinkedPageService } from 'src/app/services/linked-page.service';
+import { UnsavedChangesService } from 'src/app/services/unsaved-changes.service';
+import { Breadcrumb } from 'src/app/services/toolbar.service';
 
 export interface ModelInfo {
   name: string;
@@ -63,7 +65,7 @@ export class SelectedPdf {
   templateUrl: './cured.component.html',
   styleUrls: ['./cured.component.scss']
 })
-export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
+export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck {
   // Expose CanvasMode enum for use in template
   public CanvasMode = CanvasMode;
 
@@ -139,8 +141,19 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public isLoadedFromServer: boolean = false;
 
-  // Dirty state tracking
-  public hasUnsavedChanges: boolean = false;
+  // Dirty state tracking — mirrored in UnsavedChangesService so every way of
+  // leaving the editor (back, breadcrumb, top navigation) asks before discarding.
+  public get hasUnsavedChanges(): boolean {
+    return this.unsavedChanges.hasUnsavedChanges;
+  }
+  public set hasUnsavedChanges(value: boolean) {
+    this.unsavedChanges.hasUnsavedChanges = value;
+  }
+
+  // Where "back" leads from a saved text when it was opened from elsewhere
+  // (?returnTo=<url>&returnLabel=<label>); otherwise back goes to its dataset.
+  private returnTo: string | null = null;
+  private returnLabel: string | null = null;
 
   public takeTextId: number;
   public takeTransId: number;
@@ -931,6 +944,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     private http: HttpClient,
     private productionService: ProductionService,
     private linkedPageService: LinkedPageService,
+    private unsavedChanges: UnsavedChangesService,
     public guideLineService: GuideLineService) {
     // set some stuff
     // this.stage = 5;
@@ -1068,6 +1082,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (textId && transId) {
       // Opening a specific transliteration
+      this.returnTo = params['returnTo'] || null;
+      this.returnLabel = params['returnLabel'] || null;
       this.takeTextId = +textId;
       this.takeTransId = +transId;
       this.viewOnly = viewOnly;
@@ -1114,6 +1130,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       this.loadDatasets();
     } else {
       // Dashboard
+      this.returnTo = this.returnLabel = null;
       this.resetToCleanState();
       this.stage = 0;
       this.loadDatasets();
@@ -1226,6 +1243,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     this.toolbarService.clearButtons();
+    this.hasUnsavedChanges = false;  // leaving was confirmed (route guard) or nothing was unsaved
     this.toolbarService.setLoading(false);
     if (this.queryParamsSub) {
       this.queryParamsSub.unsubscribe();
@@ -1246,6 +1264,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.toolbarService.clearButtons();
     }
+    this.navSignature = null;  // the reset above dropped the navigation; re-publish it
   }
 
   save() {
@@ -2396,6 +2415,148 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy {
       // From thumbnails back to upload - navigate to dashboard
       this.stage = 0;
       this.updateUrl(replace);
+    }
+  }
+
+  // ── Navigation (top-bar back button + breadcrumb) ──────────────────
+
+  private navSignature: string | null = null;
+
+  /** Short name of the open text for the breadcrumb. */
+  get currentTextLabel(): string {
+    if (this.currentLabel) return this.currentLabel;
+    if (this.currentMuseumName) return `${this.currentMuseumName} ${this.currentMuseumNumber || ''}`.trim();
+    if (this.currentPNumber) return this.currentPNumber;
+    if (this.currentPublicationNumber) return this.currentPublicationNumber;
+    return this.textId ? `Text ${this.textId}` : 'Text';
+  }
+
+  ngDoCheck(): void {
+    // Re-publish the navigation whenever something it depends on changes. Deferred,
+    // because the top bar has already been checked in this change-detection pass.
+    const signature = [
+      this.stage, this.selectedDataset?.dataset_id, this.selectedDataset?.name, this.showDatasetList,
+      this.isLoadedFromServer, this.viewOnly, this.linkedMode, this.linkedIdentifierValue,
+      !!this.pdfFile, this.appendingOcr, this.currentTextLabel, this.returnTo, this.returnLabel,
+    ].join('|');
+    if (signature !== this.navSignature) {
+      this.navSignature = signature;
+      Promise.resolve().then(() => this.applyNavigation());
+    }
+  }
+
+  private applyNavigation(): void {
+    const datasetName = this.selectedDataset?.name;
+    const home: Breadcrumb = { label: 'CuReD', action: () => this.goToCuredHome() };
+    const datasetCrumb: Breadcrumb[] = datasetName ? [{ label: datasetName, action: () => this.goToDatasetTexts() }] : [];
+
+    if (this.linkedMode) {
+      this.toolbarService.setNavigation(
+        { label: 'Production', action: () => this.finishLinkedSession() },
+        [{ label: 'Production', action: () => this.finishLinkedSession() },
+         { label: `Linked page for ${this.linkedIdentifierValue}` }]);
+      return;
+    }
+
+    if (this.stage === 0) {
+      if (this.selectedDataset && !this.showDatasetList) {
+        this.toolbarService.setNavigation(
+          { label: 'Datasets', action: () => this.backToDatasets() },
+          [{ label: 'CuReD', action: () => this.backToDatasets() }, { label: datasetName }]);
+      } else {
+        this.toolbarService.setNavigation(undefined, []);  // top level
+      }
+      return;
+    }
+
+    if (this.stage >= 2 && this.isLoadedFromServer) {
+      // A saved text: back leads to where it was opened from, else to its dataset
+      const back = this.appendingOcr && this.stage === 2
+        ? { label: 'Cancel re-OCR', action: () => this.goBack() }
+        : this.returnTo
+          ? { label: this.returnLabel || 'Back', action: () => this.leaveText() }
+          : { label: datasetName || 'Datasets', action: () => this.leaveText() };
+      this.toolbarService.setNavigation(back, [home, ...datasetCrumb, { label: this.currentTextLabel }]);
+      return;
+    }
+
+    // New OCR (not saved yet): step back through upload → PDF pages → image → result
+    const backLabel = this.stage === 1 ? (datasetName || 'Datasets')
+      : this.stage === 2 ? (this.pdfFile ? 'PDF pages' : (datasetName || 'Datasets'))
+      : 'Image';
+    this.toolbarService.setNavigation(
+      { label: backLabel, action: () => this.stepBack() },
+      [home, ...datasetCrumb, { label: this.stage === 1 ? 'PDF pages' : 'New OCR' }]);
+  }
+
+  /** One step back in a new OCR (goBack itself asks before discarding OCR results). */
+  private stepBack(): void {
+    if (this.stage !== 5 && !this.unsavedChanges.confirmDiscard()) return;
+    this.goBack();
+  }
+
+  get backTooltip(): string {
+    const label = this.toolbarService.current.backLabel;
+    return label ? `Back to ${label}` : 'Back';
+  }
+
+  /** The back action of the current screen (also used by the editor's side toolbar). */
+  navigateBack(): void {
+    const back = this.toolbarService.current.backAction;
+    if (back) back();
+  }
+
+  /** Leave a saved text: to the page it was opened from, else to its dataset's text list. */
+  private leaveText(): void {
+    if (!this.unsavedChanges.confirmDiscard()) return;
+    if (this.returnTo) {
+      const url = this.returnTo;
+      this.returnTo = this.returnLabel = null;
+      this.router.navigateByUrl(url);
+      return;
+    }
+    this.showDatasetTexts();
+  }
+
+  /** Go to the CuReD start screen showing the current dataset's text list. */
+  private showDatasetTexts(): void {
+    this.router.navigate(['/cured']).then(() => {
+      // A text opened directly (link, reload) knows its dataset but never opened its list
+      if (this.selectedDataset && this.showDatasetList) {
+        this.openDataset(this.selectedDataset);
+      }
+    });
+  }
+
+  /** Breadcrumb: the open dataset's text list. */
+  private goToDatasetTexts(): void {
+    if (!this.unsavedChanges.confirmDiscard()) return;
+    this.returnTo = this.returnLabel = null;
+    if (this.isLoadedFromServer) {
+      this.showDatasetTexts();
+    } else {
+      this.unwindToStart();
+    }
+  }
+
+  /** Breadcrumb: the CuReD start page (all datasets). */
+  private goToCuredHome(): void {
+    if (!this.unsavedChanges.confirmDiscard()) return;
+    this.returnTo = this.returnLabel = null;
+    if (this.isLoadedFromServer) {
+      this.router.navigate(['/cured']);
+    } else {
+      this.unwindToStart();
+    }
+    this.backToDatasets();
+  }
+
+  /** Step a new (unsaved) OCR back to the start screen, reusing goBack's cleanup per stage. */
+  private unwindToStart(): void {
+    for (let guard = 0; this.stage > 0 && guard < 5; guard++) {
+      const before = this.stage;
+      this.goBack();
+      if (this.stage === before) break;
     }
   }
 

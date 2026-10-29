@@ -178,6 +178,23 @@ function createWindow() {
         splashShownAt = Date.now();
     });
 
+    // The page blocks unloading while the editor has unsaved changes. Electron does not
+    // show a prompt for that on its own (the window just would not close), so ask here.
+    mainWindow.webContents.on('will-prevent-unload', (event) => {
+        const choice = dialog.showMessageBoxSync(mainWindow, {
+            type: 'warning',
+            buttons: ['Discard changes and close', 'Stay'],
+            defaultId: 1,
+            cancelId: 1,
+            title: 'Unsaved changes',
+            message: 'You have unsaved changes.',
+            detail: 'Close BEn and discard them?'
+        });
+        if (choice === 0) {
+            event.preventDefault();  // ignore the page's beforeunload and close
+        }
+    });
+
     mainWindow.on('closed', () => {
         mainWindow = null;
     });

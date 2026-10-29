@@ -1,5 +1,5 @@
 import { NgModule, Injectable } from '@angular/core';
-import { RouterModule, Routes, CanActivate, Router } from '@angular/router';
+import { RouterModule, Routes, CanActivate, CanDeactivate, Router } from '@angular/router';
 import { AdminPanelComponent } from './components/admin-panel/admin-panel.component';
 import { AboutComponent } from './components/about/about.component';
 import { YoloTrainingComponent } from './components/yolo-training/yolo-training.component';
@@ -10,6 +10,7 @@ import { DocumentLibraryComponent } from './components/document-library/document
 import { LineSegmentationComponent } from './components/line-segmentation/line-segmentation.component';
 import { SegmentationComponent } from './components/segmentation/segmentation.component';
 import { ModuleService } from './services/module.service';
+import { UnsavedChangesService } from './services/unsaved-changes.service';
 
 @Injectable({ providedIn: 'root' })
 export class ModuleGuard implements CanActivate {
@@ -25,6 +26,16 @@ export class ModuleGuard implements CanActivate {
   }
 }
 
+/** Asks before leaving CuReD with unsaved changes (top navigation, breadcrumb, links). */
+@Injectable({ providedIn: 'root' })
+export class UnsavedChangesGuard implements CanDeactivate<unknown> {
+  constructor(private unsavedChanges: UnsavedChangesService) {}
+
+  canDeactivate(): boolean {
+    return this.unsavedChanges.confirmDiscard();
+  }
+}
+
 const routes: Routes = [
   {
     path: '',
@@ -33,7 +44,10 @@ const routes: Routes = [
   // CuReD - unified OCR curation, training, models & export
   {
     path: 'cured',
-    component: TrainingComponent
+    component: TrainingComponent,
+    canDeactivate: [UnsavedChangesGuard],
+    // Also check when only the query changes (e.g. clicking "CuReD" while a text is open)
+    runGuardsAndResolvers: 'always'
   },
   {
     path: 'dashboard',

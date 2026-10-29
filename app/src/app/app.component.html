@@ -30,10 +30,21 @@
 
     <!-- Dynamic toolbar area -->
     <div class="navbar-toolbar" *ngIf="toolbarState$ | async as state">
-      <!-- Back button -->
-      <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()">
+      <!-- Back button (labelled with its destination) -->
+      <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()"
+              [matTooltip]="isDesktop ? 'Back (Alt+←)' : 'Back'">
         <mat-icon>arrow_back</mat-icon>
+        <span *ngIf="state.backLabel">{{ state.backLabel }}</span>
       </button>
+
+      <!-- Breadcrumb trail -->
+      <nav *ngIf="state.breadcrumbs?.length" class="breadcrumbs" aria-label="Breadcrumb">
+        <ng-container *ngFor="let crumb of state.breadcrumbs; let last = last">
+          <button *ngIf="crumb.action && !last; else currentCrumb" class="crumb crumb-link" (click)="crumb.action()">{{ crumb.label }}</button>
+          <ng-template #currentCrumb><span class="crumb crumb-current">{{ crumb.label }}</span></ng-template>
+          <mat-icon *ngIf="!last" class="crumb-sep">chevron_right</mat-icon>
+        </ng-container>
+      </nav>
 
       <!-- Message -->
       <span *ngIf="state.message" class="toolbar-message">{{state.message}}</span>

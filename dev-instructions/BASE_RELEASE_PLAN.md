@@ -209,6 +209,13 @@ As a desktop app, BEn has no browser back button, so every screen needs an obvio
 4. **Mouse back button, Alt+← and Esc** (when no dialog is open) trigger the same action. In Electron, handle `app-command` `browser-backward` in `electron/main.js`, and add a keyboard shortcut.
 5. **One unsaved-changes check for every exit path:** back button, breadcrumb, top bar, keyboard, closing the window.
 
+**Status (2026-10-29):** 1–5 done for CuReD (dataset list, saved texts, new OCR, linked pages).
+- **Tested in the browser:** back, breadcrumb, side-toolbar back, and unsaved-changes prompts.
+- **Not yet tested:** Alt+←, the mouse back button and the close-window dialog, which need the packaged desktop app.
+- **Esc is not bound:** the editor already uses it for its own actions.
+- **`returnTo` has no callers yet:** the dashboard's "Continue working" card will be the first.
+- **Production's editor (Export tab) is not covered yet.**
+
 ### Further changes (to be specified)
 
 - **Add:** _…_
