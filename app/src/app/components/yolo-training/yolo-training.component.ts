@@ -105,13 +105,18 @@ export class YoloTrainingComponent implements OnInit, OnDestroy {
 
   // Training form
   trainingDatasetName = '';
-  trainingBaseModel = 'yolov8s.pt';
+  trainingBaseModel = 'yolo26s.pt';
   trainingOutputName = '';
 
   // Base model display names
   baseModelLabels: Record<string, string> = {
+    'yolo26n.pt': 'YOLO26 Nano (fastest, good on CPU)',
+    'yolo26s.pt': 'YOLO26 Small (recommended)',
+    'yolo26m.pt': 'YOLO26 Medium',
+    'yolo26l.pt': 'YOLO26 Large',
+    'yolo26x.pt': 'YOLO26 XLarge (most accurate)',
     'yolov8n.pt': 'YOLOv8 Nano (fastest)',
-    'yolov8s.pt': 'YOLOv8 Small (recommended)',
+    'yolov8s.pt': 'YOLOv8 Small',
     'yolov8m.pt': 'YOLOv8 Medium',
     'yolov8l.pt': 'YOLOv8 Large',
     'yolov8x.pt': 'YOLOv8 XLarge (most accurate)',

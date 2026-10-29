@@ -205,7 +205,7 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Training form
   yoloTrainingDatasetName = '';
-  yoloTrainingBaseModel = 'yolov8s.pt';
+  yoloTrainingBaseModel = 'yolo26s.pt';
   yoloTrainingOutputName = '';
 
   // Annotation state

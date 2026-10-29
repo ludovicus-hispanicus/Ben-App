@@ -1,5 +1,5 @@
 """
-YOLO Training Client - Handles YOLOv8 model training and inference.
+YOLO Training Client - Handles YOLO (YOLO26, YOLOv8) model training and inference.
 """
 
 import os
@@ -50,8 +50,15 @@ DEFAULT_CLASS_COLORS = [
 
 # Base models available
 BASE_MODELS = {
+    # YOLO26 (Ultralytics 8.4+): faster, especially on CPU
+    "yolo26n.pt": "YOLO26 Nano (fastest, good on CPU)",
+    "yolo26s.pt": "YOLO26 Small (recommended)",
+    "yolo26m.pt": "YOLO26 Medium",
+    "yolo26l.pt": "YOLO26 Large",
+    "yolo26x.pt": "YOLO26 XLarge (most accurate)",
+    # YOLOv8: the earlier generation (the existing AHw/CAD models are based on it)
     "yolov8n.pt": "YOLOv8 Nano (fastest)",
-    "yolov8s.pt": "YOLOv8 Small (recommended)",
+    "yolov8s.pt": "YOLOv8 Small",
     "yolov8m.pt": "YOLOv8 Medium",
     "yolov8l.pt": "YOLOv8 Large",
     "yolov8x.pt": "YOLOv8 XLarge (most accurate)",
@@ -1190,7 +1197,8 @@ names:
 
         # Resolve base model path
         if base_model in BASE_MODELS:
-            base_model_path = base_model  # YOLO will download if needed
+            # A copy in data/yolo/base_models is used; otherwise Ultralytics downloads it
+            base_model_path = str(self.get_model_path(base_model))
         else:
             base_model_path = str(self.get_model_path(base_model))
 
