@@ -271,6 +271,16 @@
       </div>
     </div>
 
+    <!-- Any Ollama model by name (e.g. one that doesn't report image support) -->
+    <div class="custom-ollama-model" *ngIf="ollamaAvailable">
+      <div class="category-header">Other Ollama model</div>
+      <div class="custom-ollama-row">
+        <input [(ngModel)]="customOllamaModel" placeholder="e.g. qwen3.5:4b"
+               (keyup.enter)="useCustomOllamaModel()" aria-label="Ollama model name">
+        <button mat-stroked-button (click)="useCustomOllamaModel()" [disabled]="!customOllamaModel.trim()">Use</button>
+      </div>
+    </div>
+
     <!-- Prompt Mode Selection -->
     <div class="mode-section">
       <div class="section-label">Prompt</div>

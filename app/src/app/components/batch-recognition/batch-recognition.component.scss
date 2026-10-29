@@ -1039,6 +1039,26 @@
   gap: 6px;
 }
 
+// Any Ollama model by name, below the model groups
+.custom-ollama-model {
+  margin: -4px 0 20px;
+  max-width: 420px;
+
+  .custom-ollama-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-family: 'Consolas', 'Monaco', monospace;
+    }
+  }
+}
+
 .model-btn {
   display: inline-flex;
   align-items: center;

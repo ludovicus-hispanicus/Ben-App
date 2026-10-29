@@ -162,6 +162,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     }
   ];
 
+  // Ollama: running at all, and a model name typed in by the user
+  ollamaAvailable = false;
+  customOllamaModel = '';
+  private static readonly TYPED_IN_OLLAMA_MODEL = 'Entered by name';
+
   modelAvailability: { [key: string]: boolean } = {
     'gpt4_vision': true,
     'claude_vision': true,
@@ -656,6 +661,21 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Use any Ollama model by its name (e.g. one that doesn't report image support yet). */
+  useCustomOllamaModel(): void {
+    const name = this.customOllamaModel.trim();
+    if (!name) return;
+    const value = ollamaModelValue(name);
+    const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+    const known = this.ocrModelCategories.some(c => c.models.some(m => m.value === value));
+    if (local && !known) {
+      local.models.push({ value, label: name, description: BatchRecognitionComponent.TYPED_IN_OLLAMA_MODEL });
+    }
+    this.modelAvailability[value] = true;
+    this.selectModel(value);
+    this.customOllamaModel = '';
+  }
+
   /** Fetch the provider's current model list live (needs the API key). */
   loadProviderModels(refresh = false): void {
     const provider = this.selectedModel;
@@ -770,13 +790,16 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   private loadOllamaModels(): void {
     this.curedService.getOllamaVisionModels().subscribe({
       next: (response) => {
+        this.ollamaAvailable = response.ollama_available;
         const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
         if (!local || !cloud) return;
-        local.models = [];
+        // Keep a model typed in by name; replace the discovered ones
+        local.models = local.models.filter(m => m.description === BatchRecognitionComponent.TYPED_IN_OLLAMA_MODEL);
         cloud.models = [];
         for (const m of response.models) {
           const value = ollamaModelValue(m.name);
+          if (local.models.some(x => x.value === value)) continue;
           const description = [m.parameter_size, m.size_gb ? `${m.size_gb} GB` : null, m.cloud ? 'runs on Ollama servers' : null]
             .filter(Boolean).join(' · ');
           (m.cloud ? cloud : local).models.push({ value, label: m.name, description });
