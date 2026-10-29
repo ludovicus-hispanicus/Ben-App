@@ -36,25 +36,6 @@ import { LinkedPageService } from 'src/app/services/linked-page.service';
 import { UnsavedChangesService } from 'src/app/services/unsaved-changes.service';
 import { Breadcrumb } from 'src/app/services/toolbar.service';
 
-export interface ModelInfo {
-  name: string;
-  isPretrained: boolean;
-  sizeMb: number;
-  lastModified: string | null;
-}
-
-export interface TrainingStatus {
-  curatedTexts: number;
-  previousLines: number;
-  newLines: number;
-  totalLines: number;
-  requiredForNextTraining: number;
-  progress: number; // percentage towards next training
-  isReady: boolean;
-  lastTraining: string | null;
-  currentTraining: any | null;
-}
-
 export class SelectedPdf {
   constructor(public pdf: File,
     public page: number) { }
@@ -279,14 +260,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     return this.batchTotal > 1;
   }
 
-  // Model info
-  public modelInfo: ModelInfo = {
-    name: 'Pre-trained (Default)',
-    isPretrained: true,
-    sizeMb: 0,
-    lastModified: null
-  };
-
   // OCR model selection for inference - organized by category
   private _selectedOcrModel: string = 'kraken_cusas';
 
@@ -448,13 +421,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     {
       name: 'CPU',
       models: [
-        // Populated dynamically from /available-models (kraken, trocr, qwen_lora trained models)
+        // Populated dynamically from /available-models (kraken, qwen_lora trained models)
       ]
     },
     {
       name: 'Local GPU',
       models: [
-        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (1.7GB VRAM)' },
         // Additional models populated dynamically from Ollama
       ]
     },
@@ -468,7 +440,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     {
       name: 'API',
       models: [
-        { value: 'nemotron_cloud', label: 'Nemotron', description: 'NVIDIA Build' },
         { value: 'gpt4_vision', label: 'GPT-4 Vision', description: 'OpenAI' },
         { value: 'claude_vision', label: 'Claude Vision', description: 'Anthropic' },
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
@@ -481,10 +452,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   public availableOllamaModels: string[] = [];
   // Track which models are locally available
   public modelAvailability: { [key: string]: boolean } = {
-    'nemotron_local': true,
     'qwen3_vl_235b_cloud': true,
     'qwen3_vl_235b_thinking': true,
-    'nemotron_cloud': true,
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
@@ -493,34 +462,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // Legacy support - flat array for backward compatibility
   public availableOcrModels: Array<{value: string; label: string}> = [];
 
-  // Base model selection for training (fine-tune from)
-  public selectedBaseModel: string = 'latest';
-  public baseModelsMetadata: { [key: string]: { size_mb: number; best_accuracy: number; last_accuracy: number; completed_epochs: number; alphabet_size: number } } = {};
-
-  public trainingStatus: TrainingStatus = {
-    curatedTexts: 0,
-    previousLines: 0,
-    newLines: 0,
-    totalLines: 0,
-    requiredForNextTraining: 100,
-    progress: 0,
-    isReady: false,
-    lastTraining: null,
-    currentTraining: null
-  };
-
   public curatedStats = {
     total: { lines: 0, texts: 0 },
     kraken: { lines: 0, texts: 0 },
     vlm: { lines: 0, texts: 0 },
   };
-
-  // Training state
-  public isTraining: boolean = false;
-  public trainingProgress: any = null;
-  private trainingProgressInterval: any = null;
-  public trainingModelName: string = '';
-  public epochHistory: Array<{epoch: number; accuracy: number; val_accuracy: number; loss: number}> = [];
 
   @ViewChild('canvas') canvas: FabricCanvasComponent;
   @ViewChild('lineEditor', { static: false }) lineEditor: TextEditorComponent;
@@ -990,11 +936,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     // Load flat dataset list
     this.loadDatasets();
 
-    // Load training status and models
-    this.loadTrainingStatus();
+    // Load curated stats and OCR models
     this.loadCuratedStats();
-    this.loadModels();
-    this.loadBaseModelsMetadata();
     this.loadAvailableOcrModels();
     this.loadAvailableOllamaModels();
 
@@ -1330,7 +1273,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     if (this.popStateSub) {
       this.popStateSub.unsubscribe();
     }
-    this.stopTrainingProgressPolling();
   }
 
   updateToolbarButtons() {
@@ -4033,39 +3975,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     });
   }
 
-  // ============================================
-  // Training Status Methods
-  // ============================================
-
-  loadTrainingStatus() {
-    this.curedService.getTrainingStatus().subscribe(
-      status => {
-        this.trainingStatus = status;
-        // Check if training is in progress
-        if (status.currentTraining &&
-            (status.currentTraining.status === 'training' || status.currentTraining.status === 'preparing')) {
-          this.isTraining = true;
-          this.trainingProgress = status.currentTraining;
-          this.startTrainingProgressPolling();
-        }
-      },
-      () => {
-        // Use placeholder data if endpoint not available
-        this.trainingStatus = {
-          curatedTexts: 0,
-          previousLines: 0,
-          newLines: 0,
-          totalLines: 0,
-          requiredForNextTraining: 100,
-          progress: 0,
-          isReady: false,
-          lastTraining: null,
-          currentTraining: null
-        };
-      }
-    );
-  }
-
   loadCuratedStats() {
     const projectId = this.selectedDataset?.dataset_id;
     this.curedService.getCuratedStats(projectId).subscribe(
@@ -4074,158 +3983,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     );
   }
 
-  startTraining() {
-    if (!this.trainingStatus.isReady) {
-      this.notificationService.showError('Not enough training data. Need at least 1000 curated lines.');
-      return;
-    }
-
-    if (this.isTraining) {
-      this.notificationService.showWarning('Training is already in progress.');
-      return;
-    }
-
-    if (!this.trainingModelName || !this.trainingModelName.trim()) {
-      this.notificationService.showError('Please enter a name for this model (e.g. book name).');
-      return;
-    }
-
-    // Build model name: {BaseModelKey}_{UserName}
-    const baseKey = this.selectedBaseModel.charAt(0).toUpperCase() + this.selectedBaseModel.slice(1);
-    const sanitizedName = this.trainingModelName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-    const modelName = `${baseKey}_${sanitizedName}`;
-
-    this.isTraining = true;
-    this.epochHistory = [];
-    this.trainingProgress = { status: 'preparing', current_epoch: 0, total_epochs: 50, epoch_history: [] };
-
-    this.curedService.startTraining(50, modelName, this.selectedBaseModel).subscribe(
-      response => {
-        this.notificationService.showSuccess('Training started!');
-        this.startTrainingProgressPolling();
-      },
-      error => {
-        this.isTraining = false;
-        this.trainingProgress = null;
-        const message = error.error?.detail || 'Failed to start training';
-        this.notificationService.showError(message);
-      }
-    );
-  }
-
-  cancelTraining() {
-    if (!this.isTraining) {
-      return;
-    }
-
-    this.curedService.cancelTraining().subscribe(
-      () => {
-        this.notificationService.showInfo('Training cancelled');
-        this.stopTrainingProgressPolling();
-        this.isTraining = false;
-        this.trainingProgress = null;
-        this.loadTrainingStatus();
-      },
-      error => {
-        const message = error.error?.detail || 'Failed to cancel training';
-        this.notificationService.showError(message);
-      }
-    );
-  }
-
-  private startTrainingProgressPolling() {
-    // Clear any existing interval
-    this.stopTrainingProgressPolling();
-
-    // Poll every 2 seconds
-    this.trainingProgressInterval = setInterval(() => {
-      this.curedService.getTrainingProgress().subscribe(
-        progress => {
-          this.trainingProgress = progress;
-
-          // Update epoch history from backend
-          if (progress.epoch_history && progress.epoch_history.length > 0) {
-            this.epochHistory = progress.epoch_history;
-          }
-
-          if (progress.status === 'completed') {
-            this.stopTrainingProgressPolling();
-            this.isTraining = false;
-            const earlyStopped = progress.early_stopped ? ' (early stopped)' : '';
-            this.notificationService.showSuccess(`Training completed${earlyStopped}! Model: ${progress.model_name}`);
-            this.loadTrainingStatus();
-            this.loadModels();
-            this.loadAvailableOcrModels(); // Refresh OCR dropdown with new model
-          } else if (progress.status === 'failed') {
-            this.stopTrainingProgressPolling();
-            this.isTraining = false;
-            this.notificationService.showError(`Training failed: ${progress.error || 'Unknown error'}`);
-            this.loadTrainingStatus();
-          } else if (progress.status === 'cancelled' || progress.status === 'idle') {
-            this.stopTrainingProgressPolling();
-            this.isTraining = false;
-            this.trainingProgress = null;
-          }
-        },
-        () => {
-          // Silently ignore polling errors
-        }
-      );
-    }, 2000);
-  }
-
-  private stopTrainingProgressPolling() {
-    if (this.trainingProgressInterval) {
-      clearInterval(this.trainingProgressInterval);
-      this.trainingProgressInterval = null;
-    }
-  }
-
-  loadModels() {
-    this.curedService.getActiveModel().subscribe(
-      response => {
-        this.modelInfo = {
-          name: response.name,
-          isPretrained: response.is_pretrained,
-          sizeMb: response.size_mb,
-          lastModified: response.last_modified
-        };
-      },
-      () => {
-        // Keep default model info on error
-      }
-    );
-  }
-
-  loadBaseModelsMetadata() {
-    this.curedService.getBaseModelsMetadata().subscribe(
-      response => {
-        this.baseModelsMetadata = response;
-      },
-      () => {
-        // Keep empty metadata on error
-      }
-    );
-  }
-
   loadAvailableOcrModels() {
     this.curedService.getAvailableOcrModels().subscribe(
       response => {
         this.availableOcrModels = response.models;
 
-        // Add trained models (kraken, qwen_lora, trocr) into the CPU category
+        // Add trained models (kraken, qwen_lora) into the CPU category
         const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
         if (cpuCategory) {
           const existingValues = new Set(cpuCategory.models.map(m => m.value));
-          const trainedPrefixes = ['kraken:', 'qwen_lora:', 'trocr:'];
+          const trainedPrefixes = ['kraken:', 'qwen_lora:'];
           for (const model of response.models) {
             if (trainedPrefixes.some(p => model.value.startsWith(p)) && !existingValues.has(model.value)) {
               cpuCategory.models.push({
                 value: model.value,
-                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, '').replace(/ \(TrOCR.*\)/, ''),
-                description: model.value.startsWith('kraken:') ? 'Trained Kraken model' :
-                             model.value.startsWith('qwen_lora:') ? 'Qwen QLoRA fine-tuned' :
-                             'TrOCR fine-tuned',
+                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
+                description: model.value.startsWith('kraken:') ? 'Trained Kraken model' : 'Qwen QLoRA fine-tuned',
                 trained: true,
               });
               this.modelAvailability[model.value] = true;
@@ -4250,15 +4023,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // Check if the selected model requires an API key
   requiresApiKey(modelValue?: string): boolean {
     const model = modelValue || this.selectedOcrModel;
-    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision', 'qwen3_vl_cloud', 'grok_xai'];
+    const apiModels = ['gpt4_vision', 'claude_vision', 'gemini_vision', 'qwen3_vl_cloud', 'grok_xai'];
     return apiModels.includes(model);
   }
 
   // Get placeholder text for API key input based on selected model
   getApiKeyPlaceholder(): string {
-    if (this.selectedOcrModel === 'nemotron_cloud') {
-      return 'nvapi-... (from build.nvidia.com)';
-    }
     if (this.selectedOcrModel === 'grok_xai') {
       return 'xai-... (from console.x.ai)';
     }
@@ -4277,7 +4047,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   }
 
   getKrakenTrainingTarget(): number {
-    return this.trainingStatus.requiredForNextTraining || 100;
+    return 100;
   }
 
   getVlmTrainingTarget(): number {
@@ -4345,7 +4115,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
         const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
         if (!gpuCategory) return;
 
-        // Append installed Ollama models to existing entries (e.g. Nemotron)
+        // Append installed Ollama models to the category
         const existingValues = new Set(gpuCategory.models.map(m => m.value));
         for (const m of response.models) {
           if (!m.installed) continue;

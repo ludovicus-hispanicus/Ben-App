@@ -16,7 +16,7 @@ class GetPredictionDto(BaseModel):
 
 class CureDGetTransliterationsDto(BaseModel):
     image: str
-    model: str = "nemotron"  # "nemotron", "gemini", or "openai"
+    model: str = "kraken"  # e.g. "kraken:<model>", an Ollama model, "gemini_vision"
     apiKey: str = None       # Optional API key for the selected provider
     # Optional bounding box to crop image before OCR (for memory-constrained local models)
     boundingBox: Dimensions = None

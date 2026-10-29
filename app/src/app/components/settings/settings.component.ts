@@ -76,9 +76,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     kraken: [
       { value: 'kraken', label: 'Kraken (CPU)' }
     ],
-    local: [
-      { value: 'nemotron_local', label: 'Nemotron Parse (8GB GPU)' }
-    ],
+    local: [] as { value: string; label: string }[],
     ollamaCloud: [
       { value: 'qwen3_vl_235b_cloud', label: 'Qwen3 VL 235B Cloud' },
       { value: 'qwen3_vl_235b_thinking', label: 'Qwen3 VL 235B Thinking' }
@@ -115,17 +113,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     cuda_available: boolean;
     gpu_name: string | null;
     gpu_memory_gb: number | null;
-    models: {
-      [key: string]: {
-        available: boolean;
-        loaded: boolean;
-        requires_preload: boolean;
-        vram_required_gb: number;
-      }
-    }
   } | null = null;
   loadingGpuStatus = false;
-  preloadingModel: string | null = null;
 
   // Replacement mappings (Utilities tab)
   mappingCategories: string[] = [];
@@ -219,40 +208,6 @@ export class SettingsComponent implements OnInit, OnDestroy {
         error: () => {
           this.gpuStatus = null;
           this.loadingGpuStatus = false;
-        }
-      });
-  }
-
-  preloadModel(modelName: string): void {
-    this.preloadingModel = modelName;
-    this.http.post<any>(`${environment.apiUrl}/cured/gpu/preload/${modelName}`, {})
-      .subscribe({
-        next: () => {
-          this.preloadingModel = null;
-          // Refresh GPU status to show loaded state
-          this.loadGpuStatus();
-        },
-        error: (error) => {
-          this.preloadingModel = null;
-          console.error('Failed to preload model:', error);
-          alert('Failed to preload model: ' + (error.error?.detail || error.message));
-        }
-      });
-  }
-
-  unloadModel(modelName: string): void {
-    this.preloadingModel = modelName;  // Reuse for loading state
-    this.http.post<any>(`${environment.apiUrl}/cured/gpu/unload/${modelName}`, {})
-      .subscribe({
-        next: () => {
-          this.preloadingModel = null;
-          // Refresh GPU status to show unloaded state
-          this.loadGpuStatus();
-        },
-        error: (error) => {
-          this.preloadingModel = null;
-          console.error('Failed to unload model:', error);
-          alert('Failed to unload model: ' + (error.error?.detail || error.message));
         }
       });
   }

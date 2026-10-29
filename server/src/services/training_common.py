@@ -1,5 +1,5 @@
 """
-Shared training types used by Nemotron, DeepSeek, and Kraken training services.
+Shared training types used by the Kraken, Qwen and CuRe training services.
 """
 from dataclasses import dataclass
 from enum import Enum

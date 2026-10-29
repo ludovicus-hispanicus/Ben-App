@@ -176,14 +176,6 @@ def startup_event():
     from common.app_settings import init_settings
     init_settings()
 
-    # Pre-load Nemotron local model if enabled (avoids ~30s delay on first OCR request)
-    if os.environ.get("PRELOAD_NEMOTRON", "false").lower() == "true":
-        try:
-            from clients.ocr_factory import preload_nemotron_local
-            preload_nemotron_local()
-        except Exception as e:
-            logging.warning(f"Could not preload Nemotron model: {e}")
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("APP_PORT", 5001))

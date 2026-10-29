@@ -51,7 +51,6 @@ CuReD is a three-tier desktop application:
 | Service | Purpose | Required? |
 |---------|---------|-----------|
 | **Ollama** (`localhost:11434`) | Local VLM OCR via models like LLaVA | No — falls back to Kraken OCR |
-| **NVIDIA API** | Cloud Nemotron VLM OCR | No — needs `NVIDIA_API_KEY` |
 | **Anthropic API** | Claude-based VLM OCR | No — needs `ANTHROPIC_API_KEY` |
 | **Google GenAI API** | Gemini-based VLM OCR | No — needs `GOOGLE_GENAI_API_KEY` |
 | **OpenAI API** | GPT-4 Vision OCR | No — needs `OPENAI_API_KEY` |
@@ -86,7 +85,6 @@ BEn-app/
 │   │   │   ├── kraken_client.py  # Local Kraken OCR
 │   │   │   ├── anthropic_client.py
 │   │   │   ├── gemini_client.py
-│   │   │   ├── nemotron_client.py
 │   │   │   ├── ollama_client.py
 │   │   │   ├── openai_client.py
 │   │   │   ├── vllm_client.py
@@ -124,11 +122,9 @@ The Python backend uses these environment variables (all optional for desktop us
 | `LOG_LEVEL` | `INFO` | Python logging level |
 | `ANTHROPIC_API_KEY` | — | For Claude OCR |
 | `GOOGLE_GENAI_API_KEY` | — | For Gemini OCR |
-| `NVIDIA_API_KEY` | — | For Nemotron cloud OCR |
 | `OPENAI_API_KEY` | — | For GPT-4 Vision OCR |
 | `VLLM_BASE_URL` | `http://localhost:8000/v1` | For self-hosted vLLM |
 | `VLLM_MODEL_NAME` | `Qwen/Qwen3-VL-8B-Instruct` | Model name for vLLM |
-| `PRELOAD_NEMOTRON` | `false` | Preload local Nemotron model on startup |
 
 ## Data Storage
 
@@ -238,7 +234,7 @@ If images don't load, check that `STORAGE_PATH` points to a valid writable direc
 | **Electron** | No | Only for desktop window wrapper |
 | **PyInstaller** | No | Only for building standalone `.exe` |
 | **Ollama / VLM API keys** | No | Only for VLM-based OCR; Kraken OCR works offline out of the box |
-| **GPU / CUDA** | No | Only for local Nemotron VLM or GPU-accelerated model training |
+| **GPU / CUDA** | No | Only for GPU-accelerated model training (Kraken, Qwen LoRA, YOLO) |
 
 ### Stopping the app
 

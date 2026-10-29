@@ -488,7 +488,7 @@ class BatchRecognitionHandler:
         self._cancelled_jobs: Set[str] = set()
         # Cap on concurrent batch jobs. Local-GPU jobs still serialize on the
         # GPU lock (see _run_batch), so raising this mainly helps cloud-provider
-        # jobs (Gemini/Claude/GPT/Grok/Nemotron Cloud/vLLM) which call external
+        # jobs (Gemini/Claude/GPT/Grok/vLLM) which call external
         # APIs and only contend on rate limits + bandwidth.
         self._executor = ThreadPoolExecutor(max_workers=20)
         # Clean up stale jobs from previous server session
@@ -593,7 +593,7 @@ class BatchRecognitionHandler:
         source_project_id: Optional[str] = None,
         source_folder_path: Optional[str] = None,
         include_classes: Optional[List[str]] = None,
-        model: str = "nemotron",
+        model: str = "kraken",
         prompt: str = "dictionary",
         custom_prompt: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -774,7 +774,7 @@ class BatchRecognitionHandler:
 
         # Determine if this model needs the GPU lock.
         # Cloud providers and vLLM manage their own resources externally.
-        _no_gpu_lock_prefixes = ("gemini", "openai", "gpt", "anthropic", "claude", "grok", "xai", "nemotron_cloud", "vllm")
+        _no_gpu_lock_prefixes = ("gemini", "openai", "gpt", "anthropic", "claude", "grok", "xai", "vllm")
         model_lower = effective_model.lower().split(":")[0]
         uses_gpu = not any(model_lower.startswith(prefix) for prefix in _no_gpu_lock_prefixes)
         job_record = {

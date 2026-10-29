@@ -14,7 +14,7 @@ BEn is not just an OCR tool but a complete **curation platform** for Assyriologi
 |------|-------|----------|----------|-----------|
 | **Manual Import** | External (paste) | None | User brings OCR from any source (web AI, other tools) | N/A |
 | **Fallback** | Kraken | CPU only | Offline, bulk processing, guaranteed availability | Yes (easy) |
-| **Local GPU** | Qwen3-VL / Nemotron + YOLO | 6-8GB GPU | Better quality, markdown output, entry detection | Yes |
+| **Local GPU** | Qwen3-VL + YOLO | 6-8GB GPU | Better quality, markdown output, entry detection | Yes |
 | **Premium** | Cloud APIs (Claude, Gemini, GPT, Grok) | None (cloud) | Best quality, latest models, special characters | No |
 
 ### Local VLM Model Comparison
@@ -434,6 +434,8 @@ server/src/api/routers/cloud_ocr.py          - Endpoints
 - [ ] Rate limiting and queuing
 
 ### Tier 2: Local VLM (Qwen3-VL / Nemotron + YOLO)
+
+> **2026-10-29:** Nemotron and TrOCR were removed from BEn. The Nemotron notes below are kept as history; the code is in git history (commit 77503ef).
 
 **Models:**
 

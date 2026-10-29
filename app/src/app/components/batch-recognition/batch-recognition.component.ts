@@ -130,13 +130,12 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     {
       name: 'CPU',
       models: [
-        // Trained Kraken, Qwen LoRA, and TrOCR models are loaded dynamically from the backend
+        // Trained Kraken and Qwen LoRA models are loaded dynamically from the backend
       ]
     },
     {
       name: 'Local GPU',
       models: [
-        { value: 'nemotron_local', label: 'Nemotron', description: 'Document parsing (1.7GB VRAM)' },
         // Additional models populated dynamically from Ollama
       ]
     },
@@ -150,7 +149,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     {
       name: 'API',
       models: [
-        { value: 'nemotron_cloud', label: 'Nemotron', description: 'NVIDIA Build' },
         { value: 'gpt4_vision', label: 'GPT-4 Vision', description: 'OpenAI' },
         { value: 'claude_vision', label: 'Claude Vision', description: 'Anthropic' },
         { value: 'gemini_vision', label: 'Gemini Vision', description: 'Google' },
@@ -160,10 +158,8 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   ];
 
   modelAvailability: { [key: string]: boolean } = {
-    'nemotron_local': true,
     'qwen3_vl_235b_cloud': true,
     'qwen3_vl_235b_thinking': true,
-    'nemotron_cloud': true,
     'gpt4_vision': true,
     'claude_vision': true,
     'gemini_vision': true,
@@ -702,7 +698,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   }
 
   requiresApiKey(): boolean {
-    const apiModels = ['nemotron_cloud', 'gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'];
+    const apiModels = ['gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'];
     return apiModels.includes(this.selectedModel) && !this.selectedModel.startsWith('vllm');
   }
 
@@ -736,9 +732,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   }
 
   getApiKeyPlaceholder(): string {
-    if (this.selectedModel === 'nemotron_cloud') {
-      return 'nvapi-... (from build.nvidia.com)';
-    }
     return 'Enter your API key...';
   }
 
@@ -751,14 +744,12 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         const existingValues = new Set(cpuCategory.models.map(m => m.value));
 
         for (const model of response.models) {
-          // Add trained Kraken, Qwen LoRA, and TrOCR models that aren't already in the list
-          if ((model.value.startsWith('kraken:') || model.value.startsWith('qwen_lora:') || model.value.startsWith('trocr:')) && !existingValues.has(model.value)) {
-            let description = 'Trained Kraken model';
-            if (model.value.startsWith('qwen_lora:')) description = 'Qwen QLoRA fine-tuned';
-            else if (model.value.startsWith('trocr:')) description = 'TrOCR fine-tuned (line-level)';
+          // Add trained Kraken and Qwen LoRA models that aren't already in the list
+          if ((model.value.startsWith('kraken:') || model.value.startsWith('qwen_lora:')) && !existingValues.has(model.value)) {
+            const description = model.value.startsWith('qwen_lora:') ? 'Qwen QLoRA fine-tuned' : 'Trained Kraken model';
             cpuCategory.models.push({
               value: model.value,
-              label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, '').replace(/ \(TrOCR.*\)/, ''),
+              label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
               description,
             });
             this.modelAvailability[model.value] = true;
@@ -775,7 +766,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
         if (!gpuCategory) return;
 
-        // Append installed Ollama models to existing entries (e.g. Nemotron)
+        // Append installed Ollama models to the category
         const existingValues = new Set(gpuCategory.models.map(m => m.value));
         for (const m of response.models) {
           if (!m.installed) continue;

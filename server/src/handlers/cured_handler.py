@@ -1,4 +1,3 @@
-import os
 import logging
 import base64
 from typing import List
@@ -10,13 +9,6 @@ from io import BytesIO
 from api.dto.cured_result import CuredResultDto
 from api.dto.get_predictions import CureDGetTransliterationsDto
 from entities.dimensions import Dimensions
-from clients.nemotron_client import NemotronClient
-from common.env_vars import NEMOTRON_MODE
-
-
-# Initialize Nemotron client once at module load
-_nemotron_mode = os.environ.get(NEMOTRON_MODE, "api")
-_nemotron_client = NemotronClient(mode=_nemotron_mode)
 
 
 class CuredHandler:
@@ -34,7 +26,7 @@ class CuredHandler:
     @staticmethod
     def get_transliterations(dto: CureDGetTransliterationsDto, background_tasks: BackgroundTasks):
         """
-        Run Nemotron OCR on the provided base64 image.
+        Run OCR with the requested model on the provided base64 image.
 
         Returns CuredResultDto with detected text lines and bounding boxes.
         """
@@ -45,7 +37,7 @@ class CuredHandler:
         orig_width, orig_height = CuredHandler._get_image_dimensions(image_base64)
 
         # If bounding box is provided, crop the image to that region
-        # This is useful for memory-constrained local models (like Nemotron on 8GB GPU)
+        # This is useful for memory-constrained local models
         crop_offset_x, crop_offset_y = 0, 0
         if dto.boundingBox is not None:
             image_base64, crop_offset_x, crop_offset_y = CuredHandler._crop_to_bounding_box(
@@ -68,7 +60,7 @@ class CuredHandler:
         # Select correct client via Factory
         from clients.ocr_factory import OCRFactory
         
-        # Use factory to get the client (gemini, openai, or nemotron)
+        # Use factory to get the client (Kraken, Ollama, cloud APIs, ...)
         ocr_client = OCRFactory.get_client(
             provider_name=dto.model, 
             api_key=dto.apiKey
@@ -249,13 +241,3 @@ class CuredHandler:
         except Exception as e:
             logging.error(f"Failed to crop image to bounding box: {e}")
             return image_base64, 0, 0
-
-    @staticmethod
-    def get_nemotron_status() -> dict:
-        """Return current Nemotron configuration and status."""
-        return {
-            "mode": _nemotron_mode,
-            "api_url": _nemotron_client.api_url if _nemotron_mode == "api" else None,
-            "model_id": NemotronClient.HF_MODEL_ID if _nemotron_mode == "local" else "nvidia/nemotron-parse",
-            "device": _nemotron_client._device if _nemotron_mode == "local" else "cloud",
-        }

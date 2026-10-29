@@ -43,8 +43,7 @@ lark-parser>=0.11.0
 # TEI Lex-0 XML validation
 lxml>=5.0.0
 
-# VLM OCR (optional - for DeepSeek-OCR)
-# Need 4.46+ for tokenizers compatibility with Nemotron model
+# VLM OCR (optional - Qwen3-VL LoRA)
 transformers>=4.46.0,<5.0.0
 
 # Cloud VLM APIs
@@ -53,7 +52,6 @@ anthropic>=0.40.0
 openai>=1.50.0
 bitsandbytes>=0.41.0
 accelerate>=0.25.0
-open_clip_torch  # Required for Nemotron-Parse vision encoder
 
 # CuRe sign classifier (ResNet18)
 torchvision>=0.15.0

@@ -775,7 +775,7 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
     // Bold **text** - render as bold (must be before italic)
     html = html.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
 
-    // Italic _text_ (Nemotron format) - render as italics, REMOVE the underscores
+    // Italic _text_ (underscore notation) - render as italics, REMOVE the underscores
     html = html.replace(/_([^_\n]+)_/g, '<i>$1</i>');
 
     // Italic *text* (alternative) - render as italics, REMOVE the asterisks

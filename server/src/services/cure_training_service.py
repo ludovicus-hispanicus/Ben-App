@@ -2,7 +2,7 @@
 CuRe Training Service — Full training pipeline for ResNet18 sign classifier.
 
 Adapted from CuneiformOcr/src/train.py (train_resnet18_classifier, train_end_eval).
-Follows the same patterns as KrakenTrainingService and NemotronTrainingService.
+Follows the same patterns as KrakenTrainingService.
 """
 import datetime
 import json

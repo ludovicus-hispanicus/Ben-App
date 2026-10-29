@@ -288,55 +288,20 @@
           </div>
         </div>
 
-        <!-- GPU Models Section - only show if GPU is available -->
+        <!-- GPU (used to judge which Ollama models fit) -->
         <div class="settings-section" *ngIf="gpuStatus?.cuda_available">
-          <h3>GPU Models</h3>
+          <h3>GPU</h3>
 
           <div class="gpu-info">
             <span class="status-indicator status-available"></span>
             <span>{{ gpuStatus.gpu_name }} ({{ gpuStatus.gpu_memory_gb }} GB VRAM)</span>
             <button class="btn-link" (click)="loadGpuStatus()">Refresh</button>
           </div>
-
-          <!-- Nemotron Local -->
-          <div class="gpu-model-item" *ngIf="gpuStatus.models['nemotron_local']?.available">
-            <div class="model-header">
-              <div class="model-info">
-                <strong>Nemotron-Parse</strong>
-                <span class="model-size">~{{ gpuStatus.models['nemotron_local'].vram_required_gb }} GB VRAM</span>
-              </div>
-              <div class="model-status">
-                <span class="status-badge" [class.loaded]="gpuStatus.models['nemotron_local'].loaded"
-                      [class.not-loaded]="!gpuStatus.models['nemotron_local'].loaded">
-                  {{ gpuStatus.models['nemotron_local'].loaded ? 'Loaded' : 'Not loaded' }}
-                </span>
-              </div>
-            </div>
-            <small>NVIDIA's document parsing VLM for OCR with bounding boxes</small>
-            <!-- Load button when not loaded -->
-            <div class="model-actions" *ngIf="!gpuStatus.models['nemotron_local'].loaded">
-              <button class="btn btn-sm btn-primary"
-                      (click)="preloadModel('nemotron_local')"
-                      [disabled]="preloadingModel === 'nemotron_local'">
-                {{ preloadingModel === 'nemotron_local' ? 'Loading...' : 'Load Now' }}
-              </button>
-              <small>Loading takes ~30 seconds on first use</small>
-            </div>
-            <!-- Unload button when loaded -->
-            <div class="model-actions" *ngIf="gpuStatus.models['nemotron_local'].loaded">
-              <button class="btn btn-sm btn-secondary"
-                      (click)="unloadModel('nemotron_local')"
-                      [disabled]="preloadingModel === 'nemotron_local'">
-                {{ preloadingModel === 'nemotron_local' ? 'Unloading...' : 'Unload' }}
-              </button>
-              <small>Free GPU memory for Ollama models</small>
-            </div>
-          </div>
         </div>
 
         <!-- Show message if no GPU -->
         <div class="settings-section" *ngIf="gpuStatus && !gpuStatus.cuda_available">
-          <h3>GPU Models</h3>
+          <h3>GPU</h3>
           <div class="no-gpu-message">
             <span class="status-indicator status-unavailable"></span>
             <span>No CUDA GPU detected. GPU models require an NVIDIA GPU with CUDA support.</span>

@@ -29,8 +29,7 @@ export enum TrainingTab {
 
 export enum TrainingEngine {
   Kraken = 'kraken',
-  Qwen = 'qwen',
-  TrOCR = 'trocr'
+  Qwen = 'qwen'
 }
 
 export enum OcrViewMode {
@@ -172,27 +171,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   qwenTrainingProgress: any = null;
   qwenEpochHistory: any[] = [];
 
-  // ========== TrOCR Training ==========
-  trocrTrainingStatus: TrainingStatus = {
-    curatedTexts: 0, previousLines: 0, newLines: 0, totalLines: 0,
-    requiredForNextTraining: 30, progress: 0, isReady: false,
-    lastTraining: null, currentTraining: null
-  };
-  trocrModels: TrainedModel[] = [];
-  trocrActiveModel: ActiveModelInfo | null = null;
-  selectedTrOCRModel: TrainedModel | null = null;
-  trocrModelName = '';
-  trocrBaseModels: { id: string; name: string; hf_id: string; params: string }[] = [];
-  trocrBaseModel = 'trocr-base-handwritten';
-  trocrEpochs = 30;
-  trocrPatience = 5;
-  trocrDevice = 'auto';
-  trocrLearningRate = 0.00005;
-  trocrFreezeEncoder = false;
-  isTrOCRTraining = false;
-  trocrTrainingProgress: any = null;
-  trocrEpochHistory: any[] = [];
-
   // ========== YOLO Training ==========
   yoloViewMode: YoloViewMode = YoloViewMode.Dashboard;
   YoloViewMode = YoloViewMode;
@@ -255,8 +233,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.loadQwenTrainingStatus();
     this.loadQwenOutputModes();
     this.loadQwenBaseModels();
-    this.loadTrOCRTrainingStatus();
-    this.loadTrOCRBaseModels();
     this.loadOcrModels();
     this.checkYoloHealth();
     this.loadYoloDashboardData();
@@ -300,7 +276,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     } else if (mode === OcrViewMode.Training) {
       this.loadOcrTrainingStatus();
       this.loadQwenTrainingStatus();
-      this.loadTrOCRTrainingStatus();
     }
   }
 
@@ -333,20 +308,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.qwenActiveModel = model;
       },
       error: (err) => console.error('Failed to load Qwen active model', err)
-    });
-
-    this.curedService.listTrOCRModels().subscribe({
-      next: (response) => {
-        this.trocrModels = response.models;
-      },
-      error: (err) => console.error('Failed to load TrOCR models', err)
-    });
-
-    this.curedService.getTrOCRActiveModel().subscribe({
-      next: (model) => {
-        this.trocrActiveModel = model;
-      },
-      error: (err) => console.error('Failed to load TrOCR active model', err)
     });
   }
 
@@ -398,30 +359,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     });
   }
 
-  activateTrOCRModel(modelName: string): void {
-    this.curedService.activateTrOCRModel(modelName).subscribe({
-      next: () => {
-        this.notification.showSuccess(`TrOCR model "${modelName}" activated`);
-        this.loadOcrModels();
-      },
-      error: (err) => this.notification.showError('Failed to activate model')
-    });
-  }
-
-  deleteTrOCRModel(modelName: string): void {
-    if (!confirm(`Are you sure you want to delete TrOCR model "${modelName}"?`)) {
-      return;
-    }
-    this.curedService.deleteTrOCRModel(modelName).subscribe({
-      next: () => {
-        this.notification.showSuccess(`Model "${modelName}" deleted`);
-        this.selectedTrOCRModel = null;
-        this.loadOcrModels();
-      },
-      error: (err) => this.notification.showError('Failed to delete model')
-    });
-  }
-
   getTrainingStatusColor(status: string): string {
     switch (status) {
       case 'completed': return '#4caf50';
@@ -446,7 +383,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   onTrainingDatasetChange(): void {
     this.loadOcrTrainingStatus();
     this.loadQwenTrainingStatus();
-    this.loadTrOCRTrainingStatus();
   }
 
   addTrainingDataset(datasetId: number): void {
@@ -521,7 +457,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Do a one-time check for each provider; only start polling if training is active
     this.curedService.getKrakenTrainingProgress().subscribe(p => this.handleKrakenProgress(p, true));
     this.curedService.getQwenTrainingProgress().subscribe(p => this.handleQwenProgress(p, true));
-    this.curedService.getTrOCRTrainingProgress().subscribe(p => this.handleTrOCRProgress(p, true));
   }
 
   startKrakenPolling(): void {
@@ -624,8 +559,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.trainingEngine = engine;
     if (engine === TrainingEngine.Qwen) {
       this.loadQwenTrainingStatus();
-    } else if (engine === TrainingEngine.TrOCR) {
-      this.loadTrOCRTrainingStatus();
     } else {
       this.loadOcrTrainingStatus();
     }
@@ -729,119 +662,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       error: (err) => {
         this.notification.showError('Failed to cancel training');
       }
-    });
-  }
-
-  // ========== TrOCR Training Methods ==========
-
-  private trocrPollStop$ = new Subject<void>();
-
-  loadTrOCRTrainingStatus(): void {
-    const pids = this.selectedTrainingDatasetIds.length > 0 ? this.selectedTrainingDatasetIds : undefined;
-    this.curedService.getTrOCRTrainingStatus(pids).subscribe({
-      next: (status) => {
-        this.trocrTrainingStatus = status;
-        if (status.currentTraining) {
-          this.trocrTrainingProgress = status.currentTraining;
-          this.isTrOCRTraining = status.currentTraining.status === 'training' ||
-                                  status.currentTraining.status === 'preparing';
-          if (status.currentTraining.epoch_history) {
-            this.trocrEpochHistory = status.currentTraining.epoch_history;
-          }
-        }
-      },
-      error: (err) => console.error('Failed to load TrOCR training status', err)
-    });
-  }
-
-  loadTrOCRBaseModels(): void {
-    this.curedService.getTrOCRBaseModels().subscribe({
-      next: (response) => {
-        this.trocrBaseModels = response.models;
-        if (response.models.length > 0 && !this.trocrBaseModel) {
-          this.trocrBaseModel = response.models[0].id;
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load TrOCR base models', err);
-        this.trocrBaseModels = [
-          { id: 'trocr-base-handwritten', name: 'TrOCR Base Handwritten', hf_id: 'microsoft/trocr-base-handwritten', params: '~334M' },
-          { id: 'trocr-small-handwritten', name: 'TrOCR Small Handwritten', hf_id: 'microsoft/trocr-small-handwritten', params: '~62M' },
-        ];
-      }
-    });
-  }
-
-  startTrOCRPolling(): void {
-    this.trocrPollStop$.next();
-    interval(5000)
-      .pipe(
-        takeUntil(this.destroy$),
-        takeUntil(this.trocrPollStop$),
-        switchMap(() => this.curedService.getTrOCRTrainingProgress())
-      )
-      .subscribe({ next: (p) => this.handleTrOCRProgress(p, false) });
-  }
-
-  private handleTrOCRProgress(progress: any, initialCheck: boolean): void {
-    if (progress && progress.status !== 'idle') {
-      this.trocrTrainingProgress = progress;
-      this.isTrOCRTraining = progress.status === 'training' || progress.status === 'preparing';
-      if (progress.epoch_history) {
-        this.trocrEpochHistory = progress.epoch_history;
-      }
-      if (progress.status === 'completed' || progress.status === 'failed') {
-        this.trocrPollStop$.next();
-        this.loadTrOCRTrainingStatus();
-      } else if (initialCheck) {
-        this.startTrOCRPolling();
-      }
-    } else {
-      this.isTrOCRTraining = false;
-    }
-  }
-
-  startTrOCRTraining(): void {
-    if (!this.trocrModelName?.trim()) {
-      this.notification.showWarning('Please enter a model name');
-      return;
-    }
-
-    this.isTrOCRTraining = true;
-    this.trocrEpochHistory = [];
-
-    const pids = this.selectedTrainingDatasetIds.length > 0 ? this.selectedTrainingDatasetIds : undefined;
-    this.curedService.startTrOCRTraining(
-      this.trocrEpochs,
-      this.trocrModelName.trim(),
-      this.trocrBaseModel,
-      this.trocrDevice,
-      this.trocrPatience,
-      this.trocrLearningRate,
-      this.trocrFreezeEncoder,
-      pids
-    ).subscribe({
-      next: (response) => {
-        this.notification.showSuccess('TrOCR training started');
-        this.trainingRightTab = 'progress';
-        this.startTrOCRPolling();
-        this.loadTrOCRTrainingStatus();
-      },
-      error: (err) => {
-        this.notification.showError('Failed to start training: ' + (err.error?.detail || err.message));
-        this.isTrOCRTraining = false;
-      }
-    });
-  }
-
-  cancelTrOCRTraining(): void {
-    this.curedService.cancelTrOCRTraining().subscribe({
-      next: () => {
-        this.notification.showSuccess('TrOCR training cancelled');
-        this.isTrOCRTraining = false;
-        this.loadTrOCRTrainingStatus();
-      },
-      error: (err) => this.notification.showError('Failed to cancel training')
     });
   }
 

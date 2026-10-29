@@ -131,62 +131,6 @@ export class CuredService {
         }>(url);
     }
 
-    getTrainingStatus() {
-        return this.http.get<{
-            curatedTexts: number;
-            previousLines: number;
-            newLines: number;
-            totalLines: number;
-            requiredForNextTraining: number;
-            progress: number;
-            isReady: boolean;
-            lastTraining: string | null;
-            currentTraining: TrainingProgress | null;
-        }>(`${environment.apiUrl}${this.baseUrl}/training/status`);
-    }
-
-    startTraining(epochs: number = 50, modelName: string = null, baseModel: string = null) {
-        const params: any = { epochs };
-        if (modelName) {
-            params.model_name = modelName;
-        }
-        if (baseModel) {
-            params.base_model = baseModel;
-        }
-        return this.http.post<{ message: string; epochs: number; model_name: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/start`,
-            null,
-            { params }
-        );
-    }
-
-    getTrainingProgress() {
-        return this.http.get<TrainingProgress>(`${environment.apiUrl}${this.baseUrl}/training/progress`);
-    }
-
-    cancelTraining() {
-        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/cancel`, null);
-    }
-
-    getBaseModelsMetadata() {
-        return this.http.get<{ [key: string]: BaseModelMetadata }>(`${environment.apiUrl}${this.baseUrl}/training/base-models`);
-    }
-
-    listModels() {
-        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/models`);
-    }
-
-    getActiveModel() {
-        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/active-model`);
-    }
-
-    activateModel(modelName: string) {
-        return this.http.post<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/models/${modelName}/activate`,
-            null
-        );
-    }
-
     getAvailableOcrModels() {
         return this.http.get<{ models: OcrModelOption[] }>(
             `${environment.apiUrl}${this.baseUrl}/available-models`
@@ -362,71 +306,6 @@ export class CuredService {
         );
     }
 
-    // ========== TrOCR Training ==========
-
-    getTrOCRTrainingStatus(datasetIds?: number[]) {
-        let url = `${environment.apiUrl}${this.baseUrl}/training/trocr/status`;
-        if (datasetIds && datasetIds.length > 0) {
-            const qs = datasetIds.map(id => `dataset_ids=${id}`).join('&');
-            url += `?${qs}`;
-        }
-        return this.http.get<{
-            curatedTexts: number;
-            previousLines: number;
-            newLines: number;
-            totalLines: number;
-            requiredForNextTraining: number;
-            progress: number;
-            isReady: boolean;
-            lastTraining: string | null;
-            currentTraining: any | null;
-        }>(url);
-    }
-
-    startTrOCRTraining(epochs: number = 30, modelName: string = null, baseModel: string = null, device: string = 'auto', patience: number = 5, learningRate: number = 0.00005, freezeEncoder: boolean = false, datasetIds?: number[]) {
-        const params: any = { epochs, device, patience, learning_rate: learningRate, freeze_encoder: freezeEncoder };
-        if (modelName) params.model_name = modelName;
-        if (baseModel) params.base_model = baseModel;
-        if (datasetIds && datasetIds.length > 0) params.dataset_ids = datasetIds;
-        return this.http.post<{ message: string; epochs: number; model_name: string; base_model: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/trocr/start`, null, { params }
-        );
-    }
-
-    getTrOCRTrainingProgress() {
-        return this.http.get<any>(`${environment.apiUrl}${this.baseUrl}/training/trocr/progress`);
-    }
-
-    cancelTrOCRTraining() {
-        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/trocr/cancel`, null);
-    }
-
-    listTrOCRModels() {
-        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/trocr/models`);
-    }
-
-    getTrOCRActiveModel() {
-        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/trocr/active-model`);
-    }
-
-    activateTrOCRModel(modelName: string) {
-        return this.http.post<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/trocr/models/${modelName}/activate`, null
-        );
-    }
-
-    deleteTrOCRModel(modelName: string) {
-        return this.http.delete<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/trocr/models/${modelName}`
-        );
-    }
-
-    getTrOCRBaseModels() {
-        return this.http.get<{ models: { id: string; name: string; hf_id: string; params: string }[] }>(
-            `${environment.apiUrl}${this.baseUrl}/training/trocr/base-models`
-        );
-    }
-
     // ==========================================
     // Museum Data Methods
     // ==========================================
@@ -583,14 +462,6 @@ export interface ActiveModelInfo {
     is_pretrained: boolean;
     size_mb: number;
     last_modified: string | null;
-}
-
-export interface BaseModelMetadata {
-    size_mb: number;
-    best_accuracy: number;
-    last_accuracy: number;
-    completed_epochs: number;
-    alphabet_size: number;
 }
 
 export interface BaseModelOption {

@@ -38,7 +38,7 @@ ace.define("ace/mode/cured_highlight_rules", ["require", "exports", "module", "a
           token: ["markup.bold", "markup.bold.text", "markup.bold"],
           regex: /(\*\*)([^*\n]+)(\*\*)/
         },
-        // Italic notation _text_ (Nemotron format)
+        // Italic notation _text_ (underscores)
         {
           token: ["markup.italic", "markup.italic.text", "markup.italic"],
           regex: /(_)([^_\n]+)(_)/

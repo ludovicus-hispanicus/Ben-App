@@ -58,7 +58,7 @@ BEn follows a four-tier recognition strategy (see [dev-instructions/ROADMAP.md](
 |------|-------|----------|-------|
 | Manual Import | External (paste) | None | Bring your own OCR from any source |
 | Fallback | Kraken | CPU | Offline, always available |
-| Local GPU | Qwen3-VL / Nemotron + YOLO | 6–8 GB GPU | Higher quality, trainable (LoRA) |
+| Local GPU | Qwen3-VL + YOLO | 6–8 GB GPU | Higher quality, trainable (LoRA) |
 | Premium | Cloud APIs (Claude, Gemini, GPT, Grok) | Cloud | Best quality; batch APIs supported |
 
 Cloud provider clients live in `server/src/clients/` (`anthropic_client.py`, `grok_client.py`, …),

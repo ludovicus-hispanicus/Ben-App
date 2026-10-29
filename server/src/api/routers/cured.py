@@ -58,29 +58,13 @@ async def get_museums():
     return museums
 
 
-@router.get("/nemotron/status")
-async def get_nemotron_status():
-    """Get Nemotron OCR engine status and configuration."""
-    return CuredHandler.get_nemotron_status()
-
-
 @router.get("/gpu/status")
 async def get_gpu_status():
-    """Get GPU availability and loaded models status."""
-    from clients.ocr_factory import _local_nemotron_client
-
+    """Get GPU availability (used to judge which Ollama models fit)."""
     result = {
         "cuda_available": False,
         "gpu_name": None,
         "gpu_memory_gb": None,
-        "models": {
-            "nemotron_local": {
-                "available": False,
-                "loaded": False,
-                "requires_preload": True,
-                "vram_required_gb": 1.7,
-            }
-        }
     }
 
     try:
@@ -89,59 +73,10 @@ async def get_gpu_status():
         if result["cuda_available"]:
             result["gpu_name"] = torch.cuda.get_device_name(0)
             result["gpu_memory_gb"] = round(torch.cuda.get_device_properties(0).total_memory / (1024**3), 1)
-            # Nemotron is available if CUDA is available
-            result["models"]["nemotron_local"]["available"] = True
     except ImportError:
         pass
 
-    # Check if Nemotron is already loaded
-    result["models"]["nemotron_local"]["loaded"] = _local_nemotron_client is not None
-
     return result
-
-
-@router.post("/gpu/preload/{model_name}")
-async def preload_gpu_model(model_name: str):
-    """Preload a GPU model to avoid delay on first use."""
-    if model_name == "nemotron_local":
-        try:
-            from clients.ocr_factory import preload_nemotron_local
-            preload_nemotron_local()
-            return {"message": "Nemotron model loaded successfully", "loaded": True}
-        except Exception as e:
-            logging.error(f"Failed to preload Nemotron: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-    else:
-        raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
-
-
-@router.post("/gpu/unload/{model_name}")
-async def unload_gpu_model(model_name: str):
-    """Unload a GPU model to free VRAM for other models."""
-    if model_name == "nemotron_local":
-        try:
-            import clients.ocr_factory as ocr_factory
-            if ocr_factory._local_nemotron_client is not None:
-                # Clear the cached model
-                del ocr_factory._local_nemotron_client._model
-                del ocr_factory._local_nemotron_client._processor
-                ocr_factory._local_nemotron_client = None
-
-                # Force GPU memory cleanup
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-
-                logging.info("Nemotron model unloaded, GPU memory freed")
-                return {"message": "Nemotron model unloaded", "loaded": False}
-            else:
-                return {"message": "Nemotron model was not loaded", "loaded": False}
-        except Exception as e:
-            logging.error(f"Failed to unload Nemotron: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-    else:
-        raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
 
 
 @router.get("/ollama/models")
@@ -489,152 +424,9 @@ async def get_curated_stats(dataset_id: int = None):
     }
 
 
-@router.get("/training/status")
-async def get_training_status():
-    """Get the current training data status for Nemotron LoRA fine-tuning."""
-    from services.nemotron_training_service import nemotron_training_service, TrainingStatus
-
-    # Get stats with previous/new breakdown
-    stats = nemotron_training_service.get_training_stats(global_new_text_handler)
-    logging.info(f"Nemotron training stats: {stats}")
-
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    total_lines = stats.get("total_lines", 0)
-    curated_texts = stats.get("curated_texts", 0)
-    last_training = stats.get("last_training")
-    required_for_training = 50  # LoRA is more data-efficient
-
-    # Progress: use total_lines before first training, new_lines after
-    lines_for_progress = total_lines
-    progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
-
-    # Include current training status if training is in progress
-    current_training = None
-    if nemotron_training_service.progress.status != TrainingStatus.IDLE:
-        current_training = nemotron_training_service.progress.to_dict()
-
-    return {
-        "curatedTexts": curated_texts,
-        "previousLines": previous_lines,
-        "newLines": new_lines,
-        "totalLines": total_lines,
-        "requiredForNextTraining": required_for_training,
-        "progress": progress,
-        "isReady": lines_for_progress >= required_for_training,
-        "lastTraining": last_training,
-        "currentTraining": current_training
-    }
-
-
-@router.post("/training/start")
-async def start_training(background_tasks: BackgroundTasks, epochs: int = 3, model_name: str = None, base_model: str = None):
-    """Start Nemotron LoRA fine-tuning."""
-    from services.nemotron_training_service import nemotron_training_service, TrainingStatus
-    import asyncio
-
-    # Check if already training
-    if nemotron_training_service.progress.status == TrainingStatus.TRAINING:
-        raise HTTPException(status_code=409, detail="Training already in progress")
-
-    # Validate training data
-    stats = nemotron_training_service.get_training_stats(global_new_text_handler)
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    total_lines = stats.get("total_lines", 0)
-    last_training = stats.get("last_training")
-
-    # Use new_lines after first training, total_lines before
-    lines_for_training = total_lines
-    min_required = 50  # LoRA is more data-efficient
-
-    if lines_for_training < min_required:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough training data. Need at least {min_required} lines, got {lines_for_training}"
-        )
-
-    # Generate model name if not provided
-    if not model_name:
-        from datetime import datetime
-        model_name = f"nemotron_lora_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    # Run training in background
-    def run_training_sync():
-        asyncio.run(nemotron_training_service.start_training(
-            texts_handler=global_new_text_handler,
-            epochs=epochs,
-            model_name=model_name
-        ))
-
-    background_tasks.add_task(run_training_sync)
-    return {"message": "LoRA training started", "epochs": epochs, "model_name": model_name}
-
-
-@router.get("/training/progress")
-async def get_training_progress():
-    """Get current Nemotron LoRA training progress."""
-    from services.nemotron_training_service import nemotron_training_service
-    return nemotron_training_service.progress.to_dict()
-
-
-@router.post("/training/cancel")
-async def cancel_training():
-    """Cancel ongoing Nemotron LoRA training."""
-    from services.nemotron_training_service import nemotron_training_service, TrainingStatus
-
-    if nemotron_training_service.progress.status != TrainingStatus.TRAINING:
-        raise HTTPException(status_code=400, detail="No training in progress")
-
-    nemotron_training_service.cancel_training()
-    return {"message": "Training cancelled"}
-
-
-@router.get("/training/models")
-async def list_models():
-    """List available LoRA adapter models."""
-    from services.nemotron_training_service import nemotron_training_service
-    models = nemotron_training_service.get_models()
-    return {"models": models}
-
-
-@router.get("/training/active-model")
-async def get_active_model():
-    """Get information about the currently active LoRA adapter."""
-    from services.nemotron_training_service import nemotron_training_service
-    return nemotron_training_service.get_active_model_info()
-
-
-@router.post("/training/models/{model_name}/activate")
-async def activate_model(model_name: str):
-    """Set a LoRA adapter as the active model."""
-    from services.nemotron_training_service import nemotron_training_service
-
-    success = nemotron_training_service.activate_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"LoRA adapter not found: {model_name}")
-
-    return {"message": f"LoRA adapter {model_name} activated"}
-
-
-@router.get("/training/base-models")
-async def get_base_models():
-    """Get list of available base models for training."""
-    return {
-        "models": [
-            {
-                "id": "nvidia/NVIDIA-Nemotron-Parse-v1.1",
-                "name": "Nemotron-Parse v1.1",
-                "description": "NVIDIA's document parsing VLM"
-            }
-        ]
-    }
-
-
 @router.get("/available-models")
 async def get_available_models():
     """Get list of available OCR models (providers + trained adapters + Kraken models)."""
-    from services.nemotron_training_service import nemotron_training_service
     from services.kraken_training_service import kraken_training_service
 
     # Base OCR provider models (these match OCRFactory providers)
@@ -642,8 +434,6 @@ async def get_available_models():
         {"value": "gemini", "label": "Gemini (Google Cloud)"},
         {"value": "openai", "label": "GPT-4 Vision (OpenAI)"},
         {"value": "anthropic", "label": "Claude (Anthropic)"},
-        {"value": "nemotron", "label": "Nemotron-Parse (NVIDIA Cloud)"},
-        {"value": "nemotron-local", "label": "Nemotron-Parse (Local GPU)"},
     ]
 
     # Add Kraken models (locally trained OCR models)
@@ -656,17 +446,6 @@ async def get_available_models():
             })
     except Exception as e:
         logging.warning(f"Could not load Kraken models: {e}")
-
-    # Add any trained LoRA adapters (Nemotron fine-tuned)
-    try:
-        adapters = nemotron_training_service.get_adapters()
-        for adapter in adapters:
-            models.append({
-                "value": adapter["name"],
-                "label": f"{adapter['name']} (Nemotron LoRA)"
-            })
-    except Exception as e:
-        logging.warning(f"Could not load Nemotron adapters: {e}")
 
     # Add Qwen LoRA adapters
     try:
@@ -693,19 +472,6 @@ async def get_available_models():
             })
     except Exception as e:
         logging.warning(f"Could not load CuRe models: {e}")
-
-    # Add TrOCR fine-tuned models
-    try:
-        from services.trocr_training_service import trocr_training_service
-        trocr_models = trocr_training_service.get_models()
-        for tm in trocr_models:
-            base = tm.get("base_model", "trocr")
-            models.append({
-                "value": f"trocr:{tm['name']}",
-                "label": f"{tm['name']} (TrOCR, {base})"
-            })
-    except Exception as e:
-        logging.warning(f"Could not load TrOCR models: {e}")
 
     return {"models": models}
 
@@ -1129,185 +895,6 @@ async def get_qwen_base_models():
     return {"models": qwen_training_service.get_base_models()}
 
 
-# ================================================================== #
-# TrOCR Training Endpoints
-# ================================================================== #
-
-@router.get("/training/trocr/status")
-async def get_trocr_training_status(dataset_id: int = None, dataset_ids: Optional[List[int]] = Query(None)):
-    """Get TrOCR training status and data readiness."""
-    from services.trocr_training_service import trocr_training_service
-    from services.training_common import TrainingStatus
-
-    dids = dataset_ids or ([dataset_id] if dataset_id is not None else None)
-    stats = trocr_training_service.get_training_stats(global_new_text_handler, dataset_ids=dids)
-
-    total_lines = stats.get("total_lines", 0)
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    last_training = stats.get("last_training")
-
-    required_for_training = trocr_training_service.MIN_LINES
-    lines_for_progress = total_lines
-    progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
-
-    current_training = None
-    if trocr_training_service.progress.status != TrainingStatus.IDLE:
-        current_training = trocr_training_service.progress.to_dict()
-
-    return {
-        "curatedTexts": stats.get("curated_texts", 0),
-        "previousLines": previous_lines,
-        "newLines": new_lines,
-        "totalLines": total_lines,
-        "requiredForNextTraining": required_for_training,
-        "progress": progress,
-        "isReady": lines_for_progress >= required_for_training,
-        "lastTraining": last_training,
-        "currentTraining": current_training,
-    }
-
-
-@router.post("/training/trocr/start")
-async def start_trocr_training(
-    epochs: int = 30,
-    model_name: str = None,
-    base_model: str = None,
-    device: str = "auto",
-    patience: int = 5,
-    learning_rate: float = 5e-5,
-    freeze_encoder: bool = False,
-    dataset_id: int = None,
-    dataset_ids: Optional[List[int]] = Query(None),
-):
-    """Start TrOCR fine-tuning, optionally scoped to one or more datasets."""
-    from services.trocr_training_service import trocr_training_service
-    from services.kraken_training_service import kraken_training_service
-    from services.training_common import TrainingStatus
-    import asyncio
-
-    dids = dataset_ids or ([dataset_id] if dataset_id is not None else None)
-
-    if trocr_training_service.progress.status == TrainingStatus.TRAINING:
-        raise HTTPException(status_code=409, detail="TrOCR training already in progress")
-
-    from services.gpu_lock import acquire as gpu_acquire
-    ok, owner = gpu_acquire("trocr_training")
-    if not ok:
-        raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
-
-    stats = trocr_training_service.get_training_stats(global_new_text_handler, dataset_ids=dids)
-    total_lines = stats.get("total_lines", 0)
-
-    if total_lines < trocr_training_service.MIN_LINES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough training data. Need at least {trocr_training_service.MIN_LINES} lines, got {total_lines}"
-        )
-
-    if base_model and base_model not in trocr_training_service.BASE_MODELS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid base_model '{base_model}'. Valid: {list(trocr_training_service.BASE_MODELS.keys())}"
-        )
-
-    if not model_name:
-        from datetime import datetime
-        model_name = f"trocr_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    import threading
-    from services.gpu_lock import release as gpu_release
-
-    def run_training_sync():
-        try:
-            asyncio.run(trocr_training_service.start_training(
-                texts_handler=global_new_text_handler,
-                kraken_training_service=kraken_training_service,
-                epochs=epochs,
-                model_name=model_name,
-                base_model=base_model,
-                device=device,
-                patience=patience,
-                learning_rate=learning_rate,
-                freeze_encoder=freeze_encoder,
-                dataset_ids=dids,
-            ))
-        finally:
-            gpu_release("trocr_training")
-
-    thread = threading.Thread(target=run_training_sync, daemon=True)
-    thread.start()
-    return {
-        "message": "TrOCR training started",
-        "epochs": epochs,
-        "model_name": model_name,
-        "base_model": base_model or trocr_training_service.DEFAULT_BASE_MODEL,
-        "learning_rate": learning_rate,
-        "freeze_encoder": freeze_encoder,
-    }
-
-
-@router.get("/training/trocr/progress")
-async def get_trocr_training_progress():
-    """Get current TrOCR training progress."""
-    from services.trocr_training_service import trocr_training_service
-    return trocr_training_service.progress.to_dict()
-
-
-@router.post("/training/trocr/cancel")
-async def cancel_trocr_training():
-    """Cancel ongoing TrOCR training."""
-    from services.trocr_training_service import trocr_training_service
-    from services.training_common import TrainingStatus
-
-    if trocr_training_service.progress.status != TrainingStatus.TRAINING:
-        raise HTTPException(status_code=400, detail="No TrOCR training in progress")
-
-    trocr_training_service.cancel_training()
-    return {"message": "TrOCR training cancelled"}
-
-
-@router.get("/training/trocr/models")
-async def list_trocr_models():
-    """List available TrOCR fine-tuned models."""
-    from services.trocr_training_service import trocr_training_service
-    return {"models": trocr_training_service.get_models()}
-
-
-@router.get("/training/trocr/active-model")
-async def get_trocr_active_model():
-    """Get information about the currently active TrOCR model."""
-    from services.trocr_training_service import trocr_training_service
-    return trocr_training_service.get_active_model_info()
-
-
-@router.post("/training/trocr/models/{model_name}/activate")
-async def activate_trocr_model(model_name: str):
-    """Set a TrOCR fine-tuned model as the active model."""
-    from services.trocr_training_service import trocr_training_service
-    success = trocr_training_service.activate_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"TrOCR model not found: {model_name}")
-    return {"message": f"TrOCR model {model_name} activated"}
-
-
-@router.delete("/training/trocr/models/{model_name}")
-async def delete_trocr_model(model_name: str):
-    """Delete a TrOCR fine-tuned model."""
-    from services.trocr_training_service import trocr_training_service
-    success = trocr_training_service.delete_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"TrOCR model not found or is active: {model_name}")
-    return {"message": f"TrOCR model {model_name} deleted"}
-
-
-@router.get("/training/trocr/base-models")
-async def get_trocr_base_models():
-    """Get available TrOCR base models for fine-tuning."""
-    from services.trocr_training_service import trocr_training_service
-    return {"models": trocr_training_service.get_base_models()}
-
-
 @router.post("/training/regenerate")
 async def regenerate_training_data():
     """One-time migration: scan all curated texts and persist training data to disk.
@@ -1525,7 +1112,10 @@ async def get_text_transliterations(ben_id: int):
 @router.post("/getTransliterations")
 async def get_transliterations(background_tasks: BackgroundTasks, dto: CureDGetTransliterationsDto):
     logging.info(f"getTransliterations called with model: {dto.model}")
-    result = CuredHandler.get_transliterations(dto=dto, background_tasks=background_tasks)
+    try:
+        result = CuredHandler.get_transliterations(dto=dto, background_tasks=background_tasks)
+    except ValueError as e:  # missing API key, unknown model
+        raise HTTPException(status_code=400, detail=str(e))
     logging.info(f"getTransliterations returning {len(result.lines)} lines")
     return result
 

@@ -10,7 +10,7 @@ class BatchRecognitionRequest(BaseModel):
     destination_dataset_id: Optional[int] = None  # CuReD dataset (integer ID)
     destination_folder_path: Optional[str] = None  # Export to local folder
     export_images: bool = False  # Copy source images to export folder
-    model: str = "nemotron"
+    model: str = "kraken"
     prompt: str = "dictionary"
     custom_prompt: Optional[str] = None  # Raw prompt text (overrides prompt key)
     api_key: Optional[str] = None

@@ -84,7 +84,7 @@ The audit found that the backend already boots without the heavy ML libraries, b
    - Installer size has to be measured; it must stay under GitHub's 2 GB per-asset limit.
 2. **The build script builds the wrong spec.** `build-desktop.ps1` builds `cured-server.spec` into `dist/`, but Electron packages `dist-base/` (`electron/package.json:40-42`).
 3. **CuReD shows tools that aren't in the base:**
-   - The Training tab offers Qwen and TrOCR training. Both need torch + `transformers` (and TrOCR returns HTTP 500 when they're missing), and they're mislabelled "CPU" (`cured.component.ts:436-439`).
+   - The Training tab offers Qwen training, which needs torch + `transformers`, and it's mislabelled "CPU" (`cured.component.ts:436-439`).
    - The CuReD hub calls the YOLO API on every visit (`training.component.ts:261-262`). Once layout is part of CuReD this is expected, but it must not show error messages when no layout model exists yet.
 4. **The app can't tell which modules are installed.**
    - `installed: true` is hard-coded (`app/src/app/services/module.service.ts:16-20`).
@@ -95,13 +95,15 @@ The audit found that the backend already boots without the heavy ML libraries, b
 
 5. **Library and the dashboard link to CuRe and Layout without checking whether they're enabled.** The click then silently redirects home (`document-library.component.html:337,340`, `admin-panel.component.html:59`).
 6. **Fail cleanly when a dependency is missing:**
-   - `NEMOTRON_MODE=local` stops the server from starting without torch (`handlers/cured_handler.py:18-19`).
-   - CuRe and TrOCR OCR return HTTP 500 instead of "module not installed".
+   - CuRe OCR returns HTTP 500 instead of "module not installed".
+   - Done 2026-10-29: a missing API key or an unknown model name now returns HTTP 400 with the reason (it used to fall back to Nemotron's cloud API).
 7. **Clarify modules without an id.** Batch, Export/production, lemmatization and eBL are part of CuReD (base). Destitch's screen lives inside the Segmentation module but is core on the backend; decide which it is.
 8. **Split `server/requirements.txt`** into a base list and per-module lists.
 9. **Layout moves into CuReD.** Retire `yolo` as a separate optional module id (`module.service.ts`, `app_settings.py`, nav, route guard), or keep the old route as a redirect to the CuReD Layout tab.
 
-**Not in this release's base:** CuRe, line segmentation (Kraken pageseg UI), local Qwen / TrOCR / Nemotron training and inference. Keep the code, hide the UI unless the module is installed.
+**Not in this release's base:** CuRe, line segmentation (Kraken pageseg UI), local Qwen training and inference. Keep the code, hide the UI unless the module is installed.
+
+**Removed (2026-10-29):** Nemotron (cloud and local) and TrOCR, in the backend and the UI. The code is in git history (commit 77503ef) if Nemotron is wanted again later.
 
 ## 4. Open decisions
 
@@ -117,7 +119,7 @@ The audit found that the backend already boots without the heavy ML libraries, b
 2. Commit the Kraken 7.1 upgrade.
 3. Base spec with Kraken + CPU torch + Ultralytics; fix the build script; build and measure installer size; boot-test.
 4. Measure CPU training time (Kraken tiny, YOLO26n).
-5. UI gating: hide Qwen/TrOCR, gate YOLO calls and links, report installed modules.
+5. UI gating: hide Qwen, gate YOLO calls and links, report installed modules. (Nemotron and TrOCR were removed outright.)
 6. Ollama: capability-based model discovery.
 7. Cloud APIs: live model catalog in CuReD.
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.
@@ -133,14 +135,14 @@ Layout no longer gets its own page, so its functions move into CuReD. At the sam
 - **Top navigation:** CuReD · CuRe · Layout · Segmentation · Library · Settings · About.
 - **Dashboard (`/`, "Admin Panel"):** user activity, system statistics, recent actions, model management, quick access (links to CuReD and Layout).
 - **CuReD hub (`/cured`):** tabs Datasets · Models · Training · Batch · Export.
-  - **Training engines:** Kraken · Qwen · TrOCR.
+  - **Training engines:** Kraken · Qwen (TrOCR removed 2026-10-29).
 - **CuReD page editor:**
   - **OCR model menu:**
     - Pre-trained (Kraken models)
-    - "CPU" (Kraken, Qwen LoRA, TrOCR)
-    - "Local GPU" (fixed list of Ollama models + Nemotron local)
+    - "CPU" (Kraken, Qwen LoRA)
+    - "Local GPU" (fixed list of Ollama models)
     - "Ollama Cloud" (Qwen3-VL 235B, 235B Thinking)
-    - "API" (Nemotron, GPT-4 Vision, Claude, Gemini, Grok)
+    - "API" (GPT-4 Vision, Claude, Gemini, Grok)
   - **Line boxes:** None · Estimate · Predict (Kraken).
 - **Layout page (`/yolo-training`):** datasets, annotation, training, models, predict + extract snippets → Library.
 
@@ -152,8 +154,8 @@ Layout no longer gets its own page, so its functions move into CuReD. At the sam
   - **Region selection:** add "Layout (YOLO)": detect regions on page load, click a region to OCR it.
   - **Ollama:** replace the fixed list with all installed vision models + free-text model name; suggested models only as "how to pull" hints.
   - **API:** live model lists instead of hard-coded names.
-  - **Remove** Qwen LoRA, TrOCR and Nemotron local from the menu (unless a local-model module is installed). Fix the "CPU" / "Local GPU" labels.
-- **CuReD hub, Training tab:** Kraken only in the base (Qwen and TrOCR hidden).
+  - **Remove** Qwen LoRA from the menu (unless a local-model module is installed); Nemotron and TrOCR are already gone. Fix the "CPU" / "Local GPU" labels.
+- **CuReD hub, Training tab:** Kraken only in the base (Qwen hidden).
 - **Dashboard and Library:** remove or gate links to Layout/CuRe.
 
 ### Dashboard (new design)
