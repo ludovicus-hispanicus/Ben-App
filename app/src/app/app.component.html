@@ -30,12 +30,6 @@
 
     <!-- Dynamic toolbar area -->
     <div class="navbar-toolbar" *ngIf="toolbarState$ | async as state">
-      <!-- Back button (its destination is in the tooltip; the breadcrumb shows the path) -->
-      <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()"
-              [matTooltip]="(state.backLabel ? 'Back to ' + state.backLabel : 'Back') + (isDesktop ? ' (Alt+←)' : '')">
-        <mat-icon>arrow_back</mat-icon>
-      </button>
-
       <!-- Message -->
       <span *ngIf="state.message" class="toolbar-message">{{state.message}}</span>
 
@@ -55,14 +49,20 @@
         <span>{{btn.label}}</span>
       </button>
 
-      <!-- Breadcrumb trail (right end of the bar, next to Settings / About) -->
-      <nav *ngIf="state.breadcrumbs?.length" class="breadcrumbs" aria-label="Breadcrumb">
-        <ng-container *ngFor="let crumb of state.breadcrumbs; let last = last">
-          <button *ngIf="crumb.action && !last; else currentCrumb" class="crumb crumb-link" (click)="crumb.action()">{{ crumb.label }}</button>
-          <ng-template #currentCrumb><span class="crumb crumb-current">{{ crumb.label }}</span></ng-template>
-          <mat-icon *ngIf="!last" class="crumb-sep">chevron_right</mat-icon>
-        </ng-container>
-      </nav>
+      <!-- Back button + path, right edge aligned with the page's middle column -->
+      <div *ngIf="state.backAction || state.breadcrumbs?.length" class="nav-trail" [style.margin-right.px]="trailOffset">
+        <button *ngIf="state.backAction" class="toolbar-btn toolbar-btn-back" (click)="state.backAction()"
+                [matTooltip]="(state.backLabel ? 'Back to ' + state.backLabel : 'Back') + (isDesktop ? ' (Alt+←)' : '')">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <nav *ngIf="state.breadcrumbs?.length" class="breadcrumbs" aria-label="Breadcrumb">
+          <ng-container *ngFor="let crumb of state.breadcrumbs; let last = last">
+            <button *ngIf="crumb.action && !last; else currentCrumb" class="crumb crumb-link" (click)="crumb.action()">{{ crumb.label }}</button>
+            <ng-template #currentCrumb><span class="crumb crumb-current">{{ crumb.label }}</span></ng-template>
+            <mat-icon *ngIf="!last" class="crumb-sep">chevron_right</mat-icon>
+          </ng-container>
+        </nav>
+      </div>
     </div>
 
     <ul class="navbar-nav ml-auto" style="margin-right: 16px;">

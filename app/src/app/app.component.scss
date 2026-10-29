@@ -106,19 +106,28 @@
   .toolbar-btn-back {
     padding: 0.3em 0.5em;
     white-space: nowrap;
+    flex-shrink: 0;
 
     mat-icon {
       margin: 0;
     }
   }
 
-  // Path at the right end of the bar: monospace, solid colours (no transparency)
+  // Back button + path; its right margin is set in AppComponent.alignTrail()
+  .nav-trail {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  // Path: monospace, solid colours (no transparency)
   .breadcrumbs {
     display: flex;
     align-items: center;
     min-width: 0;
     overflow: hidden;
-    margin-left: 0.5em;
     padding: 0.25em 0.6em;
     border-radius: 4px;
     background-color: #0b2545;
