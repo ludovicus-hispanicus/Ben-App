@@ -1008,18 +1008,33 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       if (this.suppressPopState) {
         return;
       }
-      const urlPath = (event.url || '').split('?')[0];
-      const targetStage = this.stageFromPath(urlPath);
-      if (targetStage < this.stage) {
-        // Browser already changed the URL, so use replaceUrl mode to avoid pushing duplicates
+      if (this.linkedMode) {
+        if (this.stage > 0) {
+          this.goBack(true);  // the browser already changed the URL, so goBack replaces it
+        }
+        return;
+      }
+      // A different URL than the router's is the router's to handle (handleQueryParams
+      // follows). The same URL it skips: the steps of a new OCR share one URL, and a
+      // save sets the text's URL without the router.
+      const target = this.router.parseUrl(event.url || '/cured');
+      if (this.router.serializeUrl(target) !== this.router.url) {
+        return;
+      }
+      if (!this.isLoadedFromServer && this.stage > 0) {
         this.goBack(true);
+      } else if (this.isLoadedFromServer && this.stage > 0) {
+        const q = target.queryParams;
+        if (+q['textId'] === this.textId && +q['transId'] === this.transliterationId) {
+          return;  // already showing it (e.g. the router restoring history after "Stay")
+        }
+        if (!this.unsavedChanges.confirmDiscard()) {
+          this.updateUrl();  // stay: put the text's URL back
+          return;
+        }
+        this.handleQueryParams(target.queryParams);
       }
     });
-  }
-
-  private stageFromPath(urlPath: string): number {
-    // CuReD is now embedded at /cured — all stages use the same path
-    return 0;
   }
 
   /**
@@ -1129,18 +1144,67 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       }
       this.loadDatasets();
     } else {
-      // Dashboard
+      // Dashboard: a dataset's text list (?dataset=…), else the start page with all datasets
       this.returnTo = this.returnLabel = null;
-      // "Back" from a text returns to its folder; any other way here (the CuReD
-      // link in the header, a fresh start) shows the start page with all datasets.
-      if (!this.keepDatasetOnReturn && this.selectedDataset) {
+      const datasetParam = params['dataset'];
+      if (!datasetParam && this.selectedDataset) {
         this.backToDatasets();
       }
-      this.keepDatasetOnReturn = false;
       this.resetToCleanState();
       this.stage = 0;
       this.loadDatasets();
+      if (datasetParam) {
+        this.showDatasetFromParam(datasetParam);
+      }
     }
+  }
+
+  /** URL value for a dataset ('unassigned' for texts without one). */
+  private datasetKey(dataset: DatasetPreview): string {
+    return dataset.dataset_id === -1 ? 'unassigned' : String(dataset.dataset_id);
+  }
+
+  /** Open a dataset's text list as its own page, so the browser's back returns here. */
+  enterDataset(dataset: DatasetPreview | null): void {
+    const key = dataset ? this.datasetKey(dataset) : 'unassigned';
+    this.router.navigate(['/cured'], { queryParams: { dataset: key } }).then(done => {
+      if (done === null) {
+        // The router believed it was already there (the URL was set without it)
+        this.location.go(`/cured?dataset=${key}`);
+        this.handleQueryParams({ dataset: key });
+      }
+    });
+  }
+
+  /** Close the text list: the CuReD start page. */
+  leaveDataset(): void {
+    this.router.navigate(['/cured']).then(done => {
+      if (done === null) {
+        this.location.go('/cured');
+        this.handleQueryParams({});
+      }
+    });
+  }
+
+  private showDatasetFromParam(key: string): void {
+    if (key === 'unassigned') {
+      this.loadUnassignedTexts();
+      return;
+    }
+    const id = +key;
+    const known = this.datasets?.find(d => d.dataset_id === id)
+      || (this.selectedDataset?.dataset_id === id ? this.selectedDataset : null);
+    if (known) {
+      this.openDataset(known);
+      return;
+    }
+    this.datasetService.getBreadcrumb(id).subscribe(crumbs => {
+      const dataset = crumbs?.[crumbs.length - 1];
+      // Still on this dataset's page?
+      if (dataset && this.route.snapshot.queryParams['dataset'] === key) {
+        this.openDataset(dataset);
+      }
+    });
   }
 
   /**
@@ -1186,6 +1250,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       if (this.linkedLabel) {
         params.set('linkedLabel', this.linkedLabel);
       }
+    } else if (this.selectedDataset && !this.showDatasetList) {
+      // A new OCR started inside a dataset stays on that dataset's page
+      params.set('dataset', this.datasetKey(this.selectedDataset));
     }
 
     const qs = params.toString();
@@ -1197,6 +1264,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     // history entries the user has to back through to escape the flow.
     if (this.linkedMode) {
       replace = true;
+    }
+    // A saved text already has its history entry; a second one would make the
+    // browser's back land on the same text. (The steps of a new OCR share one URL
+    // and do push, so back steps through them.)
+    if (!replace && this.isLoadedFromServer && this.location.path(true) === path) {
+      return;
     }
 
     this.suppressPopState = true;
@@ -2427,8 +2500,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // ── Navigation (top-bar back button + breadcrumb) ──────────────────
 
   private navSignature: string | null = null;
-  // Set by "back to folder" so the next visit to /cured keeps the dataset open
-  private keepDatasetOnReturn = false;
 
   /** Short name of the open text for the breadcrumb. */
   get currentTextLabel(): string {
@@ -2469,8 +2540,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     if (this.stage === 0) {
       if (this.selectedDataset && !this.showDatasetList) {
         this.toolbarService.setNavigation(
-          { label: 'Datasets', action: () => this.backToDatasets() },
-          [{ label: 'CuReD', action: () => this.backToDatasets() }, { label: datasetName }]);
+          { label: 'Datasets', action: () => this.leaveDataset() },
+          [{ label: 'CuReD', action: () => this.leaveDataset() }, { label: datasetName }]);
       } else {
         this.toolbarService.setNavigation(undefined, []);  // top level
       }
@@ -2526,16 +2597,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.showDatasetTexts();
   }
 
-  /** Go to the CuReD start screen showing the current dataset's text list. */
+  /** Go to the current dataset's text list (the start page if there is none). */
   private showDatasetTexts(): void {
-    this.keepDatasetOnReturn = true;
-    this.router.navigate(['/cured']).then(() => {
-      this.keepDatasetOnReturn = false;  // in case the navigation did not happen
-      // A text opened directly (link, reload) knows its dataset but never opened its list
-      if (this.selectedDataset && this.showDatasetList) {
-        this.openDataset(this.selectedDataset);
-      }
-    });
+    if (this.selectedDataset) {
+      this.enterDataset(this.selectedDataset);
+    } else {
+      this.leaveDataset();
+    }
   }
 
   /** Breadcrumb: the open dataset's text list. */
@@ -2553,12 +2621,10 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   private goToCuredHome(): void {
     if (!this.unsavedChanges.confirmDiscard()) return;
     this.returnTo = this.returnLabel = null;
-    if (this.isLoadedFromServer) {
-      this.router.navigate(['/cured']);
-    } else {
+    if (!this.isLoadedFromServer) {
       this.unwindToStart();
     }
-    this.backToDatasets();
+    this.leaveDataset();
   }
 
   /** Step a new (unsaved) OCR back to the start screen, reusing goBack's cleanup per stage. */
@@ -3602,14 +3668,16 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     return safe.replace(regex, '<mark>$1</mark>');
   }
 
-  openListItem(item: TextPreview) {
+  /** Open a text. Stepping between texts (replaceUrl) keeps one history entry, so back leads to the folder. */
+  openListItem(item: TextPreview, replaceUrl = false) {
     this.textListNavActive = true;
     if (item.latest_transliteration_id) {
       this.router.navigate(['/cured'], {
         queryParams: {
           textId: item.text_id,
           transId: item.latest_transliteration_id
-        }
+        },
+        replaceUrl
       });
     } else {
       this.curedService.getTextTransliterations(item.text_id).subscribe(
@@ -3620,17 +3688,20 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
               queryParams: {
                 textId: item.text_id,
                 transId: latest.transliteration_id
-              }
+              },
+              replaceUrl
             });
           } else {
             this.router.navigate(['/cured'], {
-              queryParams: { textId: item.text_id }
+              queryParams: { textId: item.text_id },
+              replaceUrl
             });
           }
         },
         () => {
           this.router.navigate(['/cured'], {
-            queryParams: { textId: item.text_id }
+            queryParams: { textId: item.text_id },
+            replaceUrl
           });
         }
       );
@@ -3642,7 +3713,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.hasUnsavedChanges = false;
     const idx = this.currentTextListIndex;
     if (idx > 0) {
-      this.openListItem(this.filteredTexts[idx - 1]);
+      this.openListItem(this.filteredTexts[idx - 1], true);
     }
   }
 
@@ -3651,7 +3722,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.hasUnsavedChanges = false;
     const idx = this.currentTextListIndex;
     if (idx >= 0 && idx < this.filteredTexts.length - 1) {
-      this.openListItem(this.filteredTexts[idx + 1]);
+      this.openListItem(this.filteredTexts[idx + 1], true);
     }
   }
 
@@ -3661,7 +3732,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.hasUnsavedChanges = false;
     const item = this.filteredTexts.find(t => t.text_id === textId);
     if (item) {
-      this.openListItem(item);
+      this.openListItem(item, true);
     }
   }
 

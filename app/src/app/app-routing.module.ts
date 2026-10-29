@@ -107,4 +107,11 @@ const routes: Routes = [
   imports: [RouterModule.forRoot(routes)],
   exports: [RouterModule]
 })
-export class AppRoutingModule { }
+export class AppRoutingModule {
+  constructor(router: Router) {
+    // When the browser's back is cancelled ("Stay" on unsaved changes), also restore
+    // the history position, so the next back still goes one step. Angular 12.1 has
+    // this on the Router but not yet in its typings or ExtraOptions.
+    (router as any).canceledNavigationResolution = 'computed';
+  }
+}

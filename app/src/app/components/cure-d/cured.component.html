@@ -186,7 +186,7 @@
              class="dataset-card"
              [class.selected]="isDatasetSelected(dataset) || (selectedDatasets.size === 0 && selectedDatasetCard?.dataset_id === dataset.dataset_id)"
              (click)="selectDatasetCard(dataset, $event)"
-             (dblclick)="openDataset(dataset)"
+             (dblclick)="enterDataset(dataset)"
              (contextmenu)="onDatasetContextMenu(dataset, $event)">
           <mat-icon class="dataset-icon">folder</mat-icon>
           <mat-icon *ngIf="dataset.curated_count > 0 && dataset.curated_count >= dataset.text_count"
@@ -209,7 +209,7 @@
         </div>
 
         <!-- Unassigned card -->
-        <div class="dataset-card unassigned-card" (click)="loadUnassignedTexts()">
+        <div class="dataset-card unassigned-card" (click)="enterDataset(null)">
           <mat-icon class="dataset-icon unassigned-icon">folder_off</mat-icon>
           <div class="dataset-info">
             <span class="dataset-name">Unassigned</span>
@@ -230,7 +230,7 @@
              class="dataset-details-row"
              [class.selected]="isDatasetSelected(dataset) || (selectedDatasets.size === 0 && selectedDatasetCard?.dataset_id === dataset.dataset_id)"
              (click)="selectDatasetCard(dataset, $event)"
-             (dblclick)="openDataset(dataset)"
+             (dblclick)="enterDataset(dataset)"
              (contextmenu)="onDatasetContextMenu(dataset, $event)">
           <span class="ds-col-icon">
             <mat-icon class="dataset-icon">folder</mat-icon>
@@ -261,7 +261,7 @@
         </div>
 
         <!-- Unassigned row -->
-        <div class="dataset-details-row unassigned-row" (click)="loadUnassignedTexts()">
+        <div class="dataset-details-row unassigned-row" (click)="enterDataset(null)">
           <span class="ds-col-icon">
             <mat-icon class="dataset-icon unassigned-icon">folder_off</mat-icon>
           </span>
@@ -499,10 +499,10 @@
             <div class="details-icon details-col-icon">
               <mat-icon>description</mat-icon>
             </div>
-            <span class="details-name details-col-name clickable" (click)="$event.stopPropagation()" (dblclick)="openIdentifierDialog(item, $event)" matTooltip="Double-click to edit identifiers">
+            <span class="details-name details-col-name">
               <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
             </span>
-            <span class="details-part details-col-part clickable" (click)="$event.stopPropagation()" (dblclick)="openPartDialog(item, $event)" matTooltip="Double-click to edit part">{{ item.part || '—' }}</span>
+            <span class="details-part details-col-part">{{ item.part || '—' }}</span>
             <span class="details-date details-col-date">{{ item.last_modified | date:'d MMM yy, HH:mm' }}</span>
             <span class="details-benid details-col-benid">{{ item.text_id }}</span>
             <span class="details-label details-col-label" (click)="openLabelDialog(item, $event)">
@@ -551,6 +551,20 @@
                 <mat-divider></mat-divider>
                 <button mat-menu-item (click)="exportSingleTextCured(item, $event)">
                   <mat-icon>dataset</mat-icon> CuReD zip
+                </button>
+              </mat-menu>
+              <button mat-icon-button [matMenuTriggerFor]="rowEdit" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()" matTooltip="Edit details">
+                <mat-icon>settings</mat-icon>
+              </button>
+              <mat-menu #rowEdit="matMenu">
+                <button mat-menu-item (click)="openIdentifierDialog(item, $event)">
+                  <mat-icon>badge</mat-icon> Identifiers…
+                </button>
+                <button mat-menu-item (click)="openPartDialog(item, $event)">
+                  <mat-icon>splitscreen</mat-icon> Part…
+                </button>
+                <button mat-menu-item (click)="openLabelDialog(item, $event)">
+                  <mat-icon>label</mat-icon> Labels…
                 </button>
               </mat-menu>
               <button mat-icon-button (click)="moveListItem(item, $event)" matTooltip="Move to dataset">
