@@ -1,9 +1,24 @@
 """
-Wrapper script for running ketos with patches for known bugs:
-1. Rich library: 'pop from empty list' error in subprocess environments
-2. Kraken lineest: inhomogeneous array in dewarping (numpy compatibility)
+Wrapper script for running ketos (kraken 7.x; also tolerant of kraken 6.x)
+with patches for known problems when it runs as a BEn subprocess:
+1. Console encoding: on Windows the subprocess stdout/stderr default to the
+   ANSI code page; ketos prints training alphabets (subscript digits, ḫ, ...)
+   through rich, which then dies with UnicodeEncodeError. Force UTF-8.
+2. Rich library: 'pop from empty list' error in subprocess environments.
+3. Kraken lineest: inhomogeneous array in dewarping (numpy compatibility)
+   for legacy VGSL models.
 """
 import sys
+
+
+def _force_utf8_streams():
+    """Reconfigure stdout/stderr to UTF-8 so non-Latin-1 output never crashes."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 
 # Patch rich before any imports that might use it
 def _patch_rich():
@@ -23,6 +38,7 @@ def _patch_rich():
         Console.clear_live = _safe_clear_live
     except ImportError:
         pass  # rich not installed
+
 
 def _patch_lineest():
     """
@@ -60,13 +76,15 @@ def _patch_lineest():
             return dewarped
 
         CenterNormalizer.dewarp = _safe_dewarp
-    except ImportError:
-        pass  # kraken not installed
+    except (ImportError, AttributeError):
+        pass  # kraken not installed or lineest layout changed
 
+
+_force_utf8_streams()
 _patch_rich()
 _patch_lineest()
 
-# Now run ketos CLI
+# Now run ketos CLI (kraken 7: kraken.ketos.cli is the click group; same import on 6.x)
 if __name__ == "__main__":
     from kraken.ketos import cli
     sys.exit(cli())

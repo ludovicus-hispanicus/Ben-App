@@ -889,19 +889,26 @@ async def get_kraken_base_models():
     # Return existing models that can be used as base for fine-tuning
     models = kraken_training_service.get_models()
 
+    active_name = kraken_training_service.get_active_model_name()
     base_models = [
         {
+            # id kept for frontend compatibility: with no explicit base model the
+            # service fine-tunes the active model (a fresh PP-OCRv6 only when none exists)
             "id": "from_scratch",
-            "name": "Train from scratch",
-            "description": "No base model - train a new model"
+            "name": f"Active model ({active_name})" if active_name else "New PP-OCRv6 model",
+            "description": (f"Fine-tune the active model {active_name} (default)" if active_name
+                            else "No base model - train a new PP-OCRv6 recognizer")
         }
     ]
 
     for model in models:
+        fmt = model.get("format", "")
+        arch = model.get("arch", "")
+        tag = " / ".join(t for t in (arch, "legacy CoreML" if fmt == "coreml" else fmt) if t)
         base_models.append({
             "id": model["path"],
             "name": model["name"],
-            "description": f"Fine-tune from {model['name']}"
+            "description": f"Fine-tune from {model['name']}" + (f" ({tag})" if tag else "")
         })
 
     return {"models": base_models}

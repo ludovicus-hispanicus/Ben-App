@@ -22,7 +22,12 @@ pyopenssl>=23.0.0
 
 # OCR and image processing
 PyMuPDF>=1.23.0  # PDF to PNG conversion (standalone, no Poppler needed)
-kraken>=6.0.0
+kraken>=7.1.1,<8  # 7.x: safetensors models, PP-OCRv6 recognizers, YAML ketos experiments
+# SECURITY: pytorch-lightning 2.6.2 / 2.6.3 shipped credential-stealing malware.
+# kraken 7 pins `lightning==2.6.1`, but that package does NOT pin its own
+# `pytorch-lightning` dependency, so pin it here explicitly. Do not relax.
+pytorch-lightning==2.6.1
+lightning==2.6.1
 opencv-python-headless
 python-dotenv
 httpx>=0.24.0

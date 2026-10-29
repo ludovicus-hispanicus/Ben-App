@@ -93,7 +93,7 @@ BEn-app/
 │   │   │   └── ocr_factory.py   # Client registry/factory
 │   │   ├── mongo/
 │   │   │   └── local_db_client.py  # JSON file-based DB
-│   │   ├── cured_models/         # Bundled Kraken .mlmodel files
+│   │   ├── cured_models/         # Bundled Kraken models (.safetensors; legacy .mlmodel still loadable)
 │   │   ├── ebl_atf_grammar/      # Lark grammar files for ATF parsing
 │   │   ├── schemas/              # XSD schemas for TEI validation
 │   │   ├── prompts/              # VLM prompt templates
@@ -353,7 +353,8 @@ User data is stored in: `%APPDATA%/cured-desktop/data/`
 - Windows process cleanup uses `taskkill /T /F` to kill the entire process tree
 
 ### OCR pipeline
-- Default: **Kraken OCR** (bundled `.mlmodel` files in `server/src/cured_models/`)
+- Default: **Kraken OCR** (kraken 7.x; bundled `.safetensors` models in `server/src/cured_models/`, legacy kraken-6 `.mlmodel` files load unchanged; `registry.json` + `active_model.txt` select the active model)
+- Kraken training runs `ketos --config <experiment.yml> train` via `services/ketos_wrapper.py`; the subprocess needs `PYTHONUTF8=1` and `TORCH_COMPILE_DISABLE=1` (set by `kraken_training_service.py`)
 - Optional: VLM-based OCR via cloud APIs (Anthropic, Google, NVIDIA, OpenAI) or local services (Ollama, vLLM)
 - Client selection: `server/src/clients/ocr_factory.py`
 - All VLM clients send a base64-encoded image + prompt and receive transliteration text back

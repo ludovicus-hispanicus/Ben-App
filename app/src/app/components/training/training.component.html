@@ -140,6 +140,10 @@
             <span class="label">Engine:</span>
             <span class="value">Kraken OCR</span>
           </div>
+          <div class="detail-row" *ngIf="selectedKrakenModel.format || selectedKrakenModel.arch">
+            <span class="label">Format:</span>
+            <span class="value">{{ selectedKrakenModel.format === 'coreml' ? 'legacy CoreML (.mlmodel)' : (selectedKrakenModel.format || '') }}<ng-container *ngIf="selectedKrakenModel.arch"> &middot; {{ selectedKrakenModel.arch === 'ppocrv6' ? 'PP-OCRv6' : selectedKrakenModel.arch }}</ng-container></span>
+          </div>
           <div class="detail-row" *ngIf="selectedKrakenModel.accuracy">
             <span class="label">Char Accuracy:</span>
             <span class="value">{{ (selectedKrakenModel.accuracy * 100).toFixed(2) }}%</span>

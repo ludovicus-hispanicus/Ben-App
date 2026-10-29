@@ -4,6 +4,8 @@
 import os
 import sys
 
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+
 src_dir = os.path.join(os.getcwd(), 'src')
 
 a = Analysis(
@@ -11,6 +13,12 @@ a = Analysis(
     pathex=[src_dir],
     binaries=[],
     datas=[
+        # Kraken 7 discovers its model/loader/trainer classes via entry points
+        # declared in the package metadata; without the dist-info, model
+        # loading fails with "No loader found".
+        *copy_metadata('kraken'),
+        *copy_metadata('lightning'),
+        *copy_metadata('pytorch_lightning'),
         # Grammar files (Lark parser)
         (os.path.join(src_dir, 'ebl_atf_grammar'), 'ebl_atf_grammar'),
         # XML schemas
@@ -51,14 +59,23 @@ a = Analysis(
         'torchvision',
         'torchvision.models',
         'ultralytics',
-        'kraken',
-        'kraken.lib',
-        'kraken.lib.train',
-        'kraken.lib.models',
-        'kraken.lib.dataset',
-        'kraken.lib.vgsl',
-        'kraken.lib.codec',
-        'kraken.lib.segmentation',
+        # Kraken 7.x: model classes, loaders, trainers and ketos subcommands
+        # are resolved through importlib.metadata entry points (groups
+        # kraken.models / kraken.loaders / kraken.lightning_modules /
+        # kraken.configs), so every submodule must be bundled AND the
+        # kraken dist-info metadata must be copied (see `datas` above).
+        *collect_submodules('kraken'),
+        'lightning',
+        'lightning.pytorch',
+        'lightning.fabric',
+        'pytorch_lightning',
+        'safetensors',
+        'safetensors.torch',
+        'coremltools',   # legacy .mlmodel loader (kraken <= 6 models)
+        'torchmetrics',
+        'threadpoolctl',
+        'htrmopo',
+        'yaml',          # ketos --config experiment files
         'sklearn',
         'sklearn.preprocessing',
         # Parsers

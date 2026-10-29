@@ -2,14 +2,27 @@
 Kraken OCR Training Service
 
 Handles training data export and model training for Kraken OCR.
-Supports both Kraken 5.x and 6.x versions.
+
+Targets kraken 7.x:
+  * training is driven by a YAML experiment file passed to
+    ``ketos --config <file> train`` (global options such as ``--device`` /
+    ``--precision`` go before the subcommand);
+  * ketos writes Lightning checkpoints (``checkpoint_{epoch}-{val_metric}.ckpt``)
+    into an output directory and converts the best one to a weights file
+    (``best_{score}.safetensors``) when it finishes; when BEn stops training
+    early it runs ``ketos convert`` on the best checkpoint itself;
+  * models are stored as ``.safetensors``; legacy CoreML ``.mlmodel`` files
+    (kraken <= 6) stay loadable and usable as fine-tuning bases.
+A few version checks keep the service functional on a kraken 6 install.
 """
 import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -20,12 +33,23 @@ from PIL import Image
 import base64
 import io
 
+from clients.kraken_client import MODEL_EXTENSIONS, find_model_file
+
 
 def get_kraken_version() -> Tuple[int, int, int]:
     """
-    Get the installed Kraken version.
-    Returns tuple (major, minor, patch) or (0, 0, 0) if unable to detect.
+    Get the installed Kraken version as (major, minor, patch), (0, 0, 0) if unknown.
+
+    Uses the package metadata of *this* interpreter first (the same one that
+    runs ketos through ketos_wrapper.py), falling back to the CLI.
     """
+    try:
+        from importlib.metadata import version
+        match = re.search(r'(\d+)\.(\d+)(?:\.(\d+))?', version("kraken"))
+        if match:
+            return (int(match.group(1)), int(match.group(2)), int(match.group(3) or 0))
+    except Exception:
+        pass
     try:
         result = subprocess.run(
             ["kraken", "--version"],
@@ -33,9 +57,8 @@ def get_kraken_version() -> Tuple[int, int, int]:
             text=True,
             timeout=10
         )
-        # Parse version from output like "kraken 5.2.9" or "6.0.3"
+        # Parse version from output like "kraken, version 7.1.1" or "kraken 5.2.9"
         output = result.stdout.strip() or result.stderr.strip()
-        import re
         match = re.search(r'(\d+)\.(\d+)\.(\d+)', output)
         if match:
             return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
@@ -46,6 +69,44 @@ def get_kraken_version() -> Tuple[int, int, int]:
 
 KRAKEN_VERSION = get_kraken_version()
 logging.info(f"Detected Kraken version: {KRAKEN_VERSION[0]}.{KRAKEN_VERSION[1]}.{KRAKEN_VERSION[2]}")
+
+# Weights format written by training. kraken 7 defaults to safetensors; older
+# versions only know CoreML.
+MODEL_EXT = ".safetensors" if KRAKEN_VERSION[0] >= 7 else ".mlmodel"
+
+
+def _python_executable() -> str:
+    """Interpreter used to run ketos: this process' interpreter (never a bare
+    ``python`` from PATH, which may be a different install), unless frozen."""
+    if getattr(sys, "frozen", False):
+        return "python"
+    return sys.executable
+
+
+def detect_model_arch(model_path: str) -> str:
+    """Best-effort recognition architecture family of a model file:
+    'ppocrv6' or 'vgsl' (kraken 7 metadata; CoreML files are always VGSL)."""
+    if not model_path:
+        return "vgsl"
+    if model_path.endswith(".mlmodel"):
+        return "vgsl"
+    try:
+        from kraken.models.convert import find_weights_archs
+        archs = find_weights_archs(model_path, task="recognition")
+        if archs:
+            return sorted(archs)[0]
+    except Exception as e:
+        logging.debug(f"Could not detect architecture of {model_path}: {e}")
+    try:
+        from safetensors import safe_open
+        with safe_open(model_path, framework="pt") as f:
+            meta = json.loads((f.metadata() or {}).get("kraken_meta", "{}"))
+        for entry in meta.values():
+            if isinstance(entry, dict) and "PPOCR" in str(entry.get("_model", "")):
+                return "ppocrv6"
+    except Exception:
+        pass
+    return "vgsl"
 
 
 class TrainingStatus(Enum):
@@ -218,6 +279,62 @@ class KrakenTrainingService:
         Path(self.TRAINING_DATA_DIR).mkdir(parents=True, exist_ok=True)
         Path(self.MODELS_DIR).mkdir(parents=True, exist_ok=True)
 
+    # ── Model path helpers ─────────────────────────────────────────────
+
+    def _model_file(self, model_name: str) -> Optional[str]:
+        """Path of an existing model by name (any supported format), or None."""
+        return find_model_file(self.MODELS_DIR, model_name)
+
+    def _resolve_device(self, device: str) -> str:
+        """Map the API device option ('auto' | 'cpu' | '<gpu index>') to a ketos device string."""
+        if device == "cpu":
+            return "cpu"
+        if device == "auto":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    return "cuda:0"
+            except ImportError:
+                pass
+            return "cpu"
+        return f"cuda:{device}"
+
+    def _ketos_base_command(self, device: Optional[str] = None, precision: Optional[str] = None) -> List[str]:
+        """``python ketos_wrapper.py [global options]`` — the prefix of every ketos invocation.
+
+        ketos_wrapper.py patches rich / lineest and forces UTF-8 output before
+        handing over to the ketos CLI.
+        """
+        wrapper_path = os.path.join(os.path.dirname(__file__), "ketos_wrapper.py")
+        cmd = [_python_executable(), wrapper_path]
+        if KRAKEN_VERSION[0] >= 7:
+            # kraken 7: device/precision are global options placed before the subcommand
+            if device:
+                cmd.extend(["--device", device])
+            if precision:
+                cmd.extend(["--precision", precision])
+        return cmd
+
+    def _training_env(self, resolved_device: Optional[str]) -> dict:
+        """Environment for the ketos subprocess."""
+        train_env = os.environ.copy()
+        train_env["TERM"] = "dumb"  # Disable fancy terminal features
+        train_env["NO_COLOR"] = "1"  # Disable color output
+        train_env["PYTHONUNBUFFERED"] = "1"  # Ensure unbuffered output
+        # ketos logs the training alphabet (subscript digits, ḫ, ...) through rich;
+        # with the Windows ANSI code page on a pipe that raises UnicodeEncodeError
+        # and aborts training. Force UTF-8 streams in the child interpreter.
+        train_env["PYTHONUTF8"] = "1"
+        train_env["PYTHONIOENCODING"] = "utf-8"
+        # kraken 7 wraps the PP-OCRv6 training forward pass in torch.compile,
+        # whose inductor backend needs Triton (unavailable on Windows / most
+        # CPU-only installs). Disabling compile makes it a transparent no-op.
+        train_env.setdefault("TORCH_COMPILE_DISABLE", "1")
+        # Kraken 6.x used an env var for device selection
+        if resolved_device and KRAKEN_VERSION[0] == 6:
+            train_env["KRAKEN_DEVICE"] = resolved_device
+        return train_env
+
     def _build_training_command(
         self,
         output_path: str,
@@ -226,110 +343,103 @@ class KrakenTrainingService:
         training_pattern: str,
         batch_size: int = 1,
         device: str = "auto",
-    ) -> List[str]:
+        training_manifest: Optional[str] = None,
+        checkpoint_dir: Optional[str] = None,
+        experiment_file: Optional[str] = None,
+    ) -> Tuple[List[str], Optional[str]]:
         """
-        Build ketos train command with version-aware flags.
-        Supports both Kraken 5.x and 6.x.
+        Build the ``ketos train`` command.
 
-        Based on Kraken documentation best practices:
-        - Use --augment for data augmentation (essential for small datasets)
-        - Use --workers for parallel data loading
-        - Use --resize union for fine-tuning (preserves base model weights)
-        - Use --precision bf16-mixed on GPU for speedup
+        kraken 7.x: all training options are written to a YAML experiment file
+        (``experiment_file``) and passed with ``ketos --config``; the training
+        images come from a manifest (``-t``). Checkpoints go to
+        ``checkpoint_dir`` and the best one is converted to ``output_path``.
 
-        Uses ketos_wrapper.py to patch rich library's clear_live() bug
-        that causes 'pop from empty list' error in subprocess environments.
+        kraken 5/6.x: legacy flag-based command writing ``output_path`` directly.
         """
-        # Use our wrapper script that patches rich before running ketos
-        # This fixes the 'IndexError: pop from empty list' bug in rich.Console.clear_live
-        wrapper_path = os.path.join(os.path.dirname(__file__), "ketos_wrapper.py")
-        cmd = ["python", wrapper_path, "train"]
+        resolved_device = self._resolve_device(device)
 
-        # Output path (same for both versions)
-        cmd.extend(["-o", output_path])
-
-        # Number of epochs (same for both versions)
-        cmd.extend(["-N", str(epochs)])
-
-        # Use fixed epochs for fine-tuning (early stopping compares against
-        # the base model's original accuracy which is measured on different data,
-        # so it always considers fine-tuned epochs as "worse")
-        # We implement our own early stopping with MIN_EPOCHS and PATIENCE
-        cmd.extend(["-q", "fixed"])
-
-        # Learning rate for fine-tuning (Kraken docs recommend 0.0001)
-        cmd.extend(["-r", "0.0001"])
-
-        # NOTE: --augment requires albumentations package which is not installed
-        # Skip augmentation for now - can be added later if albumentations is installed
-        # cmd.append("--augment")
-
-        # Note: --workers was removed in kraken 6.x
-
-        # Batch size
-        if batch_size > 1:
-            cmd.extend(["-B", str(batch_size)])
-
-        # Force binarization: base models are trained on grayscale (mode L) but
-        # our training images may be binary (mode 1). This ensures compatibility.
-        cmd.append("--force-binarization")
-
-        # Device selection
-        resolved_device = None
-        if device == "cpu":
-            resolved_device = "cpu"
-        elif device == "auto":
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    resolved_device = "cuda:0"
-            except ImportError:
-                pass
-            if not resolved_device:
-                resolved_device = "cpu"
-        else:
-            # Specific GPU index (e.g., "0", "1")
-            resolved_device = f"cuda:{device}"
-
-        # In kraken 6.x, device is set via KRAKEN_DEVICE env var (no CLI flag on ketos train)
-        # In kraken 5.x, use -d flag
-        if resolved_device and resolved_device != "cpu":
-            if KRAKEN_VERSION[0] >= 6:
-                logging.info(f"Using {resolved_device} via KRAKEN_DEVICE env var (Kraken {KRAKEN_VERSION[0]}.x)")
-            else:
-                cmd.extend(["-d", resolved_device])
-                logging.info(f"Using {resolved_device} (Kraken {KRAKEN_VERSION[0]}.x)")
-        else:
-            logging.info("Training on CPU")
-
-        # Add base model for fine-tuning if provided
-        # Use --resize union to preserve base model's learned character weights
-        # while adding output neurons for new characters in the training data.
-        # This avoids catastrophic forgetting when training data has characters
-        # the base model doesn't know (e.g. SAA model: 105 chars, data: 127 chars).
+        # Base model: explicit path, else the active model (fine-tuning keeps the
+        # learned weights; --resize union adds output neurons for new characters
+        # instead of discarding the codec).
         logging.info(f"[_build_training_command] base_model={base_model}")
-        logging.info(f"[_build_training_command] base_model exists: {base_model and os.path.exists(base_model)}")
         logging.info(f"[_build_training_command] MODELS_DIR={self.MODELS_DIR}")
+        resolved_base = None
         if base_model and os.path.exists(base_model):
+            resolved_base = base_model
             logging.info(f"[_build_training_command] Using provided base_model: {base_model}")
-            cmd.extend(["-i", base_model])
-            cmd.extend(["--resize", "union"])
         else:
-            # Use active model as base for fine-tuning
             active_name = self.get_active_model_name()
-            if active_name:
-                active_path = f"{self.MODELS_DIR}/{active_name}.mlmodel"
-                if os.path.exists(active_path):
-                    logging.info(f"[_build_training_command] Using active model as base: {active_name}")
-                    cmd.extend(["-i", active_path])
-                    cmd.extend(["--resize", "union"])
+            active_path = self._model_file(active_name) if active_name else None
+            if active_path:
+                resolved_base = active_path
+                logging.info(f"[_build_training_command] Using active model as base: {active_name}")
 
-        # Add training data pattern
-        cmd.append(training_pattern)
+        if KRAKEN_VERSION[0] >= 7:
+            arch = detect_model_arch(resolved_base) if resolved_base else "ppocrv6"
+            precision = "bf16-mixed" if resolved_device != "cpu" else None
 
-        logging.info(f"Built training command for Kraken {KRAKEN_VERSION[0]}.{KRAKEN_VERSION[1]}.{KRAKEN_VERSION[2]}")
+            train_cfg = {
+                "checkpoint_path": str(checkpoint_dir).replace("\\", "/"),
+                "weights_format": "safetensors",
+                "format_type": "path",
+                "epochs": int(epochs),
+                # Fixed epochs: BEn implements its own early stopping (MIN_EPOCHS /
+                # PATIENCE) on the parsed validation accuracy.
+                "quit": "fixed",
+                "batch_size": int(batch_size),
+                "augment": True,
+            }
+            if resolved_base:
+                train_cfg["load"] = str(resolved_base).replace("\\", "/")
+                train_cfg["resize"] = "union"
+            else:
+                train_cfg["arch"] = "ppocrv6"
+                train_cfg["variant"] = "small"
+
+            if arch == "ppocrv6":
+                # PP-OCRv6 defaults (AdamW+Muon, cosine schedule) tuned for the
+                # base models; short warmup and a cosine horizon matching the run.
+                train_cfg["warmup"] = 100
+                train_cfg["cos_t_max"] = int(epochs)
+            else:
+                # Legacy VGSL models: conservative fine-tuning rate (Kraken docs: 1e-4)
+                train_cfg["lrate"] = 0.0001
+
+            experiment = {
+                "device": resolved_device,
+                # One data-loading worker: on Windows every worker is a full
+                # torch+CUDA process (GBs of commit); more workers have crashed
+                # runs with "DataLoader worker exited unexpectedly" under load.
+                "num_workers": 1,
+                "train": train_cfg,
+            }
+            if precision:
+                experiment["precision"] = precision
+
+            with open(experiment_file, "w", encoding="utf-8") as f:
+                try:
+                    import yaml
+                    yaml.safe_dump(experiment, f, sort_keys=False, allow_unicode=True)
+                except ImportError:
+                    json.dump(experiment, f, indent=2)  # YAML is a JSON superset
+
+            cmd = self._ketos_base_command()
+            cmd.extend(["--config", experiment_file, "train", "-t", training_manifest])
+            logging.info(f"Experiment file {experiment_file}: {json.dumps(experiment)}")
+        else:
+            cmd = self._ketos_base_command() + ["train", "-o", output_path, "-N", str(epochs), "-q", "fixed", "-r", "0.0001"]
+            if batch_size > 1:
+                cmd.extend(["-B", str(batch_size)])
+            cmd.append("--force-binarization")
+            if resolved_device != "cpu" and KRAKEN_VERSION[0] < 6:
+                cmd.extend(["-d", resolved_device])
+            if resolved_base:
+                cmd.extend(["-i", resolved_base, "--resize", "union"])
+            cmd.append(training_pattern)
+
+        logging.info(f"Training on {resolved_device} (Kraken {KRAKEN_VERSION[0]}.{KRAKEN_VERSION[1]}.{KRAKEN_VERSION[2]})")
         logging.info(f"Training command: {' '.join(cmd)}")
-
         return cmd, resolved_device
 
     def export_training_data(self, texts_handler, dataset_id: int = None, dataset_ids: list = None) -> dict:
@@ -541,6 +651,63 @@ class KrakenTrainingService:
             logging.info(f"Normalized {resized} images to height={target_h}px in {training_dir}")
         return resized
 
+    # ── Output handling (kraken 7) ─────────────────────────────────────
+
+    @staticmethod
+    def _checkpoint_score(path: Path) -> float:
+        """val_metric encoded in a ketos checkpoint name ``checkpoint_{epoch:02d}-{val_metric:.4f}.ckpt``."""
+        m = re.search(r"checkpoint_\d+-(-?\d+\.\d+)\.ckpt$", path.name)
+        return float(m.group(1)) if m else -1.0
+
+    def _collect_trained_weights(self, checkpoint_dir: Path, output_path: Path) -> bool:
+        """Move the trained weights out of the ketos checkpoint directory to ``output_path``.
+
+        ketos converts the best checkpoint to ``best_{score}.safetensors`` on normal
+        completion. If BEn terminated training early (custom early stopping) no
+        weights file exists yet, so convert the best-scoring checkpoint with
+        ``ketos convert``. Returns True when ``output_path`` exists afterwards.
+        """
+        if not checkpoint_dir.exists():
+            return output_path.exists()
+
+        weights = sorted(checkpoint_dir.glob("best_*.safetensors"), key=lambda p: p.stat().st_mtime)
+        if not weights:
+            ckpts = [p for p in checkpoint_dir.glob("checkpoint_*.ckpt") if self._checkpoint_score(p) >= 0]
+            if ckpts:
+                best = max(ckpts, key=self._checkpoint_score)
+                target = checkpoint_dir / f"best_{self._checkpoint_score(best):.4f}.safetensors"
+                cmd = self._ketos_base_command() + ["convert", "-o", str(target), str(best)]
+                logging.info(f"Converting best checkpoint {best.name} (val_metric={self._checkpoint_score(best):.4f}) to weights: {' '.join(cmd)}")
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                                            env=self._training_env(None))
+                    if result.returncode != 0:
+                        logging.error(f"ketos convert failed ({result.returncode}): {result.stdout[-2000:]} {result.stderr[-2000:]}")
+                except Exception as e:
+                    logging.error(f"ketos convert failed: {e}")
+                weights = sorted(checkpoint_dir.glob("best_*.safetensors"), key=lambda p: p.stat().st_mtime)
+
+        if weights:
+            shutil.move(str(weights[-1]), str(output_path))
+            logging.info(f"Saved trained model {weights[-1].name} as {output_path}")
+
+        shutil.rmtree(str(checkpoint_dir), ignore_errors=True)
+        return output_path.exists()
+
+    def _cleanup_checkpoint_dir(self, model_name: Optional[str]):
+        """Remove the intermediate checkpoint directory of a run (kraken 7) and any
+        kraken 6-style ``{model}.mlmodel_N`` intermediates."""
+        if not model_name:
+            return
+        ckpt_dir = Path(self.MODELS_DIR) / f"_train_{model_name}"
+        if ckpt_dir.exists():
+            shutil.rmtree(str(ckpt_dir), ignore_errors=True)
+            logging.info(f"Cleaned up checkpoint directory: {ckpt_dir.name}")
+        for f in Path(self.MODELS_DIR).iterdir():
+            if f.is_file() and f.name.startswith(f"{model_name}.mlmodel_"):
+                f.unlink()
+                logging.info(f"Cleaned up intermediate model: {f.name}")
+
     async def start_training(
         self,
         texts_handler,
@@ -606,7 +773,8 @@ class KrakenTrainingService:
                 shutil.rmtree(str(norm_dir))
             norm_dir.mkdir(parents=True)
             for f in Path(training_dir).glob("*"):
-                shutil.copy2(str(f), str(norm_dir / f.name))
+                if f.is_file():  # skip per-dataset subdirs when training on all data
+                    shutil.copy2(str(f), str(norm_dir / f.name))
 
             # Normalize image heights to match base model's expected scale
             resized_count = self._normalize_image_heights(str(norm_dir))
@@ -630,12 +798,20 @@ class KrakenTrainingService:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 model_name = f"custom_model_{timestamp}"
 
-            output_path = Path(self.MODELS_DIR) / f"{model_name}.mlmodel"
-
-            # training_dir is already set to the normalized copy above
+            output_path = Path(self.MODELS_DIR) / f"{model_name}{MODEL_EXT}"
+            # kraken 7: checkpoints + experiment file live in a per-run directory
+            checkpoint_dir = Path(self.MODELS_DIR) / f"_train_{model_name}"
+            if checkpoint_dir.exists():
+                shutil.rmtree(str(checkpoint_dir), ignore_errors=True)
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            experiment_file = str(checkpoint_dir / "experiment.yml")
+            training_manifest = str(norm_dir / "_train_manifest.txt")
+            with open(training_manifest, "w", encoding="utf-8") as mf:
+                for png in sorted(norm_dir.glob("*.png")):
+                    mf.write(str(png.resolve()) + "\n")
 
             # Build ketos train command - version aware
-            # For PNG + .gt.txt pairs, use default "path" format (no -f flag)
+            # For PNG + .gt.txt pairs, use "path" format
             cmd, resolved_device = self._build_training_command(
                 output_path=str(output_path),
                 epochs=epochs,
@@ -643,6 +819,9 @@ class KrakenTrainingService:
                 training_pattern=f"{training_dir}/*.png",
                 batch_size=batch_size,
                 device=device,
+                training_manifest=training_manifest,
+                checkpoint_dir=str(checkpoint_dir),
+                experiment_file=experiment_file,
             )
 
             logging.info(f"Starting training with command: {' '.join(cmd)}")
@@ -654,14 +833,7 @@ class KrakenTrainingService:
                 await progress_callback(self.progress)
 
             # Run training
-            # Set environment variables to disable rich progress bar (causes IndexError in subprocess)
-            train_env = os.environ.copy()
-            train_env["TERM"] = "dumb"  # Disable fancy terminal features
-            train_env["NO_COLOR"] = "1"  # Disable color output
-            train_env["PYTHONUNBUFFERED"] = "1"  # Ensure unbuffered output
-            # Kraken 6.x uses env var for device selection
-            if resolved_device and KRAKEN_VERSION[0] >= 6:
-                train_env["KRAKEN_DEVICE"] = resolved_device
+            train_env = self._training_env(resolved_device)
 
             self.process = subprocess.Popen(
                 cmd,
@@ -675,7 +847,6 @@ class KrakenTrainingService:
             # because ketos/PyTorch Lightning uses \r for progress bar updates
             # and readline() would block forever waiting for \n.
             # Raw output is written directly to sys.stderr for live terminal display.
-            import sys
             recent_logs = self.progress.recent_logs
             line_buffer = []
             while True:
@@ -738,42 +909,38 @@ class KrakenTrainingService:
             self.process.wait()
 
             if self.process.returncode == 0 or self.progress.early_stopped:
-                # Ketos saves models as {output}_0.mlmodel, {output}_best.mlmodel, etc.
-                # Rename the best model to the expected output path
-                # Ketos saves checkpoints as either:
-                #   {output}_best.mlmodel  (best model)
-                #   {output}_0.mlmodel, {output}_1.mlmodel  (per-epoch, kraken 6.x)
-                #   {output}_0, {output}_1  (per-epoch, kraken 5.x)
-                best_model = Path(f"{output_path}_best.mlmodel")
-                if best_model.exists():
-                    shutil.move(str(best_model), str(output_path))
-                    logging.info(f"Renamed best model to {output_path}")
-                elif not output_path.exists():
-                    # Fall back to the last epoch model — match both naming conventions
-                    def get_epoch_num(path):
-                        try:
-                            name = str(path.name)
-                            # Extract trailing number after last _
-                            num_str = name.split('_')[-1].replace('.mlmodel', '')
-                            return int(num_str)
-                        except (ValueError, IndexError):
-                            return -1
+                if KRAKEN_VERSION[0] >= 7:
+                    # ketos wrote checkpoints (+ best_*.safetensors on completion) into checkpoint_dir
+                    produced = self._collect_trained_weights(checkpoint_dir, output_path)
+                else:
+                    # Ketos <= 6 saves {output}_best.mlmodel / {output}_N.mlmodel next to the output
+                    best_model = Path(f"{output_path}_best.mlmodel")
+                    if best_model.exists():
+                        shutil.move(str(best_model), str(output_path))
+                        logging.info(f"Renamed best model to {output_path}")
+                    elif not output_path.exists():
+                        def get_epoch_num(path):
+                            try:
+                                num_str = str(path.name).split('_')[-1].replace('.mlmodel', '')
+                                return int(num_str)
+                            except (ValueError, IndexError):
+                                return -1
 
-                    epoch_models = [
-                        f for f in Path(self.MODELS_DIR).iterdir()
-                        if f.name.startswith(f"{model_name}.mlmodel_") and get_epoch_num(f) >= 0
-                    ]
-                    if epoch_models:
-                        epoch_models.sort(key=get_epoch_num)
-                        last_model = epoch_models[-1]
-                        shutil.move(str(last_model), str(output_path))
-                        logging.info(f"Renamed {last_model.name} (epoch {get_epoch_num(last_model)}) to {output_path}")
+                        epoch_models = [
+                            f for f in Path(self.MODELS_DIR).iterdir()
+                            if f.name.startswith(f"{model_name}.mlmodel_") and get_epoch_num(f) >= 0
+                        ]
+                        if epoch_models:
+                            epoch_models.sort(key=get_epoch_num)
+                            last_model = epoch_models[-1]
+                            shutil.move(str(last_model), str(output_path))
+                            logging.info(f"Renamed {last_model.name} (epoch {get_epoch_num(last_model)}) to {output_path}")
+                    self._cleanup_checkpoint_dir(model_name)
+                    produced = output_path.exists()
 
-                # Clean up all intermediate epoch checkpoint files
-                for f in Path(self.MODELS_DIR).iterdir():
-                    if f.name.startswith(f"{model_name}.mlmodel_"):
-                        f.unlink()
-                        logging.info(f"Cleaned up intermediate model: {f.name}")
+                if not produced:
+                    tail = "\n".join(recent_logs[-15:])
+                    raise RuntimeError(f"Training finished but no model weights were produced.\nLast output:\n{tail}")
 
                 self.progress.status = TrainingStatus.COMPLETED
                 self.progress.message = f"Training completed! Model saved to {output_path}"
@@ -806,6 +973,7 @@ class KrakenTrainingService:
                 self.progress.completed_at = datetime.now().isoformat()
                 logging.error(f"=== Training failed: exit code {self.process.returncode} ===")
                 logging.error(f"Last ketos output:\n{tail}")
+                self._cleanup_checkpoint_dir(model_name)
                 return {
                     "success": False,
                     "error": error_detail
@@ -817,6 +985,7 @@ class KrakenTrainingService:
             self.progress.message = str(e)
             self.progress.error = str(e)
             self.progress.completed_at = datetime.now().isoformat()
+            self._cleanup_checkpoint_dir(model_name)
             return {
                 "success": False,
                 "error": str(e)
@@ -831,7 +1000,9 @@ class KrakenTrainingService:
     def _parse_progress(self, line: str):
         """Parse Kraken/ketos training output for progress info.
 
-        Ketos output format varies by terminal settings. Common patterns:
+        Ketos output format varies by terminal settings. Common patterns
+        (identical metric names in kraken 6 and 7: val_accuracy,
+        val_word_accuracy, train_loss; epoch label "stage N/M"):
 
         Full progress bar (when rich works):
             stage 0/500 ---- 79/79 0:00:44 · 0:00:00 1.86it/s val_accuracy:
@@ -846,15 +1017,13 @@ class KrakenTrainingService:
         In the stripped format, the first number after time is val_accuracy,
         the next bare decimal is val_word_accuracy.
         """
-        import re
-
         # DEBUG: Log every line to a file for analysis
         try:
             storage_path = os.environ.get("STORAGE_PATH", "data")
             debug_log_path = os.path.join(storage_path, "ketos_output.log")
-            with open(debug_log_path, "a") as debug_file:
+            with open(debug_log_path, "a", encoding="utf-8", errors="replace") as debug_file:
                 debug_file.write(f"{line}\n")
-        except:
+        except Exception:
             pass
 
         # Ketos uses \r for progress bar updates; take the last segment after \r
@@ -947,7 +1116,8 @@ class KrakenTrainingService:
         if epoch_match:
             new_epoch = int(epoch_match.group(1))
             if epoch_match.group(2):
-                self.progress.total_epochs = int(epoch_match.group(2))
+                # ketos labels stages 0..max_epochs-1
+                self.progress.total_epochs = max(self.progress.total_epochs, int(epoch_match.group(2)) + 1)
 
             # If epoch number advanced, record the previous epoch's metrics
             if new_epoch > self.progress.epoch and self.progress.epoch >= 0:
@@ -1006,11 +1176,11 @@ class KrakenTrainingService:
         # Detect label at end of line without value (wrapped to next line)
         if re.search(r"val_accuracy[:\s]*$", line, re.I):
             self._pending_metric = "val_accuracy"
-        elif re.search(r"val_word_accur[:\s\u2026]*$", line, re.I):
+        elif re.search(r"val_word_accur[:\s…]*$", line, re.I):
             self._pending_metric = "word_accuracy"
         elif re.search(r"(?<!val_)accuracy[:\s]*$", line, re.I):
             self._pending_metric = "accuracy"
-        elif re.search(r"(?:train_)?loss(?:_(?:step|epoch?))?[:\s\u2026]*$", line, re.I):
+        elif re.search(r"(?:train_)?loss(?:_(?:step|epoch?))?[:\s…]*$", line, re.I):
             self._pending_metric = "loss"
             self._expect_word_accuracy = False  # Loss label cancels word_accuracy expectation
 
@@ -1073,20 +1243,26 @@ class KrakenTrainingService:
         # Load existing registry
         registry = []
         if registry_path.exists():
-            with open(registry_path, "r") as f:
+            with open(registry_path, "r", encoding="utf-8") as f:
                 registry = json.load(f)
+
+        # Replace a stale entry of the same name (e.g. re-trained model)
+        registry = [e for e in registry if e.get("name") != model_name]
 
         # Add new model
         registry.append({
             "name": model_name,
             "path": model_path,
+            "format": "safetensors" if model_path.endswith(".safetensors") else "coreml",
+            "arch": detect_model_arch(model_path),
+            "kraken_version": ".".join(str(v) for v in KRAKEN_VERSION),
             "created": datetime.now().isoformat(),
             "epochs": len(self.progress.epoch_history),
             "accuracy": self.progress.best_accuracy
         })
 
         # Save registry
-        with open(registry_path, "w") as f:
+        with open(registry_path, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2)
 
     def cancel_training(self):
@@ -1095,22 +1271,23 @@ class KrakenTrainingService:
         model_name = self.progress.model_name
         if self.process:
             self.process.terminate()
+            try:
+                self.process.wait(timeout=30)
+            except Exception:
+                pass
         self.progress.status = TrainingStatus.CANCELLED
         self.progress.message = "Training cancelled"
         self.progress.completed_at = datetime.now().isoformat()
 
-        # Clean up intermediate epoch checkpoint files
-        if model_name:
-            for f in Path(self.MODELS_DIR).iterdir():
-                if f.name.startswith(f"{model_name}.mlmodel_"):
-                    f.unlink()
-                    logging.info(f"Cleaned up intermediate model: {f.name}")
+        # Clean up intermediate checkpoint files
+        self._cleanup_checkpoint_dir(model_name)
 
     # Cache: { model_path: { "mtime": float, "metrics": dict } }
     _metrics_cache: dict = {}
 
     def _extract_model_metrics(self, model_path: str) -> dict:
-        """Extract accuracy, epochs, and other metrics from a Kraken .mlmodel file.
+        """Extract accuracy, epochs, and other metrics from a Kraken model file
+        (.safetensors metadata header, or a loaded legacy .mlmodel).
         Results are cached by file path + modification time to avoid reloading."""
         # Check cache first
         try:
@@ -1124,33 +1301,62 @@ class KrakenTrainingService:
 
         metrics = {}
         try:
-            from kraken.lib.models import load_any
-            model = load_any(model_path)
-
-            # Extract from model metadata
-            if hasattr(model, 'nn'):
-                nn = model.nn
-                if hasattr(nn, 'hyper_params'):
-                    hp = nn.hyper_params
+            if model_path.endswith(".safetensors"):
+                # Fast path: kraken 7 stores user metadata in the safetensors header
+                from safetensors import safe_open
+                with safe_open(model_path, framework="pt") as f:
+                    header = json.loads((f.metadata() or {}).get("kraken_meta", "{}"))
+                for entry in header.values():
+                    if not isinstance(entry, dict) or "recognition" not in (entry.get("_tasks") or []):
+                        continue
+                    metrics["arch"] = "ppocrv6" if "PPOCR" in str(entry.get("_model", "")) else "vgsl"
+                    codec = entry.get("codec")
+                    if isinstance(codec, dict):
+                        metrics["charset_size"] = len(codec)
+                    hp = entry.get("hyper_params")
                     if isinstance(hp, dict):
-                        metrics['epochs'] = hp.get('completed_epochs', hp.get('epochs', None))
-                        metrics['learning_rate'] = hp.get('lrate', hp.get('lr', None))
-                if hasattr(nn, 'user_metadata'):
-                    um = nn.user_metadata
+                        metrics["epochs"] = hp.get("completed_epochs", hp.get("epochs"))
+                        metrics["learning_rate"] = hp.get("lrate", hp.get("lr"))
+                    # [(epoch, {"val_accuracy": .., "val_word_accuracy": .., "val_metric": ..}), ...]
+                    history = entry.get("metrics") or []
+                    if history:
+                        last_epoch, last = history[-1]
+                        if isinstance(last, dict):
+                            metrics["accuracy"] = last.get("val_accuracy", last.get("val_metric"))
+                            metrics["word_accuracy"] = last.get("val_word_accuracy")
+                        if metrics.get("epochs") is None:
+                            metrics["epochs"] = int(last_epoch) + 1
+                    break
+            else:
+                if KRAKEN_VERSION[0] >= 7:
+                    from kraken.models import load_models
+                    nets = load_models(model_path)
+                    nn = nets[0] if nets else None
+                else:
+                    from kraken.lib.models import load_any
+                    model = load_any(model_path)
+                    nn = getattr(model, "nn", None)
+                    if hasattr(model, "accuracy"):
+                        metrics["accuracy"] = model.accuracy
+                metrics["arch"] = "vgsl"
+                if nn is not None:
+                    hp = getattr(nn, "hyper_params", None)
+                    if isinstance(hp, dict):
+                        metrics["epochs"] = hp.get("completed_epochs", hp.get("epochs", None))
+                        metrics["learning_rate"] = hp.get("lrate", hp.get("lr", None))
+                    um = getattr(nn, "user_metadata", None)
                     if isinstance(um, dict):
-                        metrics['accuracy'] = um.get('accuracy', None)
-                        metrics['word_accuracy'] = um.get('word_accuracy', None)
-                if hasattr(nn, 'seg_type'):
-                    metrics['type'] = str(nn.seg_type)
-                if hasattr(nn, 'codec') and nn.codec:
-                    metrics['charset_size'] = len(nn.codec.c2l) if hasattr(nn.codec, 'c2l') else None
-
-            if hasattr(model, 'accuracy'):
-                metrics['accuracy'] = model.accuracy
-            if hasattr(model, 'hyper_params'):
-                hp = model.hyper_params
-                if isinstance(hp, dict):
-                    metrics['epochs'] = hp.get('completed_epochs', hp.get('epochs', metrics.get('epochs')))
+                        if um.get("accuracy") is not None:
+                            acc = um["accuracy"]
+                            # kraken <= 6 stores [(step, acc), ...]
+                            if isinstance(acc, list) and acc and isinstance(acc[-1], (list, tuple)):
+                                acc = acc[-1][1]
+                            metrics["accuracy"] = acc
+                        if um.get("word_accuracy") is not None:
+                            metrics["word_accuracy"] = um["word_accuracy"]
+                    codec = getattr(nn, "codec", None)
+                    if codec is not None and hasattr(codec, "c2l"):
+                        metrics["charset_size"] = len(codec.c2l)
 
         except Exception as e:
             logging.debug(f"Could not extract metrics from {model_path}: {e}")
@@ -1165,17 +1371,18 @@ class KrakenTrainingService:
         try:
             registry = []
             if registry_path.exists():
-                with open(registry_path, "r") as f:
+                with open(registry_path, "r", encoding="utf-8") as f:
                     registry = json.load(f)
             # Don't duplicate
             if any(e["name"] == name for e in registry):
                 return
-            entry = {"name": name, "path": path}
-            for key in ("accuracy", "word_accuracy", "epochs", "charset_size", "learning_rate"):
+            entry = {"name": name, "path": path,
+                     "format": "safetensors" if path.endswith(".safetensors") else "coreml"}
+            for key in ("accuracy", "word_accuracy", "epochs", "charset_size", "learning_rate", "arch"):
                 if metrics.get(key) is not None:
                     entry[key] = metrics[key]
             registry.append(entry)
-            with open(registry_path, "w") as f:
+            with open(registry_path, "w", encoding="utf-8") as f:
                 json.dump(registry, f, indent=2)
             logging.info(f"Auto-registered Kraken model: {name}")
         except Exception as e:
@@ -1186,29 +1393,39 @@ class KrakenTrainingService:
         registry_path = Path(self.MODELS_DIR) / "registry.json"
         if registry_path.exists():
             try:
-                with open(registry_path, "r") as f:
+                with open(registry_path, "r", encoding="utf-8") as f:
                     entries = json.load(f)
                 return {e["name"]: e for e in entries}
             except Exception:
                 pass
         return {}
 
+    def _model_files(self) -> List[Path]:
+        """All model files in MODELS_DIR, one per name (safetensors preferred over a
+        legacy .mlmodel of the same name)."""
+        models_dir = Path(self.MODELS_DIR)
+        by_name = {}
+        for ext in MODEL_EXTENSIONS:
+            for p in models_dir.glob(f"*{ext}"):
+                by_name.setdefault(p.stem, p)
+        return sorted(by_name.values())
+
     def get_models(self) -> List[dict]:
         """List available trained models with metrics.
 
         Uses registry.json for metrics when available (instant),
-        only loads .mlmodel files as a fallback for unregistered models.
+        only reads model files as a fallback for unregistered models.
         """
         models = []
-        models_dir = Path(self.MODELS_DIR)
         registry = self._load_registry()
 
-        for model_path in models_dir.glob("*.mlmodel"):
+        for model_path in self._model_files():
             stat = model_path.stat()
             name = model_path.stem
             model_info = {
                 "name": name,
                 "path": str(model_path),
+                "format": "safetensors" if model_path.suffix == ".safetensors" else "coreml",
                 "size_mb": round(stat.st_size / 1024 / 1024, 2),
                 "created": datetime.fromtimestamp(stat.st_mtime).isoformat()
             }
@@ -1216,18 +1433,11 @@ class KrakenTrainingService:
             # Fast path: use registry metadata (no model loading)
             if name in registry:
                 reg = registry[name]
-                if reg.get("accuracy") is not None:
-                    model_info["accuracy"] = reg["accuracy"]
-                if reg.get("word_accuracy") is not None:
-                    model_info["word_accuracy"] = reg["word_accuracy"]
-                if reg.get("epochs") is not None:
-                    model_info["epochs"] = reg["epochs"]
-                if reg.get("charset_size") is not None:
-                    model_info["charset_size"] = reg["charset_size"]
-                if reg.get("learning_rate") is not None:
-                    model_info["learning_rate"] = reg["learning_rate"]
+                for key in ("accuracy", "word_accuracy", "epochs", "charset_size", "learning_rate", "arch"):
+                    if reg.get(key) is not None:
+                        model_info[key] = reg[key]
             else:
-                # Slow path: load model to extract metrics (only for pre-existing models)
+                # Slow path: read model to extract metrics (only for pre-existing models)
                 logging.info(f"Loading model metrics (not in registry): {name}")
                 metrics = self._extract_model_metrics(str(model_path))
                 model_info.update(metrics)
@@ -1242,12 +1452,12 @@ class KrakenTrainingService:
         """Get the name of the currently active model from active_model.txt."""
         active_file = Path(self.MODELS_DIR) / "active_model.txt"
         if active_file.exists():
-            name = active_file.read_text().strip()
+            name = active_file.read_text(encoding="utf-8").strip()
             # Verify the model file actually exists
-            if (Path(self.MODELS_DIR) / f"{name}.mlmodel").exists():
+            if self._model_file(name):
                 return name
-        # Fallback: check if base.mlmodel exists
-        if (Path(self.MODELS_DIR) / "base.mlmodel").exists():
+        # Fallback: check if a base model exists
+        if self._model_file("base"):
             return "base"
         return None
 
@@ -1263,7 +1473,7 @@ class KrakenTrainingService:
                 "last_modified": None
             }
 
-        model_path = Path(self.MODELS_DIR) / f"{active_name}.mlmodel"
+        model_path = Path(self._model_file(active_name))
         stat = model_path.stat()
         size_mb = round(stat.st_size / 1024 / 1024, 2)
         last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
@@ -1273,7 +1483,7 @@ class KrakenTrainingService:
         registry_path = Path(self.MODELS_DIR) / "registry.json"
         if registry_path.exists():
             try:
-                with open(registry_path, "r") as f:
+                with open(registry_path, "r", encoding="utf-8") as f:
                     registry = json.load(f)
                     for model in registry:
                         if model.get("name") == active_name:
@@ -1286,18 +1496,17 @@ class KrakenTrainingService:
             "name": active_name,
             "is_pretrained": is_pretrained,
             "size_mb": size_mb,
-            "last_modified": last_modified
+            "last_modified": last_modified,
+            "format": "safetensors" if model_path.suffix == ".safetensors" else "coreml",
         }
 
     def activate_model(self, model_name: str) -> bool:
         """Set a model as the active OCR model by writing its name to active_model.txt."""
-        model_path = Path(self.MODELS_DIR) / f"{model_name}.mlmodel"
-
-        if not model_path.exists():
+        if not self._model_file(model_name):
             return False
 
         active_file = Path(self.MODELS_DIR) / "active_model.txt"
-        active_file.write_text(model_name)
+        active_file.write_text(model_name, encoding="utf-8")
         logging.info(f"Activated model: {model_name}")
 
         return True
@@ -1309,26 +1518,29 @@ class KrakenTrainingService:
         if active_name and active_name == model_name:
             return {"success": False, "error": f"Cannot delete the active model '{model_name}'. Activate a different model first."}
 
-        model_path = Path(self.MODELS_DIR) / f"{model_name}.mlmodel"
+        model_path = self._model_file(model_name)
 
-        if not model_path.exists():
+        if not model_path:
             return {"success": False, "error": f"Model '{model_name}' not found."}
 
         # Remove from registry if present
         registry_path = Path(self.MODELS_DIR) / "registry.json"
         if registry_path.exists():
             try:
-                with open(registry_path, "r") as f:
+                with open(registry_path, "r", encoding="utf-8") as f:
                     registry = json.load(f)
                 # Filter out the deleted model
                 registry = [m for m in registry if m.get("name") != model_name]
-                with open(registry_path, "w") as f:
+                with open(registry_path, "w", encoding="utf-8") as f:
                     json.dump(registry, f, indent=2)
             except Exception as e:
                 logging.warning(f"Could not update registry: {e}")
 
-        # Delete the file
-        model_path.unlink()
+        # Delete every format of the model
+        for ext in MODEL_EXTENSIONS:
+            p = Path(self.MODELS_DIR) / f"{model_name}{ext}"
+            if p.exists():
+                p.unlink()
         logging.info(f"Deleted model: {model_name}")
 
         return {"success": True}

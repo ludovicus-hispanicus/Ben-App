@@ -558,6 +558,8 @@ export interface TrainedModel {
     name: string;
     path: string;
     created: string;
+    format?: string;  // Kraken: 'safetensors' (kraken 7) | 'coreml' (legacy .mlmodel)
+    arch?: string;    // Kraken: 'ppocrv6' | 'vgsl'
     epochs?: number;
     accuracy?: number;
     word_accuracy?: number;
