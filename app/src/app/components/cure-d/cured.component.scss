@@ -3409,3 +3409,23 @@ p {
         }
     }
 }
+
+// Live provider model list (same look as in Batch)
+.sub-model-error {
+    color: #c62828;
+}
+
+.spinning {
+    animation: sub-model-spin 1s linear infinite;
+}
+
+::ng-deep .sub-model-resolves {
+    opacity: 0.6;
+    font-size: 0.85em;
+    font-family: monospace;
+}
+
+@keyframes sub-model-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}

@@ -126,6 +126,8 @@ The audit found that the backend already boots without the heavy ML libraries, b
    - **Done 2026-10-29.** `GET /cured/ollama/vision-models` lists installed models whose Ollama capabilities include `vision` (local and cloud); models Ollama can't run are reported with its reason. Menus use `ollama:<exact name>`; a model can also be typed in by name. The fixed Ollama Cloud entries were removed: Ollama retired `qwen3-vl:235b-cloud` (16 June 2026). Ollama is now reached at 127.0.0.1 (localhost cost ~1 s per request on Windows).
    - Open: `qwen3-vl:4b` is slow on a CAD snippet (86–258 s) because it reasons at length before answering, even with `think: false`. Worth comparing with `qwen3.5:4b` when the data budget allows.
 7. Cloud APIs: live model catalog in CuReD.
+   - **Done 2026-10-29.** The page editor uses the same live list as Batch (`POST /batch-recognition/provider-models`, cached 1 h): "Always latest" aliases plus pinned versions, refresh button; the built-in list remains as fallback. Single-page OCR resolves `latest:<family>` like Batch does at job start. A wrong key is reported as "Invalid API key" for all four providers (Gemini answers 400).
+   - Ollama (item 6 follow-up): one shared dropdown on the editor and Batch lists installed models, Ollama Cloud models and downloadable library models (from ollama.com, cached 12 h), "Suggested for OCR" first; downloads only after confirming the size.
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.
 9. Frontend update (§6), including the further add/remove list.
 10. README: base-version notice (§7).

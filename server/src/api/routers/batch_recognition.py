@@ -118,7 +118,9 @@ async def get_provider_models(body: ProviderModelsRequest):
         models = await model_catalog.list_models(body.provider, body.api_key, refresh=body.refresh)
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
-        msg = "Invalid API key" if status in (401, 403) else f"Provider returned HTTP {status}"
+        # Gemini answers a bad key with 400 "API key not valid" rather than 401
+        bad_key = status in (401, 403) or (status == 400 and "api key" in e.response.text.lower())
+        msg = "Invalid API key" if bad_key else f"Provider returned HTTP {status}"
         return {"success": False, "message": msg, "models": [], "latest": []}
     except Exception as e:
         return {"success": False, "message": str(e), "models": [], "latest": []}

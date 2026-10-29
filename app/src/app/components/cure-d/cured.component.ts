@@ -35,6 +35,8 @@ import { ProductionService, KwicResult } from 'src/app/services/production.servi
 import { LinkedPageService } from 'src/app/services/linked-page.service';
 import { UnsavedChangesService } from 'src/app/services/unsaved-changes.service';
 import { Breadcrumb } from 'src/app/services/toolbar.service';
+import { BatchRecognitionService } from 'src/app/services/batch-recognition.service';
+import { LatestModelAlias, ProviderModel } from 'src/app/models/batch-recognition';
 
 export class SelectedPdf {
   constructor(public pdf: File,
@@ -269,7 +271,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   // Sub-model selection for API providers (e.g., gemini-3.1-flash-preview vs gemini-3.1-pro-preview)
   public selectedSubModel: string = '';
 
-  // Available sub-models for each API provider
+  // Live model lists from each provider's /models endpoint (keyed by provider), as in Batch.
+  // When present they replace the built-in apiSubModels list below.
+  public liveSubModels: { [key: string]: { latest: LatestModelAlias[]; models: ProviderModel[] } } = {};
+  public subModelsLoading = false;
+  public subModelsError = '';
+
+  // Built-in sub-models for each API provider, shown until the live list loads (or if it fails)
   public apiSubModels: { [key: string]: Array<{value: string; label: string; description: string}> } = {
     'gemini_vision': [
       { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'Cost efficient' },
@@ -305,6 +313,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this._selectedOcrModel = value;
     // Load saved API key for this provider
     this.apiKey = localStorage.getItem('ocr_api_key_' + value) || '';
+    this.loadProviderModels();
     // Load saved sub-model for this provider (default to first option)
     if (this.apiSubModels[value]) {
       this.selectedSubModel = localStorage.getItem('ocr_sub_model_' + value) || this.apiSubModels[value][0].value;
@@ -319,6 +328,44 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   }
 
   // Save sub-model selection
+  /** Fetch the provider's current model list live (needs the API key), as Batch does. */
+  loadProviderModels(refresh = false): void {
+    const provider = this._selectedOcrModel;
+    if (!this.apiSubModels[provider] || !this.apiKey) {
+      return;
+    }
+    if (this.liveSubModels[provider] && !refresh) {
+      return;
+    }
+    this.subModelsLoading = true;
+    this.subModelsError = '';
+    this.batchRecognitionService.getProviderModels(provider, this.apiKey, refresh).subscribe({
+      next: (res) => {
+        this.subModelsLoading = false;
+        if (!res.success || !res.models.length) {
+          this.subModelsError = res.message || 'No vision models returned';
+          return;
+        }
+        this.liveSubModels[provider] = { latest: res.latest, models: res.models };
+        // Keep the saved choice if the provider still offers it, else follow its newest model
+        const valid = [...res.latest, ...res.models].some(m => m.value === this.selectedSubModel);
+        if (provider === this._selectedOcrModel && !valid && res.latest.length) {
+          this.selectedSubModel = res.latest[0].value;
+          this.onSubModelChange();
+        }
+      },
+      error: () => {
+        this.subModelsLoading = false;
+        this.subModelsError = 'Could not reach the provider; showing the built-in list';
+      },
+    });
+  }
+
+  onApiKeyChange(): void {
+    delete this.liveSubModels[this._selectedOcrModel];
+    this.loadProviderModels();
+  }
+
   onSubModelChange(): void {
     if (this._selectedOcrModel && this.selectedSubModel) {
       localStorage.setItem('ocr_sub_model_' + this._selectedOcrModel, this.selectedSubModel);
@@ -898,7 +945,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     private productionService: ProductionService,
     private linkedPageService: LinkedPageService,
     private unsavedChanges: UnsavedChangesService,
-    public guideLineService: GuideLineService) {
+    public guideLineService: GuideLineService,
+    private batchRecognitionService: BatchRecognitionService) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];

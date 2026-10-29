@@ -1123,6 +1123,15 @@ async def get_text_transliterations(ben_id: int):
 @router.post("/getTransliterations")
 async def get_transliterations(background_tasks: BackgroundTasks, dto: CureDGetTransliterationsDto):
     logging.info(f"getTransliterations called with model: {dto.model}")
+    # "provider:latest:<family>" (from the provider's live model list): use its newest
+    # model of that family, as Batch does when a job starts
+    if dto.model and ":latest:" in dto.model:
+        from services.model_catalog import resolve_sub_model
+        provider, sub_model = dto.model.split(":", 1)
+        try:
+            dto.model = f"{provider}:{await resolve_sub_model(provider, sub_model, dto.apiKey)}"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not resolve '{sub_model}': {e}")
     try:
         result = CuredHandler.get_transliterations(dto=dto, background_tasks=background_tasks)
     except ValueError as e:  # missing API key, unknown model

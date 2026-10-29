@@ -968,7 +968,8 @@
             <mat-form-field appearance="outline" class="api-key-input">
               <mat-label>API Key</mat-label>
               <input matInput [(ngModel)]="apiKey" type="password"
-                     [placeholder]="getApiKeyPlaceholder()">
+                     [placeholder]="getApiKeyPlaceholder()"
+                     (change)="onApiKeyChange()">
               <mat-icon matSuffix>key</mat-icon>
               <mat-hint>Required for cloud models. Saved locally per model.</mat-hint>
             </mat-form-field>
@@ -977,10 +978,33 @@
             <mat-form-field appearance="outline" class="sub-model-select" *ngIf="hasSubModels()">
               <mat-label>Model Version</mat-label>
               <mat-select [(ngModel)]="selectedSubModel" (selectionChange)="onSubModelChange()">
-                <mat-option *ngFor="let subModel of apiSubModels[selectedOcrModel]" [value]="subModel.value">
-                  {{ subModel.label }} - {{ subModel.description }}
-                </mat-option>
+                <ng-container *ngIf="liveSubModels[selectedOcrModel] as live; else staticSubModels">
+                  <mat-optgroup label="Always latest">
+                    <mat-option *ngFor="let alias of live.latest" [value]="alias.value">
+                      {{ alias.label }} <span class="sub-model-resolves">→ {{ alias.resolves_to }}</span>
+                    </mat-option>
+                  </mat-optgroup>
+                  <mat-optgroup label="Pinned version">
+                    <mat-option *ngFor="let m of live.models" [value]="m.value">
+                      {{ m.label }}<span class="sub-model-resolves" *ngIf="m.label !== m.value"> {{ m.value }}</span>
+                    </mat-option>
+                  </mat-optgroup>
+                </ng-container>
+                <ng-template #staticSubModels>
+                  <mat-option *ngFor="let subModel of apiSubModels[selectedOcrModel]" [value]="subModel.value">
+                    {{ subModel.label }} - {{ subModel.description }}
+                  </mat-option>
+                </ng-template>
               </mat-select>
+              <button mat-icon-button matSuffix type="button"
+                      [disabled]="!apiKey || subModelsLoading"
+                      (click)="loadProviderModels(true); $event.stopPropagation()"
+                      matTooltip="Refresh model list from provider">
+                <mat-icon [class.spinning]="subModelsLoading">refresh</mat-icon>
+              </button>
+              <mat-hint *ngIf="subModelsError" class="sub-model-error">{{ subModelsError }}</mat-hint>
+              <mat-hint *ngIf="!subModelsError && !liveSubModels[selectedOcrModel]">Enter an API key to load the provider's current models</mat-hint>
+              <mat-hint *ngIf="!subModelsError && liveSubModels[selectedOcrModel]">Live from provider · "Latest" auto-upgrades when new models ship</mat-hint>
             </mat-form-field>
           </div>
 
