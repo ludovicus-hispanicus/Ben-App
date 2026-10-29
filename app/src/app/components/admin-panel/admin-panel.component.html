@@ -33,93 +33,99 @@
   <div class="loading" *ngIf="!summary && !summaryError">Loading…</div>
   <div class="loading" *ngIf="summaryError">The dashboard data could not be loaded. Is the BEn server running?</div>
 
-  <div class="card-grid" *ngIf="summary">
+  <!-- Two columns of cards, each stacked without gaps; the third column is only for News -->
+  <div class="dashboard-body" [class.no-news]="!news?.enabled">
+    <div class="cards-column" *ngIf="summary">
+      <!-- Continue working -->
+      <section class="card">
+        <h2><mat-icon>history</mat-icon> Continue working</h2>
+        <div class="empty" *ngIf="summary.recent_texts.length === 0">No texts yet. Start with a new OCR.</div>
+        <button class="row-link" *ngFor="let t of summary.recent_texts" (click)="openText(t)">
+          <span class="row-main">{{ t.label }}</span>
+          <span class="row-meta">{{ t.dataset || 'Unassigned' }} · {{ t.lines }} {{ t.lines === 1 ? 'line' : 'lines' }} · {{ t.last_modified | date:'d MMM, HH:mm' }}</span>
+        </button>
+      </section>
 
-    <!-- Continue working -->
-    <section class="card">
-      <h2><mat-icon>history</mat-icon> Continue working</h2>
-      <div class="empty" *ngIf="summary.recent_texts.length === 0">No texts yet. Start with a new OCR.</div>
-      <button class="row-link" *ngFor="let t of summary.recent_texts" (click)="openText(t)">
-        <span class="row-main">{{ t.label }}</span>
-        <span class="row-meta">{{ t.dataset || 'Unassigned' }} · {{ t.lines }} {{ t.lines === 1 ? 'line' : 'lines' }} · {{ t.last_modified | date:'d MMM, HH:mm' }}</span>
-      </button>
-    </section>
-
-    <!-- Your data -->
-    <section class="card">
-      <h2><mat-icon>dataset</mat-icon> Your data</h2>
-      <div class="figures">
-        <div><strong>{{ summary.data.datasets }}</strong><span>datasets</span></div>
-        <div><strong>{{ summary.data.texts | number }}</strong><span>texts</span></div>
-        <div><strong>{{ summary.data.curated_texts | number }}</strong><span>curated</span></div>
-        <div><strong>{{ summary.data.curated_lines | number }}</strong><span>curated lines</span></div>
-      </div>
-      <button class="row-link progress-row" *ngFor="let d of summary.data.per_dataset" (click)="openDataset(d.dataset_id)">
-        <span class="row-main">{{ d.name }}</span>
-        <span class="row-meta">{{ d.curated }}/{{ d.texts }} curated</span>
-        <span class="bar"><span [style.width.%]="percent(d.curated, d.texts)"></span></span>
-      </button>
-    </section>
-
-    <!-- Engines -->
-    <section class="card">
-      <h2><mat-icon>memory</mat-icon> Engines</h2>
-      <div class="engine">
-        <mat-icon [class.ok]="summary.engines.kraken?.active_model">{{ summary.engines.kraken?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
-        <span class="row-main">Kraken</span>
-        <span class="row-meta">{{ summary.engines.kraken?.active_model || 'no active model' }}</span>
-      </div>
-      <div class="engine" *ngIf="modules['yolo'] && summary.engines.layout">
-        <mat-icon [class.ok]="summary.engines.layout?.active_model">{{ summary.engines.layout?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
-        <span class="row-main">Layout</span>
-        <span class="row-meta">{{ summary.engines.layout?.active_model || 'no active model' }}</span>
-      </div>
-      <div class="engine">
-        <mat-icon [class.ok]="summary.engines.ollama?.running && summary.engines.ollama?.vision_models">
-          {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models ? 'check_circle' : 'error_outline') : 'radio_button_unchecked' }}
-        </mat-icon>
-        <span class="row-main">Ollama</span>
-        <span class="row-meta">
-          {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models + ' model(s) that read images') : 'not running' }}
-        </span>
-      </div>
-      <div class="engine">
-        <mat-icon [class.ok]="apiKeysSet.length">{{ apiKeysSet.length ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-        <span class="row-main">Cloud APIs</span>
-        <span class="row-meta">{{ apiKeysSet.length ? ('keys set: ' + apiKeysSet.join(', ')) : 'no API key entered' }}</span>
-      </div>
-      <p class="hint">If OCR fails, check here first.</p>
-    </section>
-
-    <!-- Recent activity -->
-    <section class="card">
-      <h2><mat-icon>schedule</mat-icon> Recent activity</h2>
-      <div class="empty" *ngIf="summary.activity.length === 0">No trainings or batch jobs yet.</div>
-      <div class="activity" *ngFor="let a of summary.activity">
-        <mat-icon>{{ activityIcon(a.kind) }}</mat-icon>
-        <div>
-          <span class="row-main">{{ a.title }}</span>
-          <span class="row-meta">{{ a.detail }} · {{ a.when | date:'d MMM yyyy' }}</span>
+      <!-- Recent activity -->
+      <section class="card">
+        <h2><mat-icon>schedule</mat-icon> Recent activity</h2>
+        <div class="empty" *ngIf="summary.activity.length === 0">No trainings or batch jobs yet.</div>
+        <div class="activity" *ngFor="let a of summary.activity">
+          <mat-icon>{{ activityIcon(a.kind) }}</mat-icon>
+          <div>
+            <span class="row-main">{{ a.title }}</span>
+            <span class="row-meta">{{ a.detail }} · {{ a.when | date:'d MMM yyyy' }}</span>
+          </div>
+          <span class="status" [attr.data-status]="a.status">{{ a.status }}</span>
         </div>
-        <span class="status" [attr.data-status]="a.status">{{ a.status }}</span>
-      </div>
-    </section>
+      </section>
+    </div>
 
-    <!-- News -->
-    <section class="card news" *ngIf="news?.enabled">
-      <h2><mat-icon>campaign</mat-icon> News</h2>
-      <div class="empty" *ngIf="news?.entries?.length === 0">
-        {{ news?.error ? 'News could not be loaded (offline?).' : 'No news yet.' }}
-      </div>
-      <article *ngFor="let n of news?.entries">
-        <h3>
-          {{ n.title }}
-          <span class="new-badge" *ngIf="isNewNews(n.date)">new</span>
-        </h3>
-        <span class="row-meta">{{ n.date | date:'d MMMM yyyy' }}</span>
-        <markdown [data]="n.body"></markdown>
-      </article>
-      <p class="hint">News from the BEn project on GitHub, checked once a day. You can switch it off in Settings.</p>
-    </section>
+    <div class="cards-column" *ngIf="summary">
+      <!-- Your data -->
+      <section class="card">
+        <h2><mat-icon>dataset</mat-icon> Your data</h2>
+        <div class="figures">
+          <div><strong>{{ summary.data.datasets }}</strong><span>datasets</span></div>
+          <div><strong>{{ summary.data.texts | number }}</strong><span>texts</span></div>
+          <div><strong>{{ summary.data.curated_texts | number }}</strong><span>curated</span></div>
+          <div><strong>{{ summary.data.curated_lines | number }}</strong><span>curated lines</span></div>
+        </div>
+        <button class="row-link progress-row" *ngFor="let d of summary.data.per_dataset" (click)="openDataset(d.dataset_id)">
+          <span class="row-main">{{ d.name }}</span>
+          <span class="row-meta">{{ d.curated }}/{{ d.texts }} curated</span>
+          <span class="bar"><span [style.width.%]="percent(d.curated, d.texts)"></span></span>
+        </button>
+      </section>
+
+      <!-- Engines -->
+      <section class="card">
+        <h2><mat-icon>memory</mat-icon> Engines</h2>
+        <div class="engine">
+          <mat-icon [class.ok]="summary.engines.kraken?.active_model">{{ summary.engines.kraken?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
+          <span class="row-main">Kraken</span>
+          <span class="row-meta">{{ summary.engines.kraken?.active_model || 'no active model' }}</span>
+        </div>
+        <div class="engine" *ngIf="modules['yolo'] && summary.engines.layout">
+          <mat-icon [class.ok]="summary.engines.layout?.active_model">{{ summary.engines.layout?.active_model ? 'check_circle' : 'error_outline' }}</mat-icon>
+          <span class="row-main">Layout</span>
+          <span class="row-meta">{{ summary.engines.layout?.active_model || 'no active model' }}</span>
+        </div>
+        <div class="engine">
+          <mat-icon [class.ok]="summary.engines.ollama?.running && summary.engines.ollama?.vision_models">
+            {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models ? 'check_circle' : 'error_outline') : 'radio_button_unchecked' }}
+          </mat-icon>
+          <span class="row-main">Ollama</span>
+          <span class="row-meta">
+            {{ summary.engines.ollama?.running ? (summary.engines.ollama?.vision_models + ' model(s) that read images') : 'not running' }}
+          </span>
+        </div>
+        <div class="engine">
+          <mat-icon [class.ok]="apiKeysSet.length">{{ apiKeysSet.length ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+          <span class="row-main">Cloud APIs</span>
+          <span class="row-meta">{{ apiKeysSet.length ? ('keys set: ' + apiKeysSet.join(', ')) : 'no API key entered' }}</span>
+        </div>
+        <p class="hint">If OCR fails, check here first.</p>
+      </section>
+    </div>
+
+    <div class="news-column" *ngIf="news?.enabled">
+      <!-- News -->
+      <section class="card news">
+        <h2><mat-icon>campaign</mat-icon> News</h2>
+        <div class="empty" *ngIf="news?.entries?.length === 0">
+          {{ news?.error ? 'News could not be loaded (offline?).' : 'No news yet.' }}
+        </div>
+        <article *ngFor="let n of news?.entries">
+          <h3>
+            {{ n.title }}
+            <span class="new-badge" *ngIf="isNewNews(n.date)">new</span>
+          </h3>
+          <span class="row-meta">{{ n.date | date:'d MMMM yyyy' }}</span>
+          <markdown [data]="n.body"></markdown>
+        </article>
+        <p class="hint">News from the BEn project on GitHub, checked once a day. You can switch it off in Settings.</p>
+      </section>
+    </div>
   </div>
 </div>

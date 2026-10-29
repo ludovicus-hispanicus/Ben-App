@@ -85,11 +85,32 @@
   padding: 1em 0;
 }
 
-.card-grid {
+// Three columns: two of cards stacked without gaps, the third only for News
+.dashboard-body {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25em;
   align-items: start;
+
+  &.no-news {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr);
+
+    &.no-news {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+.cards-column,
+.news-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25em;
+  min-width: 0;
 }
 
 .card {
