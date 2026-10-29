@@ -31,6 +31,16 @@ _SIZE_RE = re.compile(r"^(e?\d+(\.\d+)?[bm]|\d+x\d+(\.\d+)?b)$")
 _CAPABILITIES = {"vision", "tools", "thinking", "embedding", "audio", "cloud"}
 _MAX_PAGES = 8
 
+# Left out: models built for audio, medicine, translation or code, not for transcription
+_NOT_FOR_OCR = ("audio", "medgemma", "translategemma", "devstral", "code")
+
+# Listed first: built for documents, or a strong VLM at a size most GPUs can run
+SUGGESTED_FOR_OCR = {"glm-ocr:latest", "deepseek-ocr:3b", "qwen3.5:4b", "gemma4:31b-cloud"}
+
+
+def _for_ocr(name: str) -> bool:
+    return not any(word in name.lower() for word in _NOT_FOR_OCR)
+
 
 def _cloud_models(client: httpx.Client) -> List[Dict[str, Any]]:
     """Ollama's cloud models that accept images, under the name the local Ollama uses."""
@@ -42,7 +52,9 @@ def _cloud_models(client: httpx.Client) -> List[Dict[str, Any]]:
         name = m.get("name", "")
         # "gemma4:31b" -> "gemma4:31b-cloud"; "kimi-k3" -> "kimi-k3:cloud"
         local_name = f"{name}-cloud" if ":" in name else f"{name}:cloud"
-        models.append({"name": local_name, "updated": (m.get("modified_at") or "")[:10]})
+        if _for_ocr(local_name):
+            models.append({"name": local_name, "updated": (m.get("modified_at") or "")[:10],
+                           "suggested": local_name in SUGGESTED_FOR_OCR})
     return models
 
 
@@ -68,8 +80,8 @@ def _library_models(client: httpx.Client) -> List[Dict[str, Any]]:
             body = re.sub(r"<svg.*?</svg>", "", content, flags=re.S)
             texts = [html.unescape(t).strip() for t in re.split(r"<[^>]+>", body)]
             texts = [t for t in texts if t]
-            if "vision" not in texts or "embedding" in texts:  # embedding models can't transcribe
-                continue
+            if "vision" not in texts or "embedding" in texts or not _for_ocr(name):
+                continue  # embedding models can't transcribe
             # No size labels (e.g. glm-ocr): offer "latest"; the registry tells whether it
             # exists as a download (cloud-only models have no download and are dropped)
             sizes = [t for t in texts if _SIZE_RE.match(t)] or ["latest"]
@@ -109,7 +121,8 @@ def get_catalog(refresh: bool = False) -> Dict[str, Any]:
             with ThreadPoolExecutor(max_workers=8) as pool:
                 sizes_gb = list(pool.map(lambda ms: _download_size_gb(client, ms[0]["model"], ms[1]), wanted))
         downloads = sorted((
-            {"name": f"{m['model']}:{size}", "model": m["model"], "description": m["description"], "size_gb": gb}
+            {"name": f"{m['model']}:{size}", "model": m["model"], "description": m["description"], "size_gb": gb,
+             "suggested": f"{m['model']}:{size}" in SUGGESTED_FOR_OCR}
             for (m, size), gb in zip(wanted, sizes_gb)
             if gb  # skip sizes the registry doesn't know (e.g. cloud-only)
         ), key=lambda d: (d["model"], d["size_gb"]))

@@ -19,14 +19,21 @@
         <mat-option *ngIf="catalogLoading" disabled>Asking ollama.com…</mat-option>
         <mat-option *ngIf="catalog?.error" disabled [matTooltip]="catalog?.error || ''">ollama.com not reachable</mat-option>
 
-        <mat-optgroup *ngIf="cloudOffers.length > 0" label="Ollama Cloud: runs on Ollama's servers, no download">
-          <mat-option *ngFor="let m of cloudOffers" [value]="m.name">
+        <mat-optgroup *ngIf="suggestedOffers.length > 0" label="Suggested for OCR">
+          <mat-option *ngFor="let m of suggestedOffers" [value]="m.name"
+                      [matTooltip]="m.description || ''" matTooltipPosition="right">
+            {{ m.name }} <span class="model-meta">{{ m.detail }}</span>
+          </mat-option>
+        </mat-optgroup>
+
+        <mat-optgroup *ngIf="otherCloudOffers.length > 0" label="Ollama Cloud: runs on Ollama's servers, no download">
+          <mat-option *ngFor="let m of otherCloudOffers" [value]="m.name">
             {{ m.name }} <span class="model-meta">needs ollama signin</span>
           </mat-option>
         </mat-optgroup>
 
-        <mat-optgroup *ngIf="downloadOffers.length > 0" label="Download from Ollama (uses internet data)">
-          <mat-option *ngFor="let m of downloadOffers" [value]="m.name"
+        <mat-optgroup *ngIf="otherDownloadOffers.length > 0" label="Download from Ollama (uses internet data)">
+          <mat-option *ngFor="let m of otherDownloadOffers" [value]="m.name"
                       [matTooltip]="m.description" matTooltipPosition="right">
             {{ m.name }} <span class="model-meta">{{ m.size_gb }} GB</span>
           </mat-option>

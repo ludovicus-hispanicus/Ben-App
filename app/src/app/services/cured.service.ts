@@ -495,8 +495,8 @@ export interface OllamaVisionModels {
 }
 
 export interface OllamaCatalog {
-    cloud: Array<{ name: string; updated: string }>;  // local name, e.g. "gemma4:31b-cloud"
-    downloads: Array<{ name: string; model: string; description: string; size_gb: number }>;
+    cloud: Array<{ name: string; updated: string; suggested?: boolean }>;  // local name, e.g. "gemma4:31b-cloud"
+    downloads: Array<{ name: string; model: string; description: string; size_gb: number; suggested?: boolean }>;
     error: string | null;
     fetched_at: string;
 }

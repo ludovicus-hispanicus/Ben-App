@@ -34,6 +34,10 @@ export class OllamaModelPickerComponent implements OnDestroy {
   catalogLoading = false;
   cloudOffers: OllamaCatalog['cloud'] = [];
   downloadOffers: OllamaCatalog['downloads'] = [];
+  // What the dropdown shows: the suggestions first, then the rest of each kind
+  suggestedOffers: Array<{ name: string; detail: string; description?: string }> = [];
+  otherCloudOffers: OllamaCatalog['cloud'] = [];
+  otherDownloadOffers: OllamaCatalog['downloads'] = [];
 
   download: Download | null = null;
   private eventSource: EventSource | null = null;
@@ -91,6 +95,13 @@ export class OllamaModelPickerComponent implements OnDestroy {
     const installed = new Set([...this.usable.map(m => m.name), ...this.notUsable.map(m => m.name)]);
     this.cloudOffers = this.catalog.cloud.filter(m => !installed.has(m.name));
     this.downloadOffers = this.catalog.downloads.filter(m => !installed.has(m.name));
+    this.suggestedOffers = [
+      ...this.downloadOffers.filter(m => m.suggested)
+        .map(m => ({ name: m.name, detail: `${m.size_gb} GB download`, description: m.description })),
+      ...this.cloudOffers.filter(m => m.suggested).map(m => ({ name: m.name, detail: 'cloud, no download' })),
+    ];
+    this.otherCloudOffers = this.cloudOffers.filter(m => !m.suggested);
+    this.otherDownloadOffers = this.downloadOffers.filter(m => !m.suggested);
   }
 
   onSelect(value: string | null): void {
