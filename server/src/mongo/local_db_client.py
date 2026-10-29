@@ -548,20 +548,30 @@ class ShardedCollection:
         return None
 
     def find_many(self, find_filter: Dict = {}, limit: int = 0, sort: List = None, **kwargs) -> List[Dict]:
-        # Fast path: filter by dataset_id
-        if 'dataset_id' in find_filter:
-            did = find_filter['dataset_id']
-            key = self._shard_key(did)
-            shard = self._get_shard(key)
-            # Remove dataset_id from filter since all items in this shard share it
-            remaining_filter = {k: v for k, v in find_filter.items() if k != 'dataset_id'}
+        did = find_filter.get('dataset_id')
+        # Remove dataset_id from the filter when it only selects shards: all items in a shard share it
+        remaining_filter = {k: v for k, v in find_filter.items() if k != 'dataset_id'}
+
+        # Fast path: a single dataset_id
+        if 'dataset_id' in find_filter and not isinstance(did, dict):
+            shard = self._get_shard(self._shard_key(did))
             return shard.find_many(remaining_filter, limit=limit, sort=sort, **kwargs)
 
-        # All shards
+        if isinstance(did, dict) and set(did) == {'$in'}:
+            # {"dataset_id": {"$in": [...]}}: only the listed shards
+            keys = list(dict.fromkeys(self._shard_key(d) for d in did['$in']))
+            shard_filter = remaining_filter
+        else:
+            # Any other filter (including other operators on dataset_id): all shards
+            keys = self._all_shard_keys()
+            shard_filter = find_filter
+
         all_results = []
-        for key in self._all_shard_keys():
+        for key in keys:
+            if key not in self._shards and not os.path.exists(self._shard_path(key)):
+                continue
             shard = self._get_shard(key)
-            all_results.extend(shard.find_many(find_filter, **kwargs))
+            all_results.extend(shard.find_many(shard_filter, **kwargs))
 
         # Sort merged results
         if sort:

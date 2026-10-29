@@ -784,10 +784,17 @@ async def start_kraken_training(epochs: int = 500, model_name: str = None, base_
 
     # Use new_lines after first training, total_lines before
     lines_for_training = total_lines
-    min_required = kraken_training_service.MIN_LINES_FINETUNE if base_model else kraken_training_service.MIN_LINES_SCRATCH
+    # Without an explicit base model the service fine-tunes the active model;
+    # only with no model at all does it train from scratch.
+    active_name = kraken_training_service.get_active_model_name()
+    fine_tuning = bool(base_model) or bool(active_name and kraken_training_service._model_file(active_name))
+    min_required = kraken_training_service.MIN_LINES_FINETUNE if fine_tuning else kraken_training_service.MIN_LINES_SCRATCH
 
     if lines_for_training < min_required:
-        mode = "fine-tuning" if base_model else "training from scratch"
+        if device != "cpu":
+            from services.gpu_lock import release as gpu_release
+            gpu_release("kraken_training")
+        mode = "fine-tuning" if fine_tuning else "training from scratch"
         raise HTTPException(
             status_code=400,
             detail=f"Not enough training data for {mode}. Need at least {min_required} lines, got {lines_for_training}"
