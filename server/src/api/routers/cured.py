@@ -88,6 +88,15 @@ def get_ollama_vision_models():
     return list_vision_models()
 
 
+@router.get("/ollama/catalog")
+def get_ollama_catalog(refresh: bool = False):
+    """What Ollama offers beyond the installed models: its cloud vision models and the
+    downloadable vision models of its library, with exact download sizes. Fetched from
+    ollama.com only when asked, and kept for 12 hours."""
+    from services.ollama_catalog import get_catalog
+    return get_catalog(refresh=refresh)
+
+
 @router.get("/ollama/models")
 def get_ollama_models():
     """Names of the installed Ollama vision models (kept for older clients)."""

@@ -142,6 +142,16 @@ export class CuredService {
         return this.http.get<OllamaVisionModels>(`${environment.apiUrl}${this.baseUrl}/ollama/vision-models`);
     }
 
+    /** Ollama's cloud vision models and downloadable library vision models (from ollama.com, cached 12 h). */
+    getOllamaCatalog(refresh = false): Observable<OllamaCatalog> {
+        return this.http.get<OllamaCatalog>(`${environment.apiUrl}${this.baseUrl}/ollama/catalog`, { params: { refresh: String(refresh) } });
+    }
+
+    /** Server-sent events URL that pulls (downloads) an Ollama model and reports progress. */
+    ollamaPullStreamUrl(name: string): string {
+        return `${environment.apiUrl}${this.baseUrl}/ollama/pull/${encodeURIComponent(name)}/stream`;
+    }
+
     getOllamaModels(): Observable<string[]> {
         return this.http.get<string[]>(`${environment.apiUrl}${this.baseUrl}/ollama/models`);
     }
@@ -482,6 +492,13 @@ export interface OllamaVisionModels {
     models: OllamaVisionModel[];
     unavailable: Array<{ name: string; cloud: boolean; error: string }>;
     text_only?: Array<{ name: string; cloud: boolean }>;  // installed, no image input
+}
+
+export interface OllamaCatalog {
+    cloud: Array<{ name: string; updated: string }>;  // local name, e.g. "gemma4:31b-cloud"
+    downloads: Array<{ name: string; model: string; description: string; size_gb: number }>;
+    error: string | null;
+    fetched_at: string;
 }
 
 /** OCR model value for an Ollama model ("ollama:<exact name>", see OCRFactory). */

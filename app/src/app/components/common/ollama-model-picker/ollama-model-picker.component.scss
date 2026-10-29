@@ -12,3 +12,36 @@
 ::ng-deep .mat-option.reload-option {
   color: #1976d2;
 }
+
+.ollama-download {
+  max-width: 420px;
+  margin: -0.5em 0 1em;
+  font-size: 0.85em;
+
+  .download-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.3em;
+  }
+
+  .download-name {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-weight: 600;
+  }
+
+  .download-amount {
+    color: #666;
+  }
+
+  .download-dismiss {
+    margin-left: auto;
+    min-width: 0;
+    padding: 0 0.5em;
+    line-height: 1.6;
+  }
+
+  .download-error {
+    color: #c62828;
+  }
+}
