@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, Dict
 from common.app_settings import get_all_settings, update_settings, get_enabled_modules, update_enabled_modules
+from common.module_status import get_installed_modules
 
 router = APIRouter(
     prefix="/api/v1/settings",
@@ -37,6 +38,12 @@ async def save_settings(body: SettingsUpdateRequest):
 async def get_modules():
     """Get enabled/disabled state of all modules."""
     return get_enabled_modules()
+
+
+@router.get("/modules/installed")
+async def get_modules_installed():
+    """Which modules are installed (their code and libraries are present)."""
+    return get_installed_modules()
 
 
 @router.put("/modules")

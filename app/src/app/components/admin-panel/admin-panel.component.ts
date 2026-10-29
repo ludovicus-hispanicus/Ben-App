@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { ModuleService } from '../../services/module.service';
 
 @Component({
   selector: 'app-admin-panel',
@@ -8,7 +9,7 @@ import { Router } from '@angular/router';
 })
 export class AdminPanelComponent implements OnInit {
 
-  constructor(public router: Router) { }
+  constructor(public router: Router, public moduleService: ModuleService) { }
 
   ngOnInit(): void {
     // Placeholder - global activities will be loaded here

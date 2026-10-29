@@ -5,6 +5,14 @@ import logging
 
 # Lazy imports - only import clients when needed to avoid requiring all dependencies
 
+
+def _require_module(module_id: str, label: str):
+    """Fail with a clear message when an optional module is not installed."""
+    from common.module_status import get_installed_modules
+    if not get_installed_modules().get(module_id, False):
+        raise ValueError(f"The {label} module is not installed.")
+
+
 class OCRFactory:
     @staticmethod
     def get_client(provider_name: str, api_key: Optional[str] = None) -> BaseOcrClient:
@@ -64,6 +72,7 @@ class OCRFactory:
 
         # CuRe sign classifier - supports "cure", "cure:model_name", "cure_active"
         elif provider_name.startswith("cure"):
+            _require_module("cure", "CuRe")
             from .cure_client import CuReOcrClient
             if ":" in original_provider_name:
                 model_name = original_provider_name.split(":", 1)[1]
@@ -76,6 +85,7 @@ class OCRFactory:
 
         # Qwen3-VL LoRA adapters - "qwen_lora" or "qwen_lora:adapter_name"
         elif provider_name.startswith("qwen_lora"):
+            _require_module("qwen", "Qwen")
             from .qwen_lora_client import QwenLoraOcrClient
             if ":" in original_provider_name:
                 adapter_name = original_provider_name.split(":", 1)[1]

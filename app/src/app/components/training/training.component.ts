@@ -1,12 +1,13 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Subject, interval } from 'rxjs';
-import { takeUntil, switchMap } from 'rxjs/operators';
+import { takeUntil, switchMap, take } from 'rxjs/operators';
 
 import { CuredService, TrainedModel, ActiveModelInfo } from '../../services/cured.service';
 import { YoloTrainingService } from '../../services/yolo-training.service';
 import { NotificationService } from '../../services/notification.service';
 import { DatasetService } from '../../services/dataset.service';
+import { ModuleService } from '../../services/module.service';
 import { DatasetPreview } from '../../models/cured';
 import {
   DatasetListItem,
@@ -171,6 +172,10 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   qwenTrainingProgress: any = null;
   qwenEpochHistory: any[] = [];
 
+  // Optional modules (set once the module state has loaded)
+  qwenEnabled = false;
+  yoloEnabled = false;
+
   // ========== YOLO Training ==========
   yoloViewMode: YoloViewMode = YoloViewMode.Dashboard;
   YoloViewMode = YoloViewMode;
@@ -215,7 +220,8 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     private notification: NotificationService,
     private datasetService: DatasetService,
     private cdr: ChangeDetectorRef,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private moduleService: ModuleService
   ) {}
 
   onProductionViewModeChange(mode: string): void {
@@ -230,15 +236,23 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.loadOcrTrainingStatus();
     this.loadAvailableModels();
     this.loadKrakenBaseModels();
-    this.loadQwenTrainingStatus();
-    this.loadQwenOutputModes();
-    this.loadQwenBaseModels();
-    this.loadOcrModels();
-    this.checkYoloHealth();
-    this.loadYoloDashboardData();
 
-    // Poll for training status updates
-    this.startTrainingStatusPolling();
+    // Qwen and Layout are optional modules: only call them when installed and switched on
+    this.moduleService.enabledModules$.pipe(take(1), takeUntil(this.destroy$)).subscribe(modules => {
+      this.qwenEnabled = modules['qwen'] !== false;
+      this.yoloEnabled = modules['yolo'] !== false;
+      if (this.qwenEnabled) {
+        this.loadQwenTrainingStatus();
+        this.loadQwenOutputModes();
+        this.loadQwenBaseModels();
+      }
+      this.loadOcrModels();
+      this.checkYoloHealth();
+      this.loadYoloDashboardData();
+
+      // Poll for training status updates
+      this.startTrainingStatusPolling();
+    });
 
     // Switch the embedded view based on URL hints from cross-component navigation:
     // - linkedIdentifier (production "Add linked page") → switch to Datasets so <cured> renders
@@ -296,6 +310,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       error: (err) => console.error('Failed to load Kraken active model', err)
     });
 
+    if (!this.qwenEnabled) {
+      return;
+    }
     this.curedService.listQwenModels().subscribe({
       next: (response) => {
         this.qwenModels = response.models;
@@ -456,7 +473,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   startTrainingStatusPolling(): void {
     // Do a one-time check for each provider; only start polling if training is active
     this.curedService.getKrakenTrainingProgress().subscribe(p => this.handleKrakenProgress(p, true));
-    this.curedService.getQwenTrainingProgress().subscribe(p => this.handleQwenProgress(p, true));
+    if (this.qwenEnabled) {
+      this.curedService.getQwenTrainingProgress().subscribe(p => this.handleQwenProgress(p, true));
+    }
   }
 
   startKrakenPolling(): void {
@@ -567,6 +586,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   // ========== Qwen QLoRA Training Methods ==========
 
   loadQwenTrainingStatus(): void {
+    if (!this.qwenEnabled) {
+      return;
+    }
     const pids = this.selectedTrainingDatasetIds.length > 0 ? this.selectedTrainingDatasetIds : undefined;
     this.curedService.getQwenTrainingStatus(pids).subscribe({
       next: (status) => {
@@ -668,6 +690,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   // ========== YOLO Training Methods ==========
 
   checkYoloHealth(): void {
+    if (!this.yoloEnabled) {
+      return;
+    }
     this.yoloService.checkHealth().subscribe({
       next: (response) => {
         this.yoloHealthStatus = response;
@@ -679,6 +704,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   loadYoloDashboardData(): void {
+    if (!this.yoloEnabled) {
+      return;
+    }
     this.isYoloLoading = true;
 
     this.yoloService.listDatasets().subscribe({

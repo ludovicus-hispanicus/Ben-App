@@ -254,7 +254,7 @@
 
     <!-- Categorized Model Selection -->
     <div class="model-categories">
-      <div *ngFor="let category of ocrModelCategories" class="model-category">
+      <div *ngFor="let category of ocrModelCategories" class="model-category" [hidden]="category.models.length === 0">
         <div class="category-header">{{ category.name }}</div>
         <div class="category-models">
           <button *ngFor="let model of category.models"

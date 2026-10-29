@@ -8,6 +8,7 @@ import { ConfirmDialogComponent } from '../common/confirm-dialog/confirm-dialog.
 import { FolderPickerDialogComponent, FolderPickerResult } from '../common/folder-picker-dialog/folder-picker-dialog.component';
 import { PageRangeDialogComponent, PageRangeDialogResult } from '../common/page-range-dialog/page-range-dialog.component';
 import { environment } from '../../../environments/environment';
+import { ModuleService } from '../../services/module.service';
 
 @Component({
   selector: 'app-document-library',
@@ -88,7 +89,8 @@ export class DocumentLibraryComponent implements OnInit {
     private pagesService: PagesService,
     private notificationService: NotificationService,
     private dialog: MatDialog,
-    private router: Router
+    private router: Router,
+    public moduleService: ModuleService
   ) {}
 
   ngOnInit(): void {

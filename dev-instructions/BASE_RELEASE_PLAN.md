@@ -118,8 +118,10 @@ The audit found that the backend already boots without the heavy ML libraries, b
 1. Licence decision + `LICENSE` file.
 2. Commit the Kraken 7.1 upgrade.
 3. Base spec with Kraken + CPU torch + Ultralytics; fix the build script; build and measure installer size; boot-test.
+   - The base spec must leave out the code of modules that aren't in the base (`api.routers.cure`, `api.routers.segmentation`, `services.qwen_training_service`): "installed" is detected from the module's code plus its libraries (`common/module_status.py`), and CPU torch + Ultralytics alone would make CuRe look installed.
 4. Measure CPU training time (Kraken tiny, YOLO26n).
 5. UI gating: hide Qwen, gate YOLO calls and links, report installed modules. (Nemotron and TrOCR were removed outright.)
+   - **Done 2026-10-29.** `GET /settings/modules/installed`; `ModuleService` combines installed + switched on; Qwen is its own module; nav, route guard, Training tab, model menus, Library and dashboard links follow it; OCR with a missing module returns HTTP 400 "The … module is not installed."; menu groups renamed Kraken (local) / Qwen (local) / Ollama (local). The Settings "Install" button is still a placeholder.
 6. Ollama: capability-based model discovery.
 7. Cloud APIs: live model catalog in CuReD.
 8. Layout inside CuReD: YOLO26 base models, Layout tab in the hub, detect-and-pick in the page editor.

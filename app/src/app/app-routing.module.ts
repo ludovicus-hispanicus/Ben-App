@@ -1,5 +1,7 @@
 import { NgModule, Injectable } from '@angular/core';
-import { RouterModule, Routes, CanActivate, CanDeactivate, Router } from '@angular/router';
+import { RouterModule, Routes, CanActivate, CanDeactivate, Router, UrlTree } from '@angular/router';
+import { Observable, of } from 'rxjs';
+import { map, take } from 'rxjs/operators';
 import { AdminPanelComponent } from './components/admin-panel/admin-panel.component';
 import { AboutComponent } from './components/about/about.component';
 import { YoloTrainingComponent } from './components/yolo-training/yolo-training.component';
@@ -16,13 +18,16 @@ import { UnsavedChangesService } from './services/unsaved-changes.service';
 export class ModuleGuard implements CanActivate {
   constructor(private moduleService: ModuleService, private router: Router) {}
 
-  canActivate(route: any): boolean {
+  canActivate(route: any): Observable<boolean | UrlTree> {
     const moduleId = route.data?.moduleId;
-    if (moduleId && !this.moduleService.isEnabled(moduleId)) {
-      this.router.navigate(['/']);
-      return false;
+    if (!moduleId) {
+      return of(true);
     }
-    return true;
+    // Wait for the module state (a direct link can arrive before it has loaded)
+    return this.moduleService.enabledModules$.pipe(
+      take(1),
+      map(modules => modules[moduleId] !== false || this.router.parseUrl('/')),
+    );
   }
 }
 

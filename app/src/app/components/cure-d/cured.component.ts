@@ -419,13 +419,19 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     models: Array<{value: string; label: string; description?: string; trained?: boolean}>;
   }> = [
     {
-      name: 'CPU',
+      name: 'Kraken (local)',
       models: [
-        // Populated dynamically from /available-models (kraken, qwen_lora trained models)
+        // Populated dynamically from /available-models
       ]
     },
     {
-      name: 'Local GPU',
+      name: 'Qwen (local)',
+      models: [
+        // Qwen LoRA adapters, listed only when the Qwen module is installed
+      ]
+    },
+    {
+      name: 'Ollama (local)',
       models: [
         // Additional models populated dynamically from Ollama
       ]
@@ -3988,17 +3994,21 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       response => {
         this.availableOcrModels = response.models;
 
-        // Add trained models (kraken, qwen_lora) into the CPU category
-        const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
-        if (cpuCategory) {
-          const existingValues = new Set(cpuCategory.models.map(m => m.value));
-          const trainedPrefixes = ['kraken:', 'qwen_lora:'];
+        // Add trained models: Kraken, and Qwen LoRA when that module is installed
+        const groups = [
+          { prefix: 'kraken:', category: 'Kraken (local)', description: 'Trained Kraken model' },
+          { prefix: 'qwen_lora:', category: 'Qwen (local)', description: 'Qwen QLoRA fine-tuned' },
+        ];
+        for (const group of groups) {
+          const category = this.ocrModelCategories.find(c => c.name === group.category);
+          if (!category) continue;
+          const existingValues = new Set(category.models.map(m => m.value));
           for (const model of response.models) {
-            if (trainedPrefixes.some(p => model.value.startsWith(p)) && !existingValues.has(model.value)) {
-              cpuCategory.models.push({
+            if (model.value.startsWith(group.prefix) && !existingValues.has(model.value)) {
+              category.models.push({
                 value: model.value,
                 label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
-                description: model.value.startsWith('kraken:') ? 'Trained Kraken model' : 'Qwen QLoRA fine-tuned',
+                description: group.description,
                 trained: true,
               });
               this.modelAvailability[model.value] = true;
@@ -4059,13 +4069,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   }
 
   getKrakenModels(): Array<{value: string; label: string}> {
-    const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
-    return cpuCategory ? cpuCategory.models.filter(m => this.isModelAvailable(m.value)) : [];
+    const krakenCategory = this.ocrModelCategories.find(c => c.name === 'Kraken (local)');
+    return krakenCategory ? krakenCategory.models.filter(m => this.isModelAvailable(m.value)) : [];
   }
 
   getOllamaModels(): Array<{value: string; label: string}> {
-    const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
-    return gpuCategory ? gpuCategory.models.filter(m => this.isModelAvailable(m.value)) : [];
+    const ollamaCategory = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+    return ollamaCategory ? ollamaCategory.models.filter(m => this.isModelAvailable(m.value)) : [];
   }
 
   getApiModels(): Array<{value: string; label: string}> {
@@ -4112,7 +4122,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   loadAvailableOllamaModels() {
     this.curedService.getRecommendedModels().subscribe(
       response => {
-        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
+        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         if (!gpuCategory) return;
 
         // Append installed Ollama models to the category

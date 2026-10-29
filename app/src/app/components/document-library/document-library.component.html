@@ -330,14 +330,14 @@
       <span class="viewer-label">{{viewerPage.filename}}
         <span *ngIf="openProject"> ({{viewerIndex + 1}} / {{openProject.pages.length}})</span>
       </span>
-      <div class="viewer-actions">
+      <div class="viewer-actions" *ngIf="moduleService.enabledModules$ | async as modules">
         <button mat-stroked-button (click)="openInTool('cured')">
           <mat-icon>edit_note</mat-icon> Open in CuReD
         </button>
-        <button mat-stroked-button (click)="openInTool('cure')">
+        <button mat-stroked-button *ngIf="modules['cure']" (click)="openInTool('cure')">
           <mat-icon>spellcheck</mat-icon> Open in CuRe
         </button>
-        <button mat-stroked-button (click)="openInTool('yolo-training')">
+        <button mat-stroked-button *ngIf="modules['yolo']" (click)="openInTool('yolo-training')">
           <mat-icon>grid_on</mat-icon> Open in Layout
         </button>
       </div>

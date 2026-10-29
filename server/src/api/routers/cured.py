@@ -428,6 +428,7 @@ async def get_curated_stats(dataset_id: int = None):
 async def get_available_models():
     """Get list of available OCR models (providers + trained adapters + Kraken models)."""
     from services.kraken_training_service import kraken_training_service
+    from common.module_status import is_module_available
 
     # Base OCR provider models (these match OCRFactory providers)
     models = [
@@ -447,31 +448,33 @@ async def get_available_models():
     except Exception as e:
         logging.warning(f"Could not load Kraken models: {e}")
 
-    # Add Qwen LoRA adapters
-    try:
-        from services.qwen_training_service import qwen_training_service
-        qwen_adapters = qwen_training_service.get_adapters()
-        for adapter in qwen_adapters:
-            mode = adapter.get("output_mode", "plain")
-            base = adapter.get("base_model", "qwen3-vl")
-            models.append({
-                "value": f"qwen_lora:{adapter['name']}",
-                "label": f"{adapter['name']} (Qwen QLoRA, {base}, {mode})"
-            })
-    except Exception as e:
-        logging.warning(f"Could not load Qwen adapters: {e}")
+    # Add Qwen LoRA adapters (optional module)
+    if is_module_available("qwen"):
+        try:
+            from services.qwen_training_service import qwen_training_service
+            qwen_adapters = qwen_training_service.get_adapters()
+            for adapter in qwen_adapters:
+                mode = adapter.get("output_mode", "plain")
+                base = adapter.get("base_model", "qwen3-vl")
+                models.append({
+                    "value": f"qwen_lora:{adapter['name']}",
+                    "label": f"{adapter['name']} (Qwen QLoRA, {base}, {mode})"
+                })
+        except Exception as e:
+            logging.warning(f"Could not load Qwen adapters: {e}")
 
-    # Add CuRe sign classifier models
-    try:
-        from services.cure_training_service import cure_training_service
-        cure_models = cure_training_service.get_models()
-        for cm in cure_models:
-            models.append({
-                "value": f"cure:{cm['name']}",
-                "label": f"{cm['name']} (CuRe Sign Classifier)"
-            })
-    except Exception as e:
-        logging.warning(f"Could not load CuRe models: {e}")
+    # Add CuRe sign classifier models (optional module)
+    if is_module_available("cure"):
+        try:
+            from services.cure_training_service import cure_training_service
+            cure_models = cure_training_service.get_models()
+            for cm in cure_models:
+                models.append({
+                    "value": f"cure:{cm['name']}",
+                    "label": f"{cm['name']} (CuRe Sign Classifier)"
+                })
+        except Exception as e:
+            logging.warning(f"Could not load CuRe models: {e}")
 
     return {"models": models}
 

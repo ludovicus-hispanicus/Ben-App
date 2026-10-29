@@ -74,7 +74,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   // Base models that are always available
   private baseModels = {
     kraken: [
-      { value: 'kraken', label: 'Kraken (CPU)' }
+      { value: 'kraken', label: 'Kraken' }
     ],
     local: [] as { value: string; label: string }[],
     ollamaCloud: [
@@ -171,9 +171,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.loadAppSettings();
     this.loadDictionaryStatus();
 
-    // Load module states
-    this.moduleService.enabledModules$.subscribe(modules => {
-      this.moduleStates = { ...modules };
+    // Load module states: the on/off choices, and which modules are installed
+    this.moduleService.enabledModules$.subscribe(() => {
+      this.moduleStates = this.moduleService.modulePreferences;
+    });
+    this.moduleService.installedModules$.subscribe(installed => {
+      this.appModules = APP_MODULES.map(m => ({ ...m, installed: installed[m.id] !== false }));
     });
 
     // Subscribe to mappings changes
@@ -308,8 +311,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
     // Build groups
     this.ocrModelGroups = [
-      { label: 'CPU', models: this.baseModels.kraken },
-      { label: 'Local GPU', models: localModels },
+      { label: 'Kraken (local)', models: this.baseModels.kraken },
+      { label: 'Ollama (local)', models: localModels },
       { label: 'Ollama Cloud', models: this.baseModels.ollamaCloud },
       { label: 'API', models: this.baseModels.api }
     ];

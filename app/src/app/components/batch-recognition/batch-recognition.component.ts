@@ -128,13 +128,19 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     models: Array<{value: string; label: string; description?: string}>;
   }> = [
     {
-      name: 'CPU',
+      name: 'Kraken (local)',
       models: [
-        // Trained Kraken and Qwen LoRA models are loaded dynamically from the backend
+        // Trained Kraken models are loaded dynamically from the backend
       ]
     },
     {
-      name: 'Local GPU',
+      name: 'Qwen (local)',
+      models: [
+        // Qwen LoRA adapters, listed only when the Qwen module is installed
+      ]
+    },
+    {
+      name: 'Ollama (local)',
       models: [
         // Additional models populated dynamically from Ollama
       ]
@@ -738,21 +744,24 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   private loadKrakenModels(): void {
     this.curedService.getAvailableOcrModels().subscribe({
       next: (response) => {
-        const cpuCategory = this.ocrModelCategories.find(c => c.name === 'CPU');
-        if (!cpuCategory) return;
-
-        const existingValues = new Set(cpuCategory.models.map(m => m.value));
-
-        for (const model of response.models) {
-          // Add trained Kraken and Qwen LoRA models that aren't already in the list
-          if ((model.value.startsWith('kraken:') || model.value.startsWith('qwen_lora:')) && !existingValues.has(model.value)) {
-            const description = model.value.startsWith('qwen_lora:') ? 'Qwen QLoRA fine-tuned' : 'Trained Kraken model';
-            cpuCategory.models.push({
-              value: model.value,
-              label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
-              description,
-            });
-            this.modelAvailability[model.value] = true;
+        // Trained Kraken models, and Qwen LoRA when that module is installed
+        const groups = [
+          { prefix: 'kraken:', category: 'Kraken (local)', description: 'Trained Kraken model' },
+          { prefix: 'qwen_lora:', category: 'Qwen (local)', description: 'Qwen QLoRA fine-tuned' },
+        ];
+        for (const group of groups) {
+          const category = this.ocrModelCategories.find(c => c.name === group.category);
+          if (!category) continue;
+          const existingValues = new Set(category.models.map(m => m.value));
+          for (const model of response.models) {
+            if (model.value.startsWith(group.prefix) && !existingValues.has(model.value)) {
+              category.models.push({
+                value: model.value,
+                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
+                description: group.description,
+              });
+              this.modelAvailability[model.value] = true;
+            }
           }
         }
       },
@@ -763,7 +772,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   private loadOllamaModels(): void {
     this.curedService.getRecommendedModels().subscribe({
       next: (response) => {
-        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Local GPU');
+        const gpuCategory = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         if (!gpuCategory) return;
 
         // Append installed Ollama models to the category

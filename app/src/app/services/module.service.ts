@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { forkJoin, Observable, of, ReplaySubject } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 
 export interface ModuleConfig {
@@ -18,32 +19,61 @@ export const APP_MODULES: ModuleConfig[] = [
   { id: 'cure', name: 'CuRe', description: 'Sign classifier editor', icon: 'gesture', core: false, installed: true },
   { id: 'yolo', name: 'Layout', description: 'YOLO layout detection & training', icon: 'grid_view', core: false, installed: true },
   { id: 'line_segmentation', name: 'Segmentation', description: 'Line segmentation annotation tool', icon: 'splitscreen', core: false, installed: true },
+  { id: 'qwen', name: 'Qwen (local)', description: 'Qwen3-VL LoRA training & OCR on your own GPU', icon: 'smart_toy', core: false, installed: true },
 ];
 
 @Injectable({ providedIn: 'root' })
 export class ModuleService {
-  private enabledModules = new BehaviorSubject<Record<string, boolean>>({});
+  // Emit only once loaded, so nothing shows a module before we know it exists
+  private enabledModules = new ReplaySubject<Record<string, boolean>>(1);
+  private installedModules = new ReplaySubject<Record<string, boolean>>(1);
+  /** Usable modules: installed and switched on in Settings. */
   enabledModules$ = this.enabledModules.asObservable();
+  /** Installed modules (their code and libraries are present). */
+  installedModules$ = this.installedModules.asObservable();
+
+  private preferences: Record<string, boolean> = {};
+  private installed: Record<string, boolean> = {};
+  private effective: Record<string, boolean> = {};
 
   constructor(private http: HttpClient) {
     this.loadModules();
   }
 
   private loadModules(): void {
-    this.http.get<Record<string, boolean>>(`${environment.apiUrl}/settings/modules`)
-      .subscribe({
-        next: (modules) => this.enabledModules.next(modules),
-        error: () => {
-          // Default: everything enabled
-          const defaults: Record<string, boolean> = {};
-          APP_MODULES.forEach(m => defaults[m.id] = true);
-          this.enabledModules.next(defaults);
-        }
-      });
+    const allOn: Record<string, boolean> = {};
+    APP_MODULES.forEach(m => allOn[m.id] = true);
+    forkJoin({
+      preferences: this.http.get<Record<string, boolean>>(`${environment.apiUrl}/settings/modules`)
+        .pipe(catchError(() => of(allOn))),
+      // An older backend without this route: treat everything as installed
+      installed: this.http.get<Record<string, boolean>>(`${environment.apiUrl}/settings/modules/installed`)
+        .pipe(catchError(() => of(allOn))),
+    }).subscribe(({ preferences, installed }) => {
+      this.installed = installed;
+      this.installedModules.next(installed);
+      this.publish(preferences);
+    });
   }
 
+  private publish(preferences: Record<string, boolean>): void {
+    this.preferences = preferences;
+    const effective: Record<string, boolean> = {};
+    APP_MODULES.forEach(m => {
+      effective[m.id] = this.installed[m.id] !== false && preferences[m.id] !== false;
+    });
+    this.effective = effective;
+    this.enabledModules.next(effective);
+  }
+
+  /** Installed and switched on. */
   isEnabled(moduleId: string): boolean {
-    return this.enabledModules.value[moduleId] !== false;
+    return this.effective[moduleId] !== false;
+  }
+
+  /** The user's on/off choices from Settings (regardless of what is installed). */
+  get modulePreferences(): Record<string, boolean> {
+    return { ...this.preferences };
   }
 
   updateModules(modules: Record<string, boolean>): Observable<Record<string, boolean>> {
@@ -52,7 +82,7 @@ export class ModuleService {
       { modules }
     );
     req.subscribe({
-      next: (updated) => this.enabledModules.next(updated),
+      next: (updated) => this.publish(updated),
     });
     return req;
   }
