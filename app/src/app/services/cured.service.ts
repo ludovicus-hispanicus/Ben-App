@@ -481,6 +481,7 @@ export interface OllamaVisionModels {
     ollama_available: boolean;
     models: OllamaVisionModel[];
     unavailable: Array<{ name: string; cloud: boolean; error: string }>;
+    text_only?: Array<{ name: string; cloud: boolean }>;  // installed, no image input
 }
 
 /** OCR model value for an Ollama model ("ollama:<exact name>", see OCRFactory). */

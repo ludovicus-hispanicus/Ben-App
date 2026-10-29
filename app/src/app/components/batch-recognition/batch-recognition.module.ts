@@ -11,12 +11,14 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule } from '@angular/material/dialog';
 
+import { OllamaModelPickerModule } from '../common/ollama-model-picker/ollama-model-picker.module';
 import { BatchRecognitionComponent } from './batch-recognition.component';
 import { LocalFileBrowserDialogComponent } from './local-file-browser-dialog/local-file-browser-dialog.component';
 
 @NgModule({
   imports: [
     CommonModule,
+    OllamaModelPickerModule,
     FormsModule,
     MatButtonModule,
     MatIconModule,

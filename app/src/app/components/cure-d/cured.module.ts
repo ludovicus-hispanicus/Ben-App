@@ -10,6 +10,7 @@ import { MatProgressSpinnerModule } from "@angular/material/progress-spinner";
 import { FormsModule } from "@angular/forms";
 import { TextSelectorModule } from "../common/text-selector/text-selector.module";
 import { TextCreatorModule } from "../common/text-creator/text-creator.module";
+import { OllamaModelPickerModule } from "../common/ollama-model-picker/ollama-model-picker.module";
 import { TextEditorModule } from "./text-editor/text-editor.module";
 import { DragDropModule } from "@angular/cdk/drag-drop";
 import { CuredComponent } from "./cured.component";
@@ -31,6 +32,7 @@ import { PartDialogComponent } from "../common/part-dialog/part-dialog.component
 @NgModule({
     imports: [
         CommonModule,
+        OllamaModelPickerModule,
         RouterModule,
         MatDialogModule,
         MatButtonModule,

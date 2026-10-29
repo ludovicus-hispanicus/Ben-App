@@ -1,0 +1,14 @@
+.ollama-picker {
+  width: 100%;
+  max-width: 420px;
+}
+
+::ng-deep .mat-option .model-meta {
+  margin-left: 0.5em;
+  color: #888;
+  font-size: 0.85em;
+}
+
+::ng-deep .mat-option.reload-option {
+  color: #1976d2;
+}

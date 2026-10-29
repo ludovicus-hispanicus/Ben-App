@@ -346,14 +346,15 @@ def _describe_model(service: "OllamaOcrService", tag: Dict[str, Any]) -> Dict[st
 def list_vision_models() -> Dict[str, Any]:
     """Installed Ollama models that accept images, as Ollama reports them (no fixed list).
 
-    Returns {"ollama_available", "models": [...], "unavailable": [{"name", "cloud", "error"}]}.
+    Returns {"ollama_available", "models": [...], "unavailable": [{"name", "cloud", "error"}],
+    "text_only": [{"name", "cloud"}]} -- the last are installed models without image input.
     """
     import time
     service = OllamaOcrService()
     if not service.is_available():
-        return {"ollama_available": False, "models": [], "unavailable": []}
+        return {"ollama_available": False, "models": [], "unavailable": [], "text_only": []}
 
-    models, unavailable = [], []
+    models, unavailable, text_only = [], [], []
     now = time.time()
     for tag in service.list_models():
         key = f"{tag.get('name', '')}|{tag.get('digest', '')}"
@@ -367,9 +368,11 @@ def list_vision_models() -> Dict[str, Any]:
             unavailable.append({k: public[k] for k in ("name", "cloud", "error")})
         elif entry.get("vision"):
             models.append(public)
+        else:
+            text_only.append({"name": public["name"], "cloud": public["cloud"]})
     service.close()
     models.sort(key=lambda m: (m["cloud"], m["name"]))
-    return {"ollama_available": True, "models": models, "unavailable": unavailable}
+    return {"ollama_available": True, "models": models, "unavailable": unavailable, "text_only": text_only}
 
 
 def is_available() -> bool:

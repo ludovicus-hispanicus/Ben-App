@@ -271,14 +271,9 @@
       </div>
     </div>
 
-    <!-- Any Ollama model by name (e.g. one that doesn't report image support) -->
-    <div class="custom-ollama-model" *ngIf="ollamaAvailable">
-      <div class="category-header">Other Ollama model</div>
-      <div class="custom-ollama-row">
-        <input [(ngModel)]="customOllamaModel" placeholder="e.g. qwen3.5:4b"
-               (keyup.enter)="useCustomOllamaModel()" aria-label="Ollama model name">
-        <button mat-stroked-button (click)="useCustomOllamaModel()" [disabled]="!customOllamaModel.trim()">Use</button>
-      </div>
+    <!-- Every installed Ollama model; the list is fetched when the dropdown is first opened -->
+    <div class="ollama-picker-row">
+      <app-ollama-model-picker (picked)="useOllamaModel($event)"></app-ollama-model-picker>
     </div>
 
     <!-- Prompt Mode Selection -->

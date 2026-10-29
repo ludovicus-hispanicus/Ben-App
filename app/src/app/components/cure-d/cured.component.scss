@@ -563,34 +563,10 @@
             }
         }
 
-        // Any Ollama model by name, below the model groups
-        .custom-ollama-model {
-            margin: -0.5em 0 2em;
+        // Dropdown of every installed Ollama model, below the model groups
+        .ollama-picker-row {
+            margin: -1em 0 1em;
             max-width: 500px;
-
-            .category-header {
-                display: block;
-                font-size: 0.85em;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                color: #666;
-                margin-bottom: 0.75em;
-            }
-
-            .custom-ollama-row {
-                display: flex;
-                gap: 0.5em;
-                align-items: center;
-
-                input {
-                    flex: 1;
-                    padding: 0.45em 0.75em;
-                    border: 1px solid #ccc;
-                    border-radius: 6px;
-                    font-family: 'Consolas', 'Monaco', monospace;
-                }
-            }
         }
 
         .model-categories {

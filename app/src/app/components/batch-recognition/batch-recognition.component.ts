@@ -162,10 +162,9 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     }
   ];
 
-  // Ollama: running at all, and a model name typed in by the user
+  // Ollama: running at all
   ollamaAvailable = false;
-  customOllamaModel = '';
-  private static readonly TYPED_IN_OLLAMA_MODEL = 'Entered by name';
+  private static readonly PICKED_OLLAMA_MODEL = 'Chosen from the Ollama list';
 
   modelAvailability: { [key: string]: boolean } = {
     'gpt4_vision': true,
@@ -661,19 +660,16 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Use any Ollama model by its name (e.g. one that doesn't report image support yet). */
-  useCustomOllamaModel(): void {
-    const name = this.customOllamaModel.trim();
-    if (!name) return;
+  /** Use a model chosen in the Ollama dropdown (adds it to the buttons if it isn't there). */
+  useOllamaModel(name: string): void {
     const value = ollamaModelValue(name);
     const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
     const known = this.ocrModelCategories.some(c => c.models.some(m => m.value === value));
     if (local && !known) {
-      local.models.push({ value, label: name, description: BatchRecognitionComponent.TYPED_IN_OLLAMA_MODEL });
+      local.models.push({ value, label: name, description: BatchRecognitionComponent.PICKED_OLLAMA_MODEL });
     }
     this.modelAvailability[value] = true;
     this.selectModel(value);
-    this.customOllamaModel = '';
   }
 
   /** Fetch the provider's current model list live (needs the API key). */
@@ -794,8 +790,8 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
         if (!local || !cloud) return;
-        // Keep a model typed in by name; replace the discovered ones
-        local.models = local.models.filter(m => m.description === BatchRecognitionComponent.TYPED_IN_OLLAMA_MODEL);
+        // Keep a model chosen in the Ollama dropdown; replace the discovered ones
+        local.models = local.models.filter(m => m.description === BatchRecognitionComponent.PICKED_OLLAMA_MODEL);
         cloud.models = [];
         for (const m of response.models) {
           const value = ollamaModelValue(m.name);

@@ -1,0 +1,30 @@
+<mat-form-field appearance="outline" class="ollama-picker">
+  <mat-label>Ollama models</mat-label>
+  <!-- Never keeps a value: choosing a model hands it to the model buttons above -->
+  <mat-select [value]="null" (openedChange)="onOpenedChange($event)" (selectionChange)="onSelect($event.value); $event.source.value = null">
+    <!-- A select only opens when it has an option, so this one is there before loading -->
+    <mat-option *ngIf="!loaded || loading" disabled>Asking Ollama…</mat-option>
+
+    <ng-container *ngIf="loaded && !loading">
+      <mat-option *ngIf="!ollamaAvailable" disabled>Ollama is not running</mat-option>
+
+      <mat-optgroup *ngIf="usable.length > 0" label="Can read images">
+        <mat-option *ngFor="let m of usable" [value]="m.name">
+          {{ m.name }}
+          <span class="model-meta">{{ m.cloud ? 'cloud' : (m.parameter_size || '') }}{{ m.size_gb ? ' · ' + m.size_gb + ' GB' : '' }}</span>
+        </mat-option>
+      </mat-optgroup>
+      <mat-option *ngIf="ollamaAvailable && usable.length === 0" disabled>
+        No model that reads images. Try: ollama pull qwen3-vl:4b
+      </mat-option>
+
+      <mat-optgroup *ngIf="notUsable.length > 0" label="Installed, not usable for OCR">
+        <mat-option *ngFor="let m of notUsable" disabled [matTooltip]="m.reason" matTooltipPosition="right">
+          {{ m.name }} <span class="model-meta">{{ shortReason(m.reason) }}</span>
+        </mat-option>
+      </mat-optgroup>
+
+      <mat-option [value]="RELOAD" class="reload-option">↻ Refresh list</mat-option>
+    </ng-container>
+  </mat-select>
+</mat-form-field>
