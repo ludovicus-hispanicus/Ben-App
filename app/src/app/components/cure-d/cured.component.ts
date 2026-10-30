@@ -2617,6 +2617,29 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       this.navSignature = signature;
       Promise.resolve().then(() => this.applyNavigation());
     }
+    // Choosing the OCR model: fill any model list that failed to load (e.g. the
+    // server was restarting when the page opened)
+    if (this.stage !== this.lastStage) {
+      this.lastStage = this.stage;
+      if (this.stage === 2) {
+        Promise.resolve().then(() => this.reloadEmptyModelLists());
+      }
+    }
+  }
+
+  private lastStage: number | null = null;
+
+  private reloadEmptyModelLists(): void {
+    const kraken = this.ocrModelCategories.find(c => c.name === 'Kraken (local)');
+    if (kraken && kraken.models.length === 0) {
+      this.loadAvailableOcrModels();
+    }
+    if (!this.ollamaAvailable) {
+      this.loadAvailableOllamaModels();
+    }
+    if (!this.layoutAvailable) {
+      this.loadLayoutModels();
+    }
   }
 
   private applyNavigation(): void {
