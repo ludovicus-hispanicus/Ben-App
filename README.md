@@ -35,8 +35,9 @@ Settings shows which modules are installed.
 training with YOLO26 Nano takes about 90 seconds per epoch for 70–80 pages on a laptop CPU (a
 typical run of 100 epochs: about 2.5 hours, often less with early stopping). Kraken training is
 much slower: one epoch over 300 lines took about 20 minutes on a laptop CPU, so a dataset of
-a few thousand lines needs hours per epoch. For real training runs, use a GPU (when running
-from source), for example on a campus machine.
+a few thousand lines needs hours per epoch. Even an entry-level GPU changes this: on a laptop
+GPU with 8 GB (RTX 2000 Ada), fine-tuning a Kraken model on CUSAS 18 took about 2.5 minutes
+for two epochs. For real training runs, use a GPU (when running from source).
 
 ## Choosing an approach
 
