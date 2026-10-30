@@ -46,6 +46,12 @@ a = Analysis(
         *copy_metadata('kraken'),
         *copy_metadata('lightning'),
         *copy_metadata('pytorch_lightning'),
+        # Lightning enables features by checking installed versions through the
+        # metadata (e.g. RequirementCache("rich>=10.2.2") for its progress bar;
+        # without it ketos train fails: "cannot import name 'CustomProgress'").
+        *[entry for package in ('rich', 'torch', 'torchvision', 'torchmetrics', 'lightning_utilities',
+                                'numpy', 'scipy', 'matplotlib', 'requests', 'tqdm', 'safetensors')
+          for entry in copy_metadata(package)],
         *collect_data_files('kraken'),
         # Ultralytics reads its model/config YAML files at runtime
         *collect_data_files('ultralytics'),
