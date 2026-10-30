@@ -74,6 +74,21 @@ def list_model_names(models_dir: str) -> List[str]:
     return names
 
 
+def binarize(image: Image.Image) -> Image.Image:
+    """Black-and-white page image for Kraken's line segmentation.
+
+    kraken's nlbin returns its input unchanged when the image already looks
+    bitonal, which a crisp crop of a printed page (e.g. a layout region) does;
+    that image may still be RGB, and pageseg.segment then fails with "sequence
+    argument must have length equal to input rank". Segmentation needs mode '1'.
+    """
+    from kraken import binarization
+    bw_im = binarization.nlbin(image)
+    if bw_im.mode != '1':
+        bw_im = bw_im.convert('L').convert('1')
+    return bw_im
+
+
 class KrakenOcrClient(BaseOcrClient):
     """
     OCR client using the Kraken library with custom trained models.
@@ -225,7 +240,7 @@ class KrakenOcrClient(BaseOcrClient):
 
             # Binarize the image (used for segmentation; also for binary models)
             logger.info("Binarizing image...")
-            bw_im = binarization.nlbin(image)
+            bw_im = binarize(image)
 
             # Segment to find text lines
             logger.info("Segmenting image...")

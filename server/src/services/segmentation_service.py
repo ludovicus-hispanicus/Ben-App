@@ -128,12 +128,13 @@ class SegmentationService:
         No trained model needed — works on binarized images.
         """
         try:
-            from kraken import binarization, pageseg
+            from kraken import pageseg
+            from clients.kraken_client import binarize
 
             image = self._ensure_compatible_mode(image)
 
             logger.info("Lineart pipeline: binarizing...")
-            bw_im = binarization.nlbin(image)
+            bw_im = binarize(image)
 
             logger.info("Lineart pipeline: segmenting...")
             seg = pageseg.segment(bw_im, text_direction='horizontal-lr')
@@ -174,12 +175,13 @@ class SegmentationService:
         Future: ridge/valley filtering → trained blla model or U-Net.
         """
         try:
-            from kraken import binarization, pageseg
+            from kraken import pageseg
+            from clients.kraken_client import binarize
 
             image = self._ensure_compatible_mode(image)
 
             logger.info("Photo pipeline: binarizing...")
-            bw_im = binarization.nlbin(image)
+            bw_im = binarize(image)
 
             logger.info("Photo pipeline: segmenting...")
             seg = pageseg.segment(bw_im, text_direction='horizontal-lr')
