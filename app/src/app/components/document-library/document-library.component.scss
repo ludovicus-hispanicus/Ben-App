@@ -854,3 +854,26 @@
     }
   }
 }
+
+// Page previews: the real thumbnail, loaded only when it scrolls into view
+.thumbnail-card.with-preview {
+  width: 124px;
+
+  .thumbnail-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 112px;
+    height: 150px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  }
+}

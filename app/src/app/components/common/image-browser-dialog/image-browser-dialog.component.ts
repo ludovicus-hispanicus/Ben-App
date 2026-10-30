@@ -276,4 +276,9 @@ export class ImageBrowserDialogComponent implements OnInit {
   onCancel(): void {
     this.dialogRef.close(null);
   }
+
+  /** Small JPEG preview of a page (the browser loads it only when it scrolls into view). */
+  thumbnailUrl(page: { thumbnail_url: string }): string {
+    return `${environment.apiUrl}${page.thumbnail_url}`;
+  }
 }

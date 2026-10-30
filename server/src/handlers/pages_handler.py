@@ -465,7 +465,7 @@ class PagesHandler:
             pages.append(PageInfo(
                 filename=png.name,
                 page_number=page_num,
-                thumbnail_url=f"/pages/projects/{project_id}/file/{png.name}",
+                thumbnail_url=f"/pages/projects/{project_id}/thumbnail/{page_num}",
                 full_url=f"/pages/projects/{project_id}/file/{png.name}",
                 file_size=stat.st_size,
                 modified_at=datetime.fromtimestamp(stat.st_mtime).isoformat(),
