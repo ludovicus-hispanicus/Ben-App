@@ -80,11 +80,20 @@ def _patch_lineest():
         pass  # kraken not installed or lineest layout changed
 
 
-_force_utf8_streams()
-_patch_rich()
-_patch_lineest()
+def main(args=None) -> int:
+    """Run the ketos CLI with the patches applied.
 
-# Now run ketos CLI (kraken 7: kraken.ketos.cli is the click group; same import on 6.x)
-if __name__ == "__main__":
+    ``args`` are the ketos arguments (default: the command line). The installed
+    app has no Python, so cured-server.exe calls this for ``--ketos ...``
+    (see run_server.py).
+    """
+    _force_utf8_streams()
+    _patch_rich()
+    _patch_lineest()
+    # kraken 7: kraken.ketos.cli is the click group; same import on 6.x
     from kraken.ketos import cli
-    sys.exit(cli())
+    return cli.main(args=args, prog_name="ketos", standalone_mode=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

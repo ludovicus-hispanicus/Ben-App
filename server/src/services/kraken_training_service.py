@@ -75,12 +75,17 @@ logging.info(f"Detected Kraken version: {KRAKEN_VERSION[0]}.{KRAKEN_VERSION[1]}.
 MODEL_EXT = ".safetensors" if KRAKEN_VERSION[0] >= 7 else ".mlmodel"
 
 
-def _python_executable() -> str:
-    """Interpreter used to run ketos: this process' interpreter (never a bare
-    ``python`` from PATH, which may be a different install), unless frozen."""
+def _ketos_launcher() -> List[str]:
+    """How to start ketos (with the patches in ketos_wrapper.py) as a subprocess.
+
+    From source: this process' interpreter (never a bare ``python`` from PATH,
+    which may be a different install) running ketos_wrapper.py. In the installed
+    app there is no Python: cured-server.exe runs ketos itself (``--ketos``,
+    see run_server.py).
+    """
     if getattr(sys, "frozen", False):
-        return "python"
-    return sys.executable
+        return [sys.executable, "--ketos"]
+    return [sys.executable, os.path.join(os.path.dirname(__file__), "ketos_wrapper.py")]
 
 
 def detect_model_arch(model_path: str) -> str:
@@ -305,8 +310,7 @@ class KrakenTrainingService:
         ketos_wrapper.py patches rich / lineest and forces UTF-8 output before
         handing over to the ketos CLI.
         """
-        wrapper_path = os.path.join(os.path.dirname(__file__), "ketos_wrapper.py")
-        cmd = [_python_executable(), wrapper_path]
+        cmd = _ketos_launcher()
         if KRAKEN_VERSION[0] >= 7:
             # kraken 7: device/precision are global options placed before the subcommand
             if device:

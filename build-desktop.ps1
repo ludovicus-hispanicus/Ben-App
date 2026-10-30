@@ -1,19 +1,23 @@
 # CuReD Desktop Build Script (Windows)
 # Usage: powershell -ExecutionPolicy Bypass -File build-desktop.ps1
 #
+# Builds the BASE app (CuReD + Library): server/cured-server-base.spec into
+# server/dist-base, which electron/package.json packages.
+#
 # Prerequisites:
 #   - Node.js (with npm)
-#   - Python 3.8+ (with pip)
-#   - PyInstaller: pip install pyinstaller
-#
-# Optional (for smaller build without GPU):
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   - A Python environment for the server build with server/requirements.txt,
+#     PyInstaller and **CPU** torch (a CUDA torch adds ~3 GB and breaks GitHub's
+#     2 GB release-file limit):
+#       pip install torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cpu
+#     By default the conda environment "ben-base" is used (-PythonExe to override).
 
 param(
     [switch]$SkipAngular,
     [switch]$SkipPython,
     [switch]$SkipElectron,
-    [switch]$PackageOnly  # Run 'electron-forge package' instead of 'make' (faster, no installer)
+    [switch]$PackageOnly,  # Run 'electron-forge package' instead of 'make' (faster, no installer)
+    [string]$PythonExe = "$env:USERPROFILE\miniconda3\envs\ben-base\python.exe"
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,26 +54,40 @@ if (-not $SkipAngular) {
 
 # ── Step 2: Build Python server ────────────────────────────────────────────────
 if (-not $SkipPython) {
-    Write-Host "[2/3] Building Python server with PyInstaller..." -ForegroundColor Yellow
+    Write-Host "[2/3] Building Python server (base) with PyInstaller..." -ForegroundColor Yellow
     Set-Location "$RootDir\server"
 
-    # Install PyInstaller if not present
-    python -m pip show pyinstaller | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  Installing PyInstaller..." -ForegroundColor DarkYellow
-        python -m pip install pyinstaller
+    if (-not (Test-Path $PythonExe)) {
+        Write-Host "ERROR: Python for the server build not found: $PythonExe (use -PythonExe)" -ForegroundColor Red
+        exit 1
     }
 
-    pyinstaller cured-server.spec --noconfirm
+    # A CUDA torch would make the installer ~4 GB (GitHub rejects files over 2 GB)
+    $torchVersion = & $PythonExe -c "import torch; print(torch.__version__)"
+    if ($torchVersion -notmatch '\+cpu$') {
+        Write-Host "ERROR: the build environment has torch $torchVersion; the base build needs the CPU build (+cpu)." -ForegroundColor Red
+        exit 1
+    }
+
+    # Install PyInstaller if not present
+    & $PythonExe -m pip show pyinstaller | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Installing PyInstaller..." -ForegroundColor DarkYellow
+        & $PythonExe -m pip install pyinstaller
+    }
+
+    # Ultralytics would pip-install optional packages while PyInstaller analyses it
+    $env:YOLO_AUTOINSTALL = "False"
+    & $PythonExe -m PyInstaller cured-server-base.spec --noconfirm --distpath dist-base --workpath build-base
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: PyInstaller build failed!" -ForegroundColor Red
         exit 1
     }
 
-    # Verify output exists
-    if (-not (Test-Path "$RootDir\server\dist\cured-server\cured-server.exe")) {
-        Write-Host "ERROR: PyInstaller output not found at server\dist\cured-server\" -ForegroundColor Red
+    # Verify output exists (this is what electron/package.json packages)
+    if (-not (Test-Path "$RootDir\server\dist-base\cured-server\cured-server.exe")) {
+        Write-Host "ERROR: PyInstaller output not found at server\dist-base\cured-server\" -ForegroundColor Red
         exit 1
     }
 

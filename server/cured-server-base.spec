@@ -1,36 +1,66 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the BEn API-only BASE backend.
+"""PyInstaller spec for the BEn BASE backend: CuReD + Library.
 
-This build ships the minimal server that powers CuReD via cloud OCR APIs
-(Claude / Gemini / GPT / Grok) plus curation, lemmatization, library,
-production and eBL. The heavy local-ML stack (torch / kraken / ultralytics /
-CuRe classifier / local VLM) is intentionally EXCLUDED so the installer stays
-small; those ship later as downloadable modules.
+The base ships what CuReD needs on a normal computer (CPU only):
+  * Kraken 7.1 OCR and training (CPU torch; ``cured-server --ketos`` runs ketos,
+    see run_server.py), with the bundled Kraken models
+  * layout detection and training (Ultralytics YOLO26 / YOLOv8)
+  * Ollama and the cloud OCR APIs (Claude / Gemini / GPT / Grok)
+  * curation, lemmatization, Library, production and eBL
 
-Build:  pyinstaller cured-server-base.spec --noconfirm
+Left out (optional modules, reported as "not installed" by
+common/module_status.py, which checks for their code):
+  * CuRe sign classifier, line segmentation, local Qwen3-VL (LoRA)
+  * the local VLM stack (transformers, peft, bitsandbytes, ...)
+
+Build it in an environment with **CPU** torch (a CUDA torch adds ~3 GB of DLLs
+and breaks GitHub's 2 GB per-file release limit):
+
+    pyinstaller cured-server-base.spec --noconfirm --distpath dist-base --workpath build-base
+
+Electron packages ``server/dist-base/cured-server`` (electron/package.json).
 """
 
+import glob
 import os
 
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
+
 src_dir = os.path.join(os.getcwd(), 'src')
+
+# Kraken models shipped with the app: the model files and the registry/active
+# model, not training scratch folders (_train_*) left in cured_models/.
+kraken_models = [
+    (path, 'cured_models')
+    for pattern in ('*.safetensors', '*.mlmodel', 'active_model.txt', 'registry.json')
+    for path in glob.glob(os.path.join(src_dir, 'cured_models', pattern))
+]
 
 a = Analysis(
     [os.path.join(src_dir, 'run_server.py')],
     pathex=[src_dir],
     binaries=[],
     datas=[
+        # Kraken 7 finds its model/loader/trainer classes through entry points in
+        # the package metadata; without the dist-info: "No loader found".
+        *copy_metadata('kraken'),
+        *copy_metadata('lightning'),
+        *copy_metadata('pytorch_lightning'),
+        *collect_data_files('kraken'),
+        # Ultralytics reads its model/config YAML files at runtime
+        *collect_data_files('ultralytics'),
         # Grammar files (Lark parser)
         (os.path.join(src_dir, 'ebl_atf_grammar'), 'ebl_atf_grammar'),
         # XML schemas
         (os.path.join(src_dir, 'schemas'), 'schemas'),
         # Prompt templates
         (os.path.join(src_dir, 'prompts'), 'prompts'),
-        # Config files
-        (os.path.join(src_dir, 'ebl_config.json'), '.'),
         # CSV data
         (os.path.join(src_dir, 'data', 'museums.csv'), 'data'),
-        # NOTE: 'cured_models' (Kraken weights) intentionally omitted — Kraken
-        # is a downloadable module, not part of the API-only base.
+        # Kraken OCR models
+        *kraken_models,
+        # NOT ebl_config.json: it holds the eBL login of whoever builds the app.
+        # Without it BEn starts logged out of eBL and creates its own on login.
     ],
     hiddenimports=[
         # FastAPI / Uvicorn
@@ -59,17 +89,36 @@ a = Analysis(
         # Git-backed storage
         'pygit2',
         'pgzip',
-        # Cloud OCR / LLM clients
-        'google.genai',
-        'google.auth',
-        # Image processing (no torch in base; cv2 is needed by core storage/destitch)
+        # Image processing
         'PIL',
         'fitz',  # PyMuPDF
-        'cv2',   # OpenCV — used by utils/storage_utils, image_utils, destitch (core path)
+        'cv2',
+        # ML: CPU torch, Kraken 7.x, Ultralytics
+        'torch',
+        'torchvision',
+        'ultralytics',
+        # Kraken 7.x resolves model classes, loaders, trainers and ketos
+        # subcommands through importlib.metadata entry points (kraken.models /
+        # kraken.loaders / kraken.lightning_modules / kraken.configs), so every
+        # submodule must be bundled (and the metadata copied, see datas).
+        *collect_submodules('kraken'),
+        'lightning',
+        'lightning.pytorch',
+        'lightning.fabric',
+        'pytorch_lightning',
+        'safetensors',
+        'safetensors.torch',
+        'coremltools',   # legacy .mlmodel loader (kraken <= 6 models)
+        'torchmetrics',
+        'threadpoolctl',
+        'htrmopo',
+        'yaml',          # ketos --config experiment files
+        'services.ketos_wrapper',  # cured-server --ketos (Kraken training)
         # Cloud OCR / LLM clients
         'anthropic',
         'openai',
         'google.genai',
+        'google.auth',
         'httpx',
         # Parsers
         'lark',
@@ -90,17 +139,17 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # ── Heavy local-ML stack — downloadable modules, NOT in the base ──
-        'torch',
-        'torchvision',
-        'ultralytics',
-        'kraken',
-        'sklearn',        # only used by the optional CuRe training path
-        'scikit_learn',
-        'scipy',
-        'skimage',
-        # Local VLM / training stack (already excluded in full spec)
+        # ── Optional modules: their code stays out, so BEn reports them as
+        # "not installed" (common/module_status.py checks for it) ──
+        'api.routers.cure',
+        'api.routers.segmentation',
+        'services.qwen_training_service',
+        'services.qwen_ocr_service',
+        'services.qwen3_vl_service',
+        'clients.qwen_lora_client',
+        # Local VLM / training stack (Qwen LoRA etc.)
         'transformers',
+        'peft',
         'bitsandbytes',
         'accelerate',
         'open_clip_torch',
@@ -112,23 +161,18 @@ a = Analysis(
         'spacy',
         'thinc',
         'blis',
-        # ML training frameworks — training module only
+        # Other ML frameworks
         'tensorflow',
-        'lightning',
-        'pytorch_lightning',
         'onnxruntime',
-        # Numba/triton — torch transitively, never used directly
+        'triton',
+        # Numba / LLVM (~100 MB): pulled in by hooks, not used by Kraken or Ultralytics here
         'numba',
         'llvmlite',
-        'triton',
         # Heavy optional deps from various hooks
-        'pyarrow',
-        'shapely',
-        'pywt',
-        'imageio',
-        'cloudpickle',
         'dask',
-        'matplotlib',
+        'IPython',
+        'jupyter',
+        'notebook',
     ],
     noarchive=False,
 )
