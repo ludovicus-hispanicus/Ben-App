@@ -959,6 +959,22 @@
                 <pre>{{ customPromptPreview }}</pre>
               </details>
             </div>
+            <!-- The prompt behind the selected mode (sent to VLMs and APIs; Kraken ignores it) -->
+            <div class="prompt-mode-actions" *ngIf="selectedOcrPrompt !== 'custom' && promptTexts[selectedOcrPrompt]">
+              <button type="button" class="custom-prompt-preview-toggle" (click)="showPromptText = !showPromptText">
+                <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;">{{ showPromptText ? 'visibility_off' : 'visibility' }}</mat-icon>
+                {{ showPromptText ? 'Hide the prompt' : 'Show the prompt' }}
+              </button>
+              <button type="button" class="custom-prompt-preview-toggle" (click)="editPromptCopy()"
+                      matTooltip="Start a Custom prompt from this text">
+                <mat-icon style="font-size:14px;width:14px;height:14px;vertical-align:middle;">edit_note</mat-icon>
+                Edit a copy
+              </button>
+            </div>
+            <details class="prompt-mode-preview" *ngIf="showPromptText && selectedOcrPrompt !== 'custom' && promptTexts[selectedOcrPrompt]" open>
+              <summary>Text sent to the model for "{{ selectedOcrPrompt }}"</summary>
+              <pre>{{ promptTexts[selectedOcrPrompt] }}</pre>
+            </details>
           </div>
 
           <!-- Post-OCR Correction Rules -->

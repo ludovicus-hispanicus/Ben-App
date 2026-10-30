@@ -3481,3 +3481,60 @@ p {
         }
     }
 }
+
+// The prompt behind the selected OCR mode (page editor, "Show the prompt")
+.prompt-mode-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.5em;
+    margin-top: 0.5em;
+    font-size: 0.78em;
+
+    .custom-prompt-preview-toggle {
+        background: transparent;
+        border: 1px solid #d1c4e9;
+        border-radius: 4px;
+        color: #6a1b9a;
+        padding: 0.15em 0.5em;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25em;
+
+        &:hover {
+            background: #f3e5f5;
+            border-color: #9b59b6;
+        }
+    }
+}
+
+.prompt-mode-preview {
+    max-width: 560px;
+    margin: 0.5em auto 0;
+    border: 1px solid #e0d7ee;
+    border-radius: 6px;
+    background: #faf7fd;
+    padding: 0.4em 0.6em;
+    font-size: 0.78em;
+    color: #444;
+    text-align: left;
+
+    summary {
+        cursor: pointer;
+        color: #6a1b9a;
+        font-weight: 500;
+        padding: 0.15em 0;
+        user-select: none;
+    }
+
+    pre {
+        margin: 0.4em 0 0;
+        max-height: 320px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.95em;
+        line-height: 1.45;
+    }
+}

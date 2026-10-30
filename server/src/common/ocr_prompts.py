@@ -115,6 +115,48 @@ STRICT EXTRACTION RULES:
 7. UNKNOWN SYMBOLS: If you encounter a small symbol, mark, or special character that you cannot confidently identify or map to a known Unicode character, output ↑ (U+2191) in its place. Do NOT guess or substitute with a visually similar but incorrect character. Common examples of such symbols are reference marks, cross-reference arrows, and determinative signs.
 
 Output the result as plain text, one entry per line. No markdown, no explanations.""",
+    "ebl_atf": """You are an expert Assyriologist. Transcribe the printed transliteration in this image into eBL-ATF, the text format of the electronic Babylonian Library (eBL).
+
+OUTPUT
+──────
+  • Output only ATF lines, one per line. No introduction, no explanations, no code fences.
+
+LINES
+─────
+  • Text lines: the line number as printed, a period and a space: "1. ", "2'. ", "10. ".
+    If the page has no line numbers, number the lines 1., 2., 3., … in order.
+  • Surfaces and columns, when the edition marks them, each on its own line:
+    @obverse, @reverse, @left, @column 1, @column 2, …
+  • Missing parts and rulings as $-lines: "$ (rest of obverse broken)", "$ single ruling".
+  • A translation printed for a line goes after that line as "#tr.en: …" (#tr.de: for German).
+  • A note of the editor that belongs to a line: "#note: …".
+  • Score editions (a composite line followed by manuscript witnesses made of dashes
+    and sigla): transcribe the composite lines only, not the witness lines.
+
+SIGNS
+─────
+  • Syllabic readings in lowercase, joined by hyphens within a word: a-na, i-ha-bil-šu.
+  • Logograms (Sumerograms) in uppercase, signs joined by periods: LUGAL, DUMU.MEŠ, AN.MI.
+  • Determinatives in curly braces, attached to their word: {d}IŠKUR, {giš}GU.ZA, uri₂{ki}.
+  • Sign indices as Unicode subscript digits: u₂, ša₂, du₁₁, BURU₁₄.
+    Accents become indices: ú → u₂, ù → u₃, á → a₂, à → a₃, é → e₂, è → e₃, í → i₂, ì → i₃.
+  • Write h for ḫ (eBL convention): ha-bil, not ḫa-bil. Keep š, ṣ, ṭ.
+  • An unreadable sign is x.
+
+DAMAGE AND EDITORIAL MARKS
+──────────────────────────
+  • Broken text in square brackets [ ]; an unrestored gap is [...]: [DINGIR] ša₂ ina [...].
+  • Half brackets ⸢ ⸣ (partly preserved signs): drop them and put # after every sign they
+    enclose: ⸢ma⸣ → ma#, ⸢AD-šu⸣ → AD#-šu#.
+  • Uncertain reading: ? directly after the sign (ma(?) → ma?); editorial correction: !;
+    collated: *.
+  • Signs supplied by the editor: < >; superfluous signs: << >>.
+
+DO NOT
+──────
+  • Do not restore, complete or correct broken or uncertain text.
+  • Do not normalise or translate the Akkadian or Sumerian; copy translations only where
+    the page prints them.""",
     "zettelkasten": """You are a specialist in Assyriology and Sumerian lexicography transcribing index cards from a digitized Zettelkasten (slip archive).
 
 OUTPUT FORMAT

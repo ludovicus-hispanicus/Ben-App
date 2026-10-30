@@ -39,6 +39,7 @@ import { BatchRecognitionService } from 'src/app/services/batch-recognition.serv
 import { LatestModelAlias, ProviderModel } from 'src/app/models/batch-recognition';
 import { YoloTrainingService } from 'src/app/services/yolo-training.service';
 import { ModuleService } from 'src/app/services/module.service';
+import { environment } from 'src/environments/environment';
 
 export class SelectedPdf {
   constructor(public pdf: File,
@@ -534,6 +535,45 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   /** Restore the bundled starter (assyriologist framing + safety rules).
    * Needed because the textarea is restored from localStorage on init, so
    * users who already had a custom prompt never see the new default. */
+  // The text of each prompt mode (from the server), so the user can see what is sent
+  public promptTexts: { [key: string]: string } = {};
+  public showPromptText = false;
+  private static readonly PROMPT_LABELS: { [key: string]: string } = {
+    plain: 'Plain', markdown: 'Markdown', dictionary: 'Dictionary', cad: 'CAD',
+    ahw_refentry: 'AHw RefEntry', ebl_atf: 'eBL ATF', tei_lex0: 'TEI Lex-0', zettelkasten: 'Zettelkasten',
+  };
+
+  /** Prompt texts from the server; modes that exist there but not in the list are added. */
+  private loadPromptTexts(): void {
+    this.http.get<{ prompts: Array<{ key: string; value: string; builtin: boolean }> }>(
+      `${environment.apiUrl}/cured/ollama/prompts`
+    ).subscribe({
+      next: (res) => {
+        for (const p of res.prompts) {
+          this.promptTexts[p.key] = p.value;
+          if (!this.ocrPromptModes.some(m => m.value === p.key)) {
+            this.ocrPromptModes.push({
+              value: p.key,
+              label: CuredComponent.PROMPT_LABELS[p.key] || p.key,
+              description: p.builtin ? 'Built-in prompt' : 'Your saved prompt',
+            });
+          }
+        }
+      },
+      error: () => {},  // the built-in list stays; the preview is just not available
+    });
+  }
+
+  /** Start a custom prompt from the selected mode's text. */
+  editPromptCopy(): void {
+    const text = this.promptTexts[this.selectedOcrPrompt];
+    if (!text) return;
+    this.customOcrPrompt = text;
+    localStorage.setItem(CuredComponent.CUSTOM_OCR_PROMPT_KEY, text);
+    this.selectedOcrPrompt = 'custom';
+    this.showPromptText = false;
+  }
+
   resetCustomOcrPrompt(): void {
     this.customOcrPrompt = CuredComponent.DEFAULT_CUSTOM_OCR_PROMPT;
     localStorage.setItem(CuredComponent.CUSTOM_OCR_PROMPT_KEY, CuredComponent.DEFAULT_CUSTOM_OCR_PROMPT);
@@ -1091,6 +1131,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.loadCuratedStats();
     this.loadAvailableOcrModels();
     this.loadLayoutModels();
+    this.loadPromptTexts();
     this.loadAvailableOllamaModels();
 
     // Subscribe to query param changes to handle navigation within the same route
