@@ -1,0 +1,143 @@
+# Builds BEn for Apple Silicon Macs (arm64) and, if asked, attaches it to a release.
+#
+# Run it from GitHub: Actions > "Build Mac (Apple Silicon)" > Run workflow.
+# The app is not signed with an Apple Developer ID, only ad-hoc: macOS shows a
+# warning on first start (see the release notes for how to open it).
+name: Build Mac (Apple Silicon)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach the zip to this release (empty: only keep it as a workflow artifact)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14   # Apple Silicon (arm64)
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── Python server ──────────────────────────────────────────────────────
+      - name: Install server dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Same versions as the Windows build environment (ben-base). The Mac
+          # wheels of torch run on the CPU (Kraken does not use Apple's GPU here).
+          pip install torch==2.10.0 torchvision==0.25.0
+          # The local VLM training stack is left out of the base build (see the spec)
+          grep -vE '^(transformers|bitsandbytes|accelerate)' server/requirements.txt > /tmp/req-base.txt
+          pip install -r /tmp/req-base.txt kraken==7.1.1 ultralytics==8.4.13 coremltools==9.0 pyinstaller==6.19.0
+          python -c "import torch, kraken, ultralytics; print('torch', torch.__version__)"
+
+      - name: Add the shipped Kraken models
+        run: |
+          mkdir -p server/src/cured_models
+          cp server/release-models/CUSAS18.safetensors server/release-models/registry.json \
+             server/release-models/active_model.txt server/src/cured_models/
+
+      - name: Package the server (PyInstaller)
+        working-directory: server
+        env:
+          YOLO_AUTOINSTALL: "False"
+        run: python -m PyInstaller cured-server-base.spec --noconfirm --distpath dist-base --workpath build-base
+
+      - name: Start test (empty data folder, Kraken reading)
+        run: |
+          mkdir -p /tmp/ben-data
+          APP_PORT=5099 STORAGE_PATH=/tmp/ben-data ./server/dist-base/cured-server/cured-server > /tmp/server.log 2>&1 &
+          for i in $(seq 1 180); do
+            curl -sf http://127.0.0.1:5099/docs > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:5099/api/v1/settings/modules/installed
+          echo
+          curl -sf http://127.0.0.1:5099/api/v1/cured/training/kraken/active-model
+          echo
+          python - <<'EOF'
+          import base64, io, json, urllib.request
+          from PIL import Image, ImageDraw, ImageFont
+          img = Image.new("RGB", (1400, 260), "white")
+          d = ImageDraw.Draw(img)
+          font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 44)
+          d.text((40, 40), "1. [a-na be-li-ia] qí-bí-ma", fill="black", font=font)
+          d.text((40, 140), "2. um-ma ib-ni-{d}marduk", fill="black", font=font)
+          buf = io.BytesIO(); img.save(buf, "PNG")
+          body = json.dumps({"image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+                             "model": "kraken:CUSAS18", "prompt": "plain"}).encode()
+          req = urllib.request.Request("http://127.0.0.1:5099/api/v1/cured/getTransliterations", body,
+                                       {"Content-Type": "application/json"})
+          lines = json.load(urllib.request.urlopen(req, timeout=600))["lines"]
+          print(len(lines), "lines:", lines)
+          assert lines, "Kraken returned no lines"
+          EOF
+          pkill -f dist-base/cured-server/cured-server || true
+
+      - name: Server log
+        if: always()
+        run: tail -n 80 /tmp/server.log || true
+
+      # ── Frontend and app ───────────────────────────────────────────────────
+      - name: Build the frontend (Angular)
+        working-directory: app
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: |
+          npm ci
+          npx ng build --configuration=desktop
+
+      - name: App icon (.icns)
+        working-directory: electron/assets
+        run: |
+          mkdir icon.iconset
+          for s in 16 32 128 256 512; do
+            sips -z $s $s icon.png --out icon.iconset/icon_${s}x${s}.png > /dev/null
+            d=$((s * 2))
+            sips -z $d $d icon.png --out icon.iconset/icon_${s}x${s}@2x.png > /dev/null
+          done
+          iconutil -c icns icon.iconset -o icon.icns
+
+      - name: Package the app (Electron)
+        working-directory: electron
+        run: |
+          npm ci
+          npx electron-forge package --platform darwin --arch arm64
+          APP=$(ls -d out/*-darwin-arm64/*.app)
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Ad-hoc signature and zip
+        working-directory: electron
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          # Without a valid (ad-hoc) signature macOS calls the app "damaged"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --verbose=2 "$APP"
+          ZIP="BEn-$VERSION-mac-arm64.zip"
+          ditto -c -k --keepParent "$APP" "$ZIP"
+          ls -lh "$ZIP"
+          echo "ZIP=electron/$ZIP" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ben-mac-arm64
+          path: ${{ env.ZIP }}
+          retention-days: 14
+
+      - name: Attach to the release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.release_tag }}" "$ZIP" --clobber

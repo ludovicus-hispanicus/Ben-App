@@ -1,0 +1,12 @@
+[
+  {
+    "name": "CUSAS18",
+    "path": "CUSAS18.safetensors",
+    "format": "safetensors",
+    "arch": "ppocrv6",
+    "kraken_version": "7.1.1",
+    "created": "2026-11-16T22:11:00.730649",
+    "epochs": 21,
+    "accuracy": 0.981
+  }
+]

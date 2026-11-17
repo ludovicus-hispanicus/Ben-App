@@ -55,7 +55,8 @@ function getAngularDistPath() {
 
 function getPythonServerPath() {
     if (IS_PACKAGED) {
-        return path.join(process.resourcesPath, 'cured-server', 'cured-server.exe');
+        const exe = process.platform === 'win32' ? 'cured-server.exe' : 'cured-server';
+        return path.join(process.resourcesPath, 'cured-server', exe);
     }
     return null; // dev mode uses system python
 }
