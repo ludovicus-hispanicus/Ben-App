@@ -96,7 +96,8 @@ jobs:
         env:
           NODE_OPTIONS: --openssl-legacy-provider
         run: |
-          npm ci
+          # @ngrx 13 declares Angular 13 as a peer, the app runs on Angular 12 (works)
+          npm ci --legacy-peer-deps
           npx ng build --configuration=desktop
 
       - name: App icon (.icns)
