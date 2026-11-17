@@ -22,29 +22,40 @@ application backed by a local database, with pluggable cloud and local recogniti
 |---|---|
 | **OCR with Kraken** | Fast line recognition on the CPU, offline. Ships with a model for CUSAS-style transliterations; train your own from corrected pages (CPU, no graphics card needed). |
 | **Layout detection** | Finds the regions of a page (entries, headers, page numbers, …) so you can send one region to OCR with a click instead of drawing a box. Train layout models (YOLO26) on your own editions. |
-| **Ollama** | Use any vision model you run locally with [Ollama](https://ollama.com). BEn lists the installed models that can read images, Ollama's cloud models, and models to download, with their size. |
+| **Ollama** | Use any vision model you run locally with [Ollama](https://ollama.com). BEn lists the installed models that can read images, Ollama's cloud models, and models to download, with their size. Needs Ollama 0.40 or newer (tested with 0.40.13): older versions cannot download recent models such as GLM-OCR, Qwen 3.5 or Gemma 4. |
 | **Cloud APIs** | Gemini, Claude, OpenAI and Grok with your own API key, single pages or large batches (including the providers' cheaper batch APIs). |
 | **Correction & export** | Line-by-line correction next to the image, curation for training, lemmatization, ATF export and eBL upload. |
 | **Library** | Books, PDFs and page images, organised in projects. |
 
 **Optional modules** (not in the installer, available when running from source): CuRe (sign
-classifier), line segmentation, and local Qwen3-VL training and inference (needs a GPU).
-Settings shows which modules are installed.
+classifier) and line segmentation. Settings shows which modules are installed.
 
-**Training on the CPU.** Training works without a graphics card, but it is slow. Layout
-training with YOLO26 Nano takes about 90 seconds per epoch for 70–80 pages on a laptop CPU (a
-typical run of 100 epochs: about 2.5 hours, often less with early stopping). Kraken training is
-much slower: one epoch over 300 lines took about 20 minutes on a laptop CPU, so a dataset of
-a few thousand lines needs hours per epoch. Even an entry-level GPU changes this: on a laptop
-GPU with 8 GB (RTX 2000 Ada), fine-tuning a Kraken model on CUSAS 18 took about 2.5 minutes
-for two epochs. For real training runs, use a GPU (when running from source).
+**Training on the CPU.** Training works without a graphics card, but it is slow, especially
+Kraken training. How long it takes depends on your texts: how many lines, how long they are,
+and how many epochs are needed. Even an entry-level GPU is much faster, so for real training
+runs use a GPU (when running from source).
+
+**Training vision models.** CuReD can fine-tune DeepSeek-OCR (3B) on your curated texts
+(Training → DeepSeek-OCR LoRA; from source, with an NVIDIA GPU, Ollama, and
+`pip install unsloth peft gguf`). At the end BEn creates the Ollama model
+`deepseek-ocr-<name>`, which you choose in CuReD's Ollama list. It has been tested on one laptop
+with an 8 GB GPU (RTX 2000 Ada, Windows 11): one epoch on 69 CUSAS 18 texts took 13 minutes and
+halved the error on a held-out text (30.9 % → 14.4 %). On 8 GB the model is loaded in 4-bit and
+the longest pages are left out; 8 GB is the limit to start with, and sometimes not enough.
+To train with enough data, start with 16 GB of GPU memory or more. Every computer differs (GPU,
+memory, drivers, operating system), so expect to adapt the training settings to your machine:
+we recommend cloning the repository and adapting it with an AI coding assistant. Once it runs,
+the human-in-the-loop cycle is the same everywhere: OCR, correct, retrain, OCR the next batch.
 
 ## Choosing an approach
 
 Every project has to decide how to digitise its material, depending on its budget (API costs
 per page, or one-off training), its time, the people available for correction (curated lines
 are what makes a local model good) and its computing power (an ordinary laptop, a GPU on
-campus, or the large companies' cloud models). BEn makes these options concrete and comparable
+campus, or the large companies' cloud models). A typical choice: spend about 3,000 € on a computer
+with a powerful GPU (train, test, correct, retrain; the models stay with the project and run
+offline), or spend it on a large cloud model (better results from the start, no training, fast).
+BEn makes these options concrete and comparable
 on your own pages: a Kraken model trained locally, a model trained on a campus GPU, local vision
 models through Ollama, or the cloud APIs, all with the same correction workflow. As open-source
 software it can be adapted freely to a project's needs.
@@ -69,7 +80,7 @@ the tools they need.
 - **Core modules** ship with every install and cannot be disabled: **CuReD** and **Library**
   (the storage backbone the other modules depend on). **Settings** hosts the module manager.
   Batch recognition, training, layout detection, production and eBL are parts of CuReD.
-- **Optional modules** — CuRe, Segmentation and Qwen (local VLM) — can be enabled/disabled
+- **Optional modules** — CuRe and Segmentation — can be enabled/disabled
   per install. A module counts as installed when its code and libraries are present
   (`server/src/common/module_status.py`, `GET /settings/modules/installed`); the navigation,
   routes and menus show only installed, enabled modules.
@@ -95,7 +106,6 @@ How it works:
 - **Library** — books, PDFs and page images; storage backbone for other modules. *(core)*
 - **CuRe** — cuneiform sign classifier. *(optional)*
 - **Segmentation** — line segmentation annotation tool. *(optional)*
-- **Qwen** — local Qwen3-VL LoRA training and OCR on your own GPU. *(optional)*
 - **Settings** — model configuration, API keys, the module manager and dashboard news.
 
 ## OCR / recognition architecture
@@ -106,7 +116,7 @@ BEn follows a four-tier recognition strategy (see [dev-instructions/ROADMAP.md](
 |------|-------|----------|-------|
 | Manual Import | External (paste) | None | Bring your own OCR from any source |
 | Local | Kraken 7 (+ YOLO layout) | CPU | Offline, always available, trainable |
-| Local VLM | Any Ollama vision model; Qwen3-VL LoRA (optional module) | CPU or GPU | Markdown output; found automatically |
+| Local VLM | Any Ollama vision model, including DeepSeek-OCR models trained in CuReD | CPU or GPU | Markdown output; found automatically |
 | Premium | Cloud APIs (Claude, Gemini, GPT, Grok) | Cloud | Best quality; live model lists; batch APIs supported |
 
 Cloud provider clients live in `server/src/clients/` (`anthropic_client.py`, `grok_client.py`, …),
@@ -127,6 +137,7 @@ with batch-API support under `server/src/clients/batch_api/`.
 - Node.js (tested with Node 22)
 - Python 3.10+
 - (Optional) A CUDA-capable GPU for local VLM models
+- (Optional) [Ollama](https://ollama.com) 0.40 or newer (tested with 0.40.13)
 
 ### Frontend (`app/`)
 

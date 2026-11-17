@@ -30,6 +30,10 @@ OLLAMA_MODELS = {
     "qwen3_vl_235b_thinking": "qwen3-vl:235b-thinking-cloud",  # Qwen3-VL 235B Thinking - STEM/math
 }
 
+# DeepSeek-OCR (and models trained from it, e.g. deepseek-ocr-ahw) answers BEn's long prompts
+# with nothing; it only knows its own short commands.
+DEEPSEEK_OCR_PROMPT = "Free OCR."
+
 
 class OllamaOcrClient(BaseOcrClient):
     """OCR client using Ollama for vision model inference."""
@@ -45,6 +49,21 @@ class OllamaOcrClient(BaseOcrClient):
         self.model = OLLAMA_MODELS.get(model, model)
         self._service = OllamaOcrService(model=self.model)
         logger.info(f"Initialized OllamaOcrClient with model: {self.model}")
+
+    def _is_deepseek_ocr(self) -> bool:
+        return self.model.lower().startswith("deepseek-ocr")
+
+    def _gpu_busy_message(self) -> Optional[str]:
+        """Refuse local models while a training holds the GPU (cloud models still run).
+
+        Loading e.g. DeepSeek-OCR (~6.9 GB) next to a training on an 8 GB GPU makes
+        one of them fail.
+        """
+        from services.ollama_gpu import training_on_gpu, is_ollama_cloud_model, TRAINING_BUSY_MESSAGE
+        if training_on_gpu() and not is_ollama_cloud_model(self.model):
+            logger.info(f"Ollama OCR with {self.model} refused: a training holds the GPU")
+            return TRAINING_BUSY_MESSAGE
+        return None
 
     def ocr_image(
         self,
@@ -65,6 +84,10 @@ class OllamaOcrClient(BaseOcrClient):
         Returns:
             Dict with "lines" (List[str]) and optionally "dimensions"
         """
+        busy = self._gpu_busy_message()
+        if busy:
+            return {"lines": [], "dimensions": [], "error": busy}
+
         # Use provided prompt or fall back to the configured default
         output_mode = prompt if prompt else get_default_prompt()
         logger.info(f"Running Ollama OCR with model: {self.model}, prompt: {output_mode}")
@@ -74,6 +97,8 @@ class OllamaOcrClient(BaseOcrClient):
         if prompt and prompt not in PROMPTS and len(prompt) > 30:
             custom_prompt = prompt
             output_mode = "plain"  # fallback mode key
+        if self._is_deepseek_ocr():
+            custom_prompt, output_mode = DEEPSEEK_OCR_PROMPT, "plain"
 
         result = self._service.ocr_from_base64(
             image_base64=image_base64,
@@ -107,6 +132,13 @@ class OllamaOcrClient(BaseOcrClient):
         }
 
     def ocr_images(self, images: List[Tuple[str, int, int]], prompt: Optional[str] = None) -> List[Dict[str, Any]]:
+        busy = self._gpu_busy_message()
+        if busy:
+            return [{"lines": [], "dimensions": [], "error": busy} for _ in images]
+        if self._is_deepseek_ocr():
+            # DeepSeek-OCR reads one image per request with its own command ("Free OCR."),
+            # not a multi-image prompt through the chat endpoint
+            return super().ocr_images(images, prompt)
         output_mode = prompt if prompt else get_default_prompt()
 
         custom_prompt = None
@@ -115,6 +147,8 @@ class OllamaOcrClient(BaseOcrClient):
             output_mode = "plain"
 
         base_prompt = custom_prompt or PROMPTS.get(output_mode, PROMPTS["plain"])
+        if self._is_deepseek_ocr():
+            base_prompt = DEEPSEEK_OCR_PROMPT
         wrapped = wrap_prompt_for_batch(base_prompt, len(images))
 
         image_list = []
@@ -125,15 +159,17 @@ class OllamaOcrClient(BaseOcrClient):
             image_list.append(img_b64)
             dims.append((w, h))
 
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": wrapped, "images": image_list}],
+            "stream": False,
+        }
+        from services.ollama_gpu import is_ollama_cloud_model
+        if not is_ollama_cloud_model(self.model):
+            # Ollama's default 4,096-token context holds the images AND the answer: too small
+            body["options"] = {"num_ctx": 32768}
         try:
-            response = self._service.client.post(
-                f"{self._service.base_url}/api/chat",
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": wrapped, "images": image_list}],
-                    "stream": False,
-                },
-            )
+            response = self._service.client.post(f"{self._service.base_url}/api/chat", json=body)
             if response.status_code != 200:
                 logger.error(f"Ollama multi-image OCR failed: {response.status_code}")
                 return [{"lines": [], "dimensions": []} for _ in images]

@@ -276,8 +276,13 @@
       <app-ollama-model-picker (picked)="useOllamaModel($event)"></app-ollama-model-picker>
     </div>
 
+    <div class="mode-section" *ngIf="ignoresPrompt()">
+      <div class="section-label">Prompt</div>
+      <div class="optional">{{ isKrakenModel() ? 'Kraken reads no prompt.' : 'DeepSeek-OCR does not follow written instructions, only a few fixed commands. BEn sends it "Free OCR." (plain text), the command its trained models also learned.' }}</div>
+    </div>
+
     <!-- Prompt Mode Selection -->
-    <div class="mode-section">
+    <div class="mode-section" *ngIf="!ignoresPrompt()">
       <div class="section-label">Prompt</div>
       <div class="mode-buttons">
         <button *ngFor="let mode of ocrPromptModes"
@@ -354,38 +359,9 @@
       </div>
     </div>
 
-    <!-- Images per Call -->
-    <div class="config-section">
-      <div class="section-label">Images per Call</div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <select [(ngModel)]="batchMode" class="batch-size-input" style="flex: 1;">
-          <option value="fixed">Fixed</option>
-          <option value="dynamic">Dynamic (by image size)</option>
-        </select>
-        <input *ngIf="batchMode === 'fixed'" type="number" [(ngModel)]="batchSize" min="0" class="batch-size-input" style="width: 70px;" placeholder="0">
-        <input *ngIf="batchMode === 'dynamic'" type="text" value="-" readonly class="batch-size-input" style="width: 70px; text-align: center; opacity: 0.5;">
-      </div>
-    </div>
-
-    <!-- Image Resolution -->
-    <div class="config-section">
-      <div class="section-label">Target DPI <span class="optional">(downscales to target, reads actual DPI)</span></div>
-      <select [(ngModel)]="targetDpi" class="batch-size-input">
-        <option *ngFor="let opt of targetDpiOptions" [ngValue]="opt.value">{{ opt.label }}</option>
-      </select>
-    </div>
-
-    <!-- Image Scale -->
-    <div class="config-section">
-      <div class="section-label">Image Scale <span class="optional">(applied after DPI resize)</span></div>
-      <select [(ngModel)]="imageScale" class="batch-size-input">
-        <option *ngFor="let opt of imageScaleOptions" [ngValue]="opt.value">{{ opt.label }}</option>
-      </select>
-    </div>
-
-    <!-- Line Detection Mode -->
-    <div class="config-section">
-      <div class="section-label">Line Detection</div>
+    <!-- Line boxes (Kraken brings its own) -->
+    <div class="config-section" *ngIf="!isKrakenModel()">
+      <div class="section-label">Line boxes</div>
       <div class="mode-buttons">
         <button *ngFor="let opt of boxModeOptions"
                 class="mode-btn"
@@ -397,17 +373,48 @@
       </div>
     </div>
 
-    <!-- Tiling Mode -->
-    <div class="config-section">
-      <div class="section-label">Tiling Mode</div>
-      <div class="mode-buttons">
-        <button *ngFor="let opt of tilingModeOptions"
-                class="mode-btn"
-                [class.selected]="tilingMode === opt.value"
-                (click)="tilingMode = opt.value"
-                [matTooltip]="opt.description">
-          {{ opt.label }}
-        </button>
+    <!-- Advanced: only what applies to the chosen model -->
+    <div class="config-section advanced-settings" *ngIf="!isKrakenModel()">
+      <button type="button" class="advanced-toggle" (click)="showAdvanced = !showAdvanced">
+        <mat-icon>{{ showAdvanced ? 'expand_less' : 'expand_more' }}</mat-icon>
+        Advanced
+      </button>
+      <div *ngIf="showAdvanced" class="advanced-body">
+        <div class="config-section">
+          <div class="section-label">Image size</div>
+          <select [(ngModel)]="imageSize" class="batch-size-input">
+            <option *ngFor="let opt of imageSizeOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+          </select>
+        </div>
+
+        <div class="config-section">
+          <div class="section-label">Columns</div>
+          <div class="mode-buttons">
+            <button *ngFor="let opt of tilingModeOptions"
+                    class="mode-btn"
+                    [class.selected]="tilingMode === opt.value"
+                    (click)="tilingMode = opt.value"
+                    [matTooltip]="opt.description">
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="config-section" *ngIf="requiresApiKey()">
+          <div class="section-label">Images per request</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <select [(ngModel)]="batchMode" class="batch-size-input" style="flex: 1;">
+              <option value="auto">Automatic (by image size)</option>
+              <option value="fixed">Fixed number</option>
+            </select>
+            <input *ngIf="batchMode === 'fixed'" type="number" [(ngModel)]="batchSize" min="1" class="batch-size-input" style="width: 70px;">
+          </div>
+          <div class="optional" style="font-size: 12px; margin-top: 4px;">
+            {{ batchMode === 'auto'
+              ? 'Small snippets go up to 20 per request, page-sized images one at a time; very tall images are split.'
+              : 'Several images in one request are cheaper, but the answer has to be split up again.' }}
+          </div>
+        </div>
       </div>
     </div>
 

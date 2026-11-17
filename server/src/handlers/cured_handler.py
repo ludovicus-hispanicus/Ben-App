@@ -184,8 +184,10 @@ class CuredHandler:
                 import traceback
                 traceback.print_exc()
 
-        # Apply box mode override
+        # Apply box mode override. Kraken found the lines itself: keep its boxes.
         box_mode = getattr(dto, 'boxMode', None) or 'estimate'
+        if dto.model.startswith('kraken') and box_mode == 'predict':
+            box_mode = 'estimate'
         if box_mode == 'none':
             boxes = []
         elif box_mode == 'predict' and text_lines:

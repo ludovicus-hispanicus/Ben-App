@@ -31,7 +31,7 @@ export class AppComponent implements OnDestroy {
 
   constructor(
     private titleService: Title,
-    private toolbarService: ToolbarService,
+    public toolbarService: ToolbarService,
     public moduleService: ModuleService,
     private router: Router,
     private zone: NgZone

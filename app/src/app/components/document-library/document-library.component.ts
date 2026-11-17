@@ -204,6 +204,8 @@ export class DocumentLibraryComponent implements OnInit {
   private loadFolderPages(node: ProjectTreeNode): void {
     this.pagesService.getProject(node.project_id).subscribe({
       next: (detail) => {
+        // A slower answer for a folder clicked earlier must not replace the current one
+        if (this.selectedFolder?.project_id !== node.project_id) { return; }
         this.openProject = detail;
       },
       error: () => {
@@ -404,12 +406,15 @@ export class DocumentLibraryComponent implements OnInit {
 
   onNameClick(node: ProjectTreeNode, event: MouseEvent): void {
     event.stopPropagation();
-    // Only start rename if this node is already selected (slow double-click)
+    // Only start rename if this node is already selected (slow double-click);
+    // otherwise the click on the name opens the folder, like a click on the row
     if (this.selectedFolder?.project_id === node.project_id) {
       clearTimeout(this.renameClickTimer);
       this.renameClickTimer = setTimeout(() => {
         this.startRename(node);
       }, 400);
+    } else {
+      this.selectFolder(node);
     }
   }
 
@@ -421,6 +426,8 @@ export class DocumentLibraryComponent implements OnInit {
       this.renameClickTimer = setTimeout(() => {
         this.startRename(folder);
       }, 400);
+    } else {
+      this.toggleFolderSelection(folder, event);
     }
   }
 

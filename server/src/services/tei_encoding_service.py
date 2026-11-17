@@ -109,6 +109,9 @@ class TeiEncodingService:
         self, system_prompt: str, user_message: str, model: str
     ) -> Dict[str, Any]:
         """Use Ollama text-only chat for TEI encoding."""
+        from services.ollama_gpu import training_on_gpu, is_ollama_cloud_model, TRAINING_BUSY_MESSAGE
+        if training_on_gpu() and not is_ollama_cloud_model(model):
+            return {"success": False, "text": "", "error": TRAINING_BUSY_MESSAGE}
         try:
             response = self.client.post(
                 f"{self.ollama_url}/api/chat",

@@ -24,7 +24,7 @@ class OCRFactory:
         # Cloud API providers - support provider:submodel format (e.g., gemini_vision:gemini-3-pro)
         # Parse sub-model if present
         sub_model = None
-        if ":" in provider_name and not provider_name.startswith("kraken") and not provider_name.startswith("cure") and not provider_name.startswith("qwen_lora") and not provider_name.startswith("vllm") and not provider_name.startswith("ollama:"):
+        if ":" in provider_name and not provider_name.startswith("kraken") and not provider_name.startswith("cure") and not provider_name.startswith("vllm") and not provider_name.startswith("ollama:"):
             provider_name, sub_model = provider_name.split(":", 1)
             provider_name = provider_name.lower().strip()
             logging.info(f"Parsed sub-model: {sub_model} for provider: {provider_name}")
@@ -89,17 +89,6 @@ class OCRFactory:
                 model_name = "active"
             logging.info(f"Using CuRe sign classifier with model: {model_name}")
             return CuReOcrClient(model_name=model_name)
-
-        # Qwen3-VL LoRA adapters - "qwen_lora" or "qwen_lora:adapter_name"
-        elif provider_name.startswith("qwen_lora"):
-            _require_module("qwen", "Qwen")
-            from .qwen_lora_client import QwenLoraOcrClient
-            if ":" in original_provider_name:
-                adapter_name = original_provider_name.split(":", 1)[1]
-            else:
-                adapter_name = None
-            logging.info(f"Using Qwen3-VL LoRA OCR with adapter: {adapter_name or 'base'}")
-            return QwenLoraOcrClient(adapter_name=adapter_name)
 
         # vLLM server - "vllm" (base model) or "vllm:adapter_name" (LoRA adapter)
         elif provider_name.startswith("vllm"):

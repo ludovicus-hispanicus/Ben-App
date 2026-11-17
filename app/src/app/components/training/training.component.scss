@@ -744,3 +744,31 @@
     }
   }
 }
+
+// Vision-model training: what to expect from a training run
+.vlm-training-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 16px 0 12px;
+  padding: 10px 12px;
+  background: #f3f6fb;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #455a64;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: #607d8b;
+    flex-shrink: 0;
+  }
+}
+
+.vlm-progress-message {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #546e7a;
+}

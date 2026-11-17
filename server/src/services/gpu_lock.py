@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
-_gpu_owner: str | None = None  # e.g. "qwen_training", "kraken_training", "batch_recognition"
+_gpu_owner: str | None = None  # e.g. "deepseek_training", "kraken_training", "batch_recognition"
 
 
 def acquire(owner: str) -> tuple[bool, str | None]:

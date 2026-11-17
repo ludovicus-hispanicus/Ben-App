@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil, switchMap, take } from 'rxjs/operators';
 
@@ -8,6 +8,7 @@ import { YoloTrainingService } from '../../services/yolo-training.service';
 import { NotificationService } from '../../services/notification.service';
 import { DatasetService } from '../../services/dataset.service';
 import { ModuleService } from '../../services/module.service';
+import { ToolbarService } from '../../services/toolbar.service';
 import { DatasetPreview } from '../../models/cured';
 import {
   DatasetListItem,
@@ -30,7 +31,7 @@ export enum TrainingTab {
 
 export enum TrainingEngine {
   Kraken = 'kraken',
-  Qwen = 'qwen'
+  DeepSeek = 'deepseek'
 }
 
 export enum OcrViewMode {
@@ -78,8 +79,16 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('krakenLogTerminal') krakenLogTerminal: ElementRef;
   private shouldScrollLogs = true;
 
-  // OCR View Mode (Datasets / Models / Training)
-  ocrViewMode: OcrViewMode = OcrViewMode.Datasets;
+  // OCR View Mode (Datasets / Models / Training / Batch / Layout / Export)
+  private _ocrViewMode: OcrViewMode = OcrViewMode.Datasets;
+  get ocrViewMode(): OcrViewMode {
+    return this._ocrViewMode;
+  }
+  set ocrViewMode(mode: OcrViewMode) {
+    this._ocrViewMode = mode;
+    // After the view has changed: the page view (<cured>) clears the toolbar when it goes
+    setTimeout(() => this.applyViewNavigation());
+  }
   OcrViewMode = OcrViewMode;
 
   // CuReD stage (0=dashboard, 1=pdf, 2+=visualizer)
@@ -146,8 +155,8 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   krakenModels: TrainedModel[] = [];
   krakenActiveModel: ActiveModelInfo | null = null;
   selectedKrakenModel: TrainedModel | null = null;
-  // ========== Qwen QLoRA Training ==========
-  qwenTrainingStatus: TrainingStatus = {
+  // ========== DeepSeek-OCR LoRA Training (result: an Ollama model) ==========
+  deepseekTrainingStatus: TrainingStatus & { available?: boolean; unavailableReason?: string | null } = {
     curatedTexts: 0,
     previousLines: 0,
     newLines: 0,
@@ -156,25 +165,21 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     progress: 0,
     isReady: false,
     lastTraining: null,
-    currentTraining: null
+    currentTraining: null,
+    available: false,
+    unavailableReason: null
   };
-  qwenModels: TrainedModel[] = [];
-  qwenActiveModel: ActiveModelInfo | null = null;
-  selectedQwenModel: TrainedModel | null = null;
-  qwenModelName = '';
-  qwenOutputMode = 'plain';
-  qwenOutputModes: { [key: string]: string } = {};
-  qwenBaseModels: { id: string; name: string; hf_id: string }[] = [];
-  qwenBaseModel = 'qwen3-vl-4b';
-  qwenEpochs = 10;
-  qwenPatience = 3;
-  qwenDevice = 'auto';
-  isQwenTraining = false;
-  qwenTrainingProgress: any = null;
-  qwenEpochHistory: any[] = [];
+  deepseekModels: TrainedModel[] = [];
+  selectedDeepSeekModel: TrainedModel | null = null;
+  deepseekModelName = '';
+  deepseekEpochs = 2;
+  deepseekPatience = 2;
+  deepseekDevice = 'auto';
+  isDeepSeekTraining = false;
+  deepseekTrainingProgress: any = null;
+  deepseekEpochHistory: any[] = [];
 
   // Optional modules (set once the module state has loaded)
-  qwenEnabled = false;
   yoloEnabled = false;
 
   // ========== YOLO Training ==========
@@ -222,8 +227,35 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     private datasetService: DatasetService,
     private cdr: ChangeDetectorRef,
     private route: ActivatedRoute,
+    private router: Router,
+    private toolbarService: ToolbarService,
     private moduleService: ModuleService
   ) {}
+
+  private static readonly VIEW_LABELS: { [mode: string]: string } = {
+    models: 'Models', training: 'Training', batch: 'Batch', layout: 'Layout', export: 'Export',
+  };
+
+  /** Path in the toolbar for the hub's tabs (the page view sets its own: datasets, texts). */
+  private applyViewNavigation(): void {
+    const label = TrainingComponent.VIEW_LABELS[this._ocrViewMode];
+    if (!label) {
+      return;
+    }
+    const home = { label: 'CuReD', action: () => this.goToCuredStart() };
+    this.toolbarService.setNavigation(home, [home, { label }]);
+  }
+
+  /** Back to the CuReD start page: the page view with the list of datasets. */
+  goToCuredStart(): void {
+    if (this._ocrViewMode !== OcrViewMode.Datasets) {
+      this.ocrViewMode = OcrViewMode.Datasets;
+    }
+    // Drop a tab's leftover URL (e.g. ?view=layout), so a reload stays on the start page
+    if (this.router.url !== '/cured') {
+      this.router.navigate(['/cured']);
+    }
+  }
 
   onProductionViewModeChange(mode: string): void {
     setTimeout(() => {
@@ -233,20 +265,20 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   ngOnInit(): void {
+    this.toolbarService.curedHome$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      if (this._ocrViewMode !== OcrViewMode.Datasets) {
+        this.ocrViewMode = OcrViewMode.Datasets;
+      }
+    });
     this.loadTrainingDatasets();
     this.loadOcrTrainingStatus();
     this.loadAvailableModels();
     this.loadKrakenBaseModels();
 
-    // Qwen and Layout are optional modules: only call them when installed and switched on
+    // Layout is an optional module: only call it when installed and switched on
     this.moduleService.enabledModules$.pipe(take(1), takeUntil(this.destroy$)).subscribe(modules => {
-      this.qwenEnabled = modules['qwen'] !== false;
       this.yoloEnabled = modules['yolo'] !== false;
-      if (this.qwenEnabled) {
-        this.loadQwenTrainingStatus();
-        this.loadQwenOutputModes();
-        this.loadQwenBaseModels();
-      }
+      this.loadDeepSeekTrainingStatus();
       this.loadOcrModels();
       this.checkYoloHealth();
       this.loadYoloDashboardData();
@@ -259,7 +291,9 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     // - linkedIdentifier (production "Add linked page") → switch to Datasets so <cured> renders
     // - view=production (cured Finish button) → switch back to Export so <app-production> renders
     this.route.queryParams.pipe(takeUntil(this.destroy$)).subscribe(params => {
-      if (params['linkedIdentifier'] && this.ocrViewMode !== OcrViewMode.Datasets) {
+      if ((params['linkedIdentifier'] || (params['library_project'] && !params['view']))
+          && this.ocrViewMode !== OcrViewMode.Datasets) {
+        // Linked page from production, or "Open in CuReD" from the Library: <cured> loads it
         this.ocrViewMode = OcrViewMode.Datasets;
       } else if (params['view'] === 'production' && this.ocrViewMode !== OcrViewMode.Export) {
         this.ocrViewMode = OcrViewMode.Export;
@@ -296,7 +330,7 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.loadOcrModels();
     } else if (mode === OcrViewMode.Training) {
       this.loadOcrTrainingStatus();
-      this.loadQwenTrainingStatus();
+      this.loadDeepSeekTrainingStatus();
     }
   }
 
@@ -317,21 +351,11 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       error: (err) => console.error('Failed to load Kraken active model', err)
     });
 
-    if (!this.qwenEnabled) {
-      return;
-    }
-    this.curedService.listQwenModels().subscribe({
+    this.curedService.listDeepSeekModels().subscribe({
       next: (response) => {
-        this.qwenModels = response.models;
+        this.deepseekModels = response.models;
       },
-      error: (err) => console.error('Failed to load Qwen models', err)
-    });
-
-    this.curedService.getQwenActiveModel().subscribe({
-      next: (model) => {
-        this.qwenActiveModel = model;
-      },
-      error: (err) => console.error('Failed to load Qwen active model', err)
+      error: (err) => console.error('Failed to load DeepSeek models', err)
     });
   }
 
@@ -359,34 +383,32 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
     });
   }
 
-  activateQwenModel(modelName: string): void {
-    this.curedService.activateQwenModel(modelName).subscribe({
+  deleteDeepSeekModel(model: TrainedModel): void {
+    const what = model.ollama_model
+      ? `DeepSeek model "${model.name}" and its Ollama model "${model.ollama_model}"`
+      : `DeepSeek model "${model.name}"`;
+    if (!confirm(`Delete ${what}?`)) {
+      return;
+    }
+    this.curedService.deleteDeepSeekModel(model.name).subscribe({
       next: () => {
-        this.notification.showSuccess(`Qwen model "${modelName}" activated`);
+        this.notification.showSuccess(`Model "${model.name}" deleted`);
+        this.selectedDeepSeekModel = null;
         this.loadOcrModels();
       },
-      error: (err) => this.notification.showError('Failed to activate model')
+      error: (err) => this.notification.showError(err?.error?.detail || 'Failed to delete model')
     });
   }
 
-  deleteQwenModel(modelName: string): void {
-    if (!confirm(`Are you sure you want to delete Qwen model "${modelName}"?`)) {
-      return;
-    }
-    this.curedService.deleteQwenModel(modelName).subscribe({
-      next: () => {
-        this.notification.showSuccess(`Model "${modelName}" deleted`);
-        this.selectedQwenModel = null;
-        this.loadOcrModels();
-      },
-      error: (err) => this.notification.showError('Failed to delete model')
-    });
+  selectModel(kind: 'kraken' | 'deepseek', model: TrainedModel): void {
+    this.selectedKrakenModel = kind === 'kraken' ? model : null;
+    this.selectedDeepSeekModel = kind === 'deepseek' ? model : null;
   }
 
   getTrainingStatusColor(status: string): string {
     switch (status) {
       case 'completed': return '#4caf50';
-      case 'training': case 'preparing': return '#1976d2';
+      case 'training': case 'preparing': case 'evaluating': return '#1976d2';
       case 'failed': return '#f44336';
       case 'cancelled': return '#ff9800';
       default: return '#666';
@@ -406,7 +428,7 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   onTrainingDatasetChange(): void {
     this.loadOcrTrainingStatus();
-    this.loadQwenTrainingStatus();
+    this.loadDeepSeekTrainingStatus();
   }
 
   addTrainingDataset(datasetId: number): void {
@@ -475,13 +497,50 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   private krakenPollStop$ = new Subject<void>();
-  private qwenPollStop$ = new Subject<void>();
+  private deepseekPollStop$ = new Subject<void>();
 
   startTrainingStatusPolling(): void {
     // Do a one-time check for each provider; only start polling if training is active
     this.curedService.getKrakenTrainingProgress().subscribe(p => this.handleKrakenProgress(p, true));
-    if (this.qwenEnabled) {
-      this.curedService.getQwenTrainingProgress().subscribe(p => this.handleQwenProgress(p, true));
+    this.curedService.getDeepSeekTrainingProgress().subscribe({
+      next: p => this.handleDeepSeekProgress(p, true),
+      error: () => {}
+    });
+  }
+
+  startDeepSeekPolling(): void {
+    this.deepseekPollStop$.next();
+    interval(5000)
+      .pipe(
+        takeUntil(this.destroy$),
+        takeUntil(this.deepseekPollStop$),
+        switchMap(() => this.curedService.getDeepSeekTrainingProgress())
+      )
+      .subscribe({ next: (p) => this.handleDeepSeekProgress(p, false) });
+  }
+
+  private isRunning(status: string): boolean {
+    return status === 'training' || status === 'preparing' || status === 'evaluating';
+  }
+
+  private handleDeepSeekProgress(progress: any, initialCheck: boolean): void {
+    if (progress && progress.status !== 'idle') {
+      this.deepseekTrainingProgress = progress;
+      this.isDeepSeekTraining = this.isRunning(progress.status);
+      if (progress.epoch_history) {
+        this.deepseekEpochHistory = progress.epoch_history;
+      }
+      if (!this.isDeepSeekTraining) {
+        this.deepseekPollStop$.next();
+        this.loadDeepSeekTrainingStatus();
+        if (progress.status === 'completed') {
+          this.loadOcrModels();
+        }
+      } else if (initialCheck) {
+        this.startDeepSeekPolling();
+      }
+    } else {
+      this.isDeepSeekTraining = false;
     }
   }
 
@@ -511,35 +570,6 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
       }
     } else {
       this.isOcrTraining = false;
-    }
-  }
-
-  startQwenPolling(): void {
-    this.qwenPollStop$.next();
-    interval(5000)
-      .pipe(
-        takeUntil(this.destroy$),
-        takeUntil(this.qwenPollStop$),
-        switchMap(() => this.curedService.getQwenTrainingProgress())
-      )
-      .subscribe({ next: (p) => this.handleQwenProgress(p, false) });
-  }
-
-  private handleQwenProgress(progress: any, initialCheck: boolean): void {
-    if (progress && progress.status !== 'idle') {
-      this.qwenTrainingProgress = progress;
-      this.isQwenTraining = progress.status === 'training' || progress.status === 'preparing';
-      if (progress.epoch_history) {
-        this.qwenEpochHistory = progress.epoch_history;
-      }
-      if (progress.status === 'completed' || progress.status === 'failed') {
-        this.qwenPollStop$.next();
-        this.loadQwenTrainingStatus();
-      } else if (initialCheck) {
-        this.startQwenPolling();
-      }
-    } else {
-      this.isQwenTraining = false;
     }
   }
 
@@ -583,114 +613,92 @@ export class TrainingComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   setTrainingEngine(engine: TrainingEngine): void {
     this.trainingEngine = engine;
-    if (engine === TrainingEngine.Qwen) {
-      this.loadQwenTrainingStatus();
+    if (engine === TrainingEngine.DeepSeek) {
+      this.loadDeepSeekTrainingStatus();
     } else {
       this.loadOcrTrainingStatus();
     }
   }
 
-  // ========== Qwen QLoRA Training Methods ==========
+  // ========== Vision-model training helpers ==========
 
-  loadQwenTrainingStatus(): void {
-    if (!this.qwenEnabled) {
-      return;
+  /** Share of the whole run that is done, counting pages within the current epoch. */
+  vlmProgressPercent(p: any): number {
+    if (!p?.total_epochs) {
+      return 0;
     }
+    const withinEpoch = p.total_steps ? (p.step || 0) / p.total_steps : 0;
+    const epochsDone = Math.max(0, (p.current_epoch || 0) - 1) + withinEpoch;
+    return Math.min(100, (epochsDone / p.total_epochs) * 100);
+  }
+
+  formatEta(seconds: number): string {
+    if (!seconds) {
+      return '';
+    }
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return h > 0 ? `${h} h ${m} min` : `${m} min`;
+  }
+
+  // ========== DeepSeek-OCR Training Methods ==========
+
+  loadDeepSeekTrainingStatus(): void {
     const pids = this.selectedTrainingDatasetIds.length > 0 ? this.selectedTrainingDatasetIds : undefined;
-    this.curedService.getQwenTrainingStatus(pids).subscribe({
+    this.curedService.getDeepSeekTrainingStatus(pids).subscribe({
       next: (status) => {
-        this.qwenTrainingStatus = status;
+        this.deepseekTrainingStatus = status;
         if (status.currentTraining) {
-          this.qwenTrainingProgress = status.currentTraining;
-          this.isQwenTraining = status.currentTraining.status === 'training' ||
-                                 status.currentTraining.status === 'preparing';
+          this.deepseekTrainingProgress = status.currentTraining;
+          this.isDeepSeekTraining = this.isRunning(status.currentTraining.status);
           if (status.currentTraining.epoch_history) {
-            this.qwenEpochHistory = status.currentTraining.epoch_history;
+            this.deepseekEpochHistory = status.currentTraining.epoch_history;
           }
         }
       },
-      error: (err) => {
-        console.error('Failed to load Qwen training status', err);
-      }
+      error: (err) => console.error('Failed to load DeepSeek training status', err)
     });
   }
 
-  loadQwenOutputModes(): void {
-    this.curedService.getQwenOutputModes().subscribe({
-      next: (response) => {
-        this.qwenOutputModes = response.modes;
-      },
-      error: (err) => {
-        console.error('Failed to load Qwen output modes', err);
-        this.qwenOutputModes = {
-          plain: 'Plain text transcription',
-          tei_lex0: 'TEI Lex-0 XML for dictionaries',
-          tei_epidoc: 'TEI EpiDoc XML for cuneiform texts',
-        };
-      }
-    });
+  /** Name the trained model gets in Ollama (same rule as the server). */
+  /** Vision models trained outside BEn on Qwen3-VL (e.g. qwen3-vl-ahw) share the DeepSeek list. */
+  isQwenModel(model: TrainedModel | null | undefined): boolean {
+    return (model?.base_model || '').toLowerCase().startsWith('qwen');
   }
 
-  loadQwenBaseModels(): void {
-    this.curedService.getQwenBaseModels().subscribe({
-      next: (response) => {
-        this.qwenBaseModels = response.models;
-        if (response.models.length > 0 && !this.qwenBaseModel) {
-          this.qwenBaseModel = response.models[0].id;
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load Qwen base models', err);
-        this.qwenBaseModels = [
-          { id: 'qwen3-vl-4b', name: 'Qwen3-VL 4B', hf_id: 'Qwen/Qwen3-VL-4B' },
-          { id: 'qwen3-vl-8b', name: 'Qwen3-VL 8B', hf_id: 'Qwen/Qwen3-VL-8B' },
-        ];
-      }
-    });
+  deepseekOllamaName(name: string): string {
+    const slug = (name || '').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'trained';
+    return slug.startsWith('deepseek-ocr') ? slug : `deepseek-ocr-${slug}`;
   }
 
-  startQwenTraining(): void {
-    if (!this.qwenModelName?.trim()) {
+  startDeepSeekTraining(): void {
+    if (!this.deepseekModelName?.trim()) {
       this.notification.showWarning('Please enter a model name');
       return;
     }
-
-    this.isQwenTraining = true;
-    this.qwenEpochHistory = [];
-
+    this.isDeepSeekTraining = true;
+    this.deepseekEpochHistory = [];
     const pids = this.selectedTrainingDatasetIds.length > 0 ? this.selectedTrainingDatasetIds : undefined;
-    this.curedService.startQwenTraining(
-      this.qwenEpochs,
-      this.qwenModelName.trim(),
-      this.qwenBaseModel,
-      this.qwenOutputMode,
-      this.qwenDevice,
-      this.qwenPatience,
-      pids
+    this.curedService.startDeepSeekTraining(
+      this.deepseekEpochs, this.deepseekModelName.trim(), this.deepseekDevice, this.deepseekPatience, pids
     ).subscribe({
       next: (response) => {
-        this.notification.showSuccess('Qwen QLoRA training started');
+        this.notification.showSuccess(`DeepSeek-OCR training started (Ollama model: ${response.ollama_model})`);
         this.trainingRightTab = 'progress';
-        this.startQwenPolling();
-        this.loadQwenTrainingStatus();
+        this.startDeepSeekPolling();
+        this.loadDeepSeekTrainingStatus();
       },
       error: (err) => {
         this.notification.showError('Failed to start training: ' + (err.error?.detail || err.message));
-        this.isQwenTraining = false;
+        this.isDeepSeekTraining = false;
       }
     });
   }
 
-  cancelQwenTraining(): void {
-    this.curedService.cancelQwenTraining().subscribe({
-      next: () => {
-        this.notification.showSuccess('Training cancelled');
-        this.isQwenTraining = false;
-        this.loadQwenTrainingStatus();
-      },
-      error: (err) => {
-        this.notification.showError('Failed to cancel training');
-      }
+  cancelDeepSeekTraining(): void {
+    this.curedService.cancelDeepSeekTraining().subscribe({
+      next: () => this.notification.showSuccess('Cancelling: the training stops after the current page'),
+      error: (err) => this.notification.showError(err?.error?.detail || 'Failed to cancel training')
     });
   }
 

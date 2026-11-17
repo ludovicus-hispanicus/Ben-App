@@ -56,6 +56,23 @@ def _random_suffix(length: int = 6) -> str:
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
+def _numbered_page_files(project_path: Path) -> List[tuple]:
+    """(page number, path) of a project's page images, in list order.
+
+    page_NNN files keep their number; any other image is numbered by its position
+    (PNGs first, then JPGs). The page list and the image-by-number lookup share this."""
+    image_files = sorted(p for p in project_path.glob("*.png") if p.is_file())
+    image_files += sorted(p for p in project_path.glob("*.jpg") if p.is_file())
+    image_files += sorted(p for p in project_path.glob("*.jpeg") if p.is_file())
+    numbered = []
+    for idx, path in enumerate(image_files):
+        if path.stem.startswith("page_"):
+            numbered.append((int(path.stem.replace("page_", "").lstrip("0") or "1"), path))
+        else:
+            numbered.append((idx + 1, path))
+    return numbered
+
+
 def _resolve_project_path(project_id: str) -> Path:
     """Resolve a project_id to its filesystem path."""
     if project_id.startswith(_PDF_IMG_PREFIX):
@@ -79,6 +96,20 @@ def _write_metadata(project_path: Path, metadata: dict):
     """Write metadata.json to a project directory."""
     meta_file = project_path / "metadata.json"
     meta_file.write_text(json.dumps(metadata, indent=2))
+
+
+def _count_images(folder: Path) -> int:
+    """Number of page images in a folder.
+
+    os.scandir reports file types from the directory listing itself; checking
+    each Path with is_file() costs one stat per file, which made the Library
+    tree take ~1 s with 55,000 pages.
+    """
+    with os.scandir(folder) as entries:
+        return sum(
+            1 for e in entries
+            if e.is_file() and os.path.splitext(e.name)[1].lower() in (".png", ".jpg", ".jpeg")
+        )
 
 
 class PagesHandler:
@@ -303,10 +334,7 @@ class PagesHandler:
                 except Exception:
                     continue
 
-                page_count = len([
-                    p for p in project_dir.iterdir()
-                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
-                ])
+                page_count = _count_images(project_dir)
                 projects.append(ProjectInfo(
                     project_id=project_dir.name,
                     name=meta.get("name", project_dir.name),
@@ -320,10 +348,7 @@ class PagesHandler:
             for folder in sorted(PDF_IMAGES_PATH.iterdir()):
                 if not folder.is_dir():
                     continue
-                page_count = len([
-                    p for p in folder.iterdir()
-                    if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg")
-                ])
+                page_count = _count_images(folder)
                 if page_count == 0:
                     continue
                 pdf_meta = _read_metadata(folder)
@@ -438,29 +463,7 @@ class PagesHandler:
         name = meta.get("name", project_path.name)
 
         pages: List[PageInfo] = []
-        # Find all PNG/JPG images (exclude thumbnails dir, metadata, etc.)
-        image_files = sorted(
-            p for p in project_path.glob("*.png")
-            if p.is_file()
-        )
-        # Also include jpg/jpeg
-        image_files += sorted(
-            p for p in project_path.glob("*.jpg")
-            if p.is_file()
-        )
-        image_files += sorted(
-            p for p in project_path.glob("*.jpeg")
-            if p.is_file()
-        )
-
-        for idx, png in enumerate(image_files):
-            # For page_NNN.png files, extract the number; for others use index+1
-            if png.stem.startswith("page_"):
-                page_num_str = png.stem.replace("page_", "").lstrip("0") or "1"
-                page_num = int(page_num_str)
-            else:
-                page_num = idx + 1
-
+        for page_num, png in _numbered_page_files(project_path):
             stat = png.stat()
             pages.append(PageInfo(
                 filename=png.name,
@@ -501,6 +504,10 @@ class PagesHandler:
             page_path = project_path / fmt
             if page_path.exists():
                 return str(page_path)
+        # Pages with their own names (e.g. cut-out regions): same numbering as the page list
+        for num, path in _numbered_page_files(project_path):
+            if num == page_number:
+                return str(path)
         return None
 
     def get_thumbnail_path(self, project_id: str, page_number: int) -> Optional[str]:

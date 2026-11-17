@@ -175,22 +175,61 @@ class KrakenOcrClient(BaseOcrClient):
             cls._model_cache[model_path] = {"mtime": mtime, "model": model}
         return model
 
-    @staticmethod
-    def _inference_device() -> str:
-        """Device for recognition: CPU unless KRAKEN_OCR_DEVICE=cuda (and CUDA exists)."""
-        want = os.environ.get("KRAKEN_OCR_DEVICE", "cpu").strip().lower()
-        if want.startswith("cuda"):
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    return "cuda"
-            except Exception:
-                pass
-        return "cpu"
+    # Free GPU memory Kraken needs before it uses the GPU (model, CUDA context, line batches)
+    GPU_MIN_FREE_BYTES = 1.5 * 1024 ** 3
 
-    def _recognize(self, model, image: Image.Image, bw_image: Image.Image, seg) -> List[str]:
+    @classmethod
+    def _inference_device(cls) -> str:
+        """Device for recognition: the GPU when it is free (or can be freed), else the CPU.
+
+        On the GPU a CUSAS page (82 lines) takes ~5 s instead of 20-35 s on a busy
+        laptop CPU, with identical text. Ollama models holding GPU memory are
+        unloaded first (Ollama loads them again when needed), unless a Batch job
+        holds the GPU and may be using them: taking memory from under a loaded
+        Ollama model makes it fail ("CUDA error: device not ready"). The CPU is
+        used while a training holds the GPU, during such a Batch job, or when less
+        than 1.5 GB is free. KRAKEN_OCR_DEVICE=cpu or =cuda overrides the choice.
+        The installer ships CPU torch, so it always uses the CPU.
+        """
+        want = os.environ.get("KRAKEN_OCR_DEVICE", "auto").strip().lower()
+        if want == "cpu":
+            return "cpu"
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                return "cpu"
+        except Exception:
+            return "cpu"
+        if want.startswith("cuda"):
+            return "cuda"
+        from services.gpu_lock import current_owner
+        from services.ollama_gpu import ollama_models_on_gpu, unload_ollama_models
+        owner = current_owner() or ""
+        if "training" in owner:
+            return "cpu"
+        if ollama_models_on_gpu():
+            if owner:  # a Batch job may be using the Ollama model
+                logger.info(f"Kraken on CPU: Ollama model in GPU memory, GPU held by {owner}")
+                return "cpu"
+            unload_ollama_models("Kraken OCR")
+            # Ollama's model process may need a moment to hand the memory back
+            deadline = time.time() + 5
+            while time.time() < deadline and ollama_models_on_gpu():
+                time.sleep(0.25)
+        try:
+            free, _total = torch.cuda.mem_get_info()
+            if free < cls.GPU_MIN_FREE_BYTES:
+                logger.info(f"Kraken on CPU: only {free / 1024 ** 3:.1f} GB GPU memory free")
+                return "cpu"
+        except Exception:
+            return "cpu"
+        return "cuda"
+
+    def _recognize(self, model, image: Image.Image, bw_image: Image.Image, seg,
+                   device: Optional[str] = None) -> List[str]:
         """Run line recognition and return one prediction string per segmented line."""
         if get_kraken_major_version() >= 7:
+            device = device or self._inference_device()
             from kraken.configs import RecognitionInferenceConfig
 
             # Models declaring a binary input ('1') get the binarized page; all
@@ -200,15 +239,53 @@ class KrakenOcrClient(BaseOcrClient):
             config = RecognitionInferenceConfig(
                 batch_size=1,
                 num_line_workers=0,  # in-process line extraction (no worker pool inside the server)
-                accelerator=self._inference_device(),
+                accelerator=device,
                 device="auto",
             )
-            records = model.predict(rec_im, seg, config)
+            try:
+                records = list(model.predict(rec_im, seg, config))
+            finally:
+                if device == "cuda":
+                    # Give the memory back, so Ollama models loaded later find it free
+                    import torch
+                    torch.cuda.empty_cache()
         else:
             from kraken import rpred
             records = rpred.rpred(model, bw_image, seg)
 
         return [record.prediction.strip() for record in records]
+
+    @classmethod
+    def warm_up(cls) -> None:
+        """Load Kraken and the active model, and read a small test image once.
+
+        The first OCR after the server starts otherwise takes over a minute
+        (imports, model loading, CUDA set-up, first-pass overhead); later pages
+        take seconds. Called in a background thread at server start.
+        """
+        t0 = time.time()
+        try:
+            from PIL import ImageDraw
+            client = cls("latest")
+            if not os.path.exists(client._model_path):
+                return
+            image = Image.new("RGB", (900, 260), "white")
+            draw = ImageDraw.Draw(image)
+            for i in range(3):
+                draw.text((30, 30 + i * 70), "a-na be-li2-ia qi2-bi2-ma um-ma", fill="black")
+            image = image.resize((1800, 520))
+            from kraken import pageseg
+            bw_image = binarize(image)
+            seg = pageseg.segment(bw_image, text_direction='horizontal-lr')
+            model = cls._load_recognizer(client._model_path)
+            # CPU only: the GPU may hold an Ollama model, and taking memory from
+            # under it makes Ollama fail ("CUDA error: device not ready")
+            if seg.lines:
+                client._recognize(model, image, bw_image, seg, device="cpu")
+            logger.info(f"Kraken warmed up with {client.model_name} -> "
+                        f"{os.path.basename(client._model_path)} in {time.time() - t0:.1f}s")
+        except Exception as e:
+            logger.info(f"Kraken warm-up skipped: {e}")
 
     # ── OCR ───────────────────────────────────────────────────────────
 

@@ -15,6 +15,7 @@ from utils.storage_utils import StorageUtils
 from fastapi.responses import FileResponse
 import logging
 import os
+import threading
 
 router = APIRouter(
     prefix="/api/v1/cured",
@@ -247,7 +248,13 @@ async def pull_ollama_model_stream(model_name: str):
                     json={"name": model_name, "stream": True}
                 ) as response:
                     if response.status_code != 200:
-                        error_msg = f"Ollama returned status {response.status_code}"
+                        # Pass on Ollama's own message, e.g. "requires a newer version of Ollama"
+                        body = (await response.aread()).decode(errors="replace").strip()
+                        try:
+                            detail = json.loads(body).get("error", body)
+                        except (json.JSONDecodeError, AttributeError):
+                            detail = body
+                        error_msg = f"Ollama returned status {response.status_code}" + (f": {detail}" if detail else "")
                         logging.error(error_msg)
                         yield f"data: {json.dumps({'status': 'error', 'error': error_msg})}\n\n"
                         return
@@ -456,21 +463,6 @@ async def get_available_models():
     except Exception as e:
         logging.warning(f"Could not load Kraken models: {e}")
 
-    # Add Qwen LoRA adapters (optional module)
-    if is_module_available("qwen"):
-        try:
-            from services.qwen_training_service import qwen_training_service
-            qwen_adapters = qwen_training_service.get_adapters()
-            for adapter in qwen_adapters:
-                mode = adapter.get("output_mode", "plain")
-                base = adapter.get("base_model", "qwen3-vl")
-                models.append({
-                    "value": f"qwen_lora:{adapter['name']}",
-                    "label": f"{adapter['name']} (Qwen QLoRA, {base}, {mode})"
-                })
-        except Exception as e:
-            logging.warning(f"Could not load Qwen adapters: {e}")
-
     # Add CuRe sign classifier models (optional module)
     if is_module_available("cure"):
         try:
@@ -551,6 +543,9 @@ async def start_kraken_training(epochs: int = 500, model_name: str = None, base_
         ok, owner = gpu_acquire("kraken_training")
         if not ok:
             raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
+        # The training has priority: free the GPU from Ollama's models
+        from services.ollama_gpu import unload_ollama_models
+        unload_ollama_models("Kraken training")
 
     # Validate training data
     stats = kraken_training_service.get_training_stats(global_new_text_handler, dataset_ids=dids)
@@ -699,211 +694,119 @@ async def get_kraken_base_models():
 
 
 # ==========================================
-# Qwen3-VL QLoRA Training Endpoints
+# DeepSeek-OCR LoRA Training Endpoints (trained models become Ollama models)
 # ==========================================
 
-@router.get("/training/qwen/status")
-async def get_qwen_training_status(dataset_id: int = None, dataset_ids: Optional[List[int]] = Query(None)):
-    """Get the current training data status for Qwen QLoRA fine-tuning."""
-    from services.qwen_training_service import qwen_training_service
+@router.get("/training/deepseek/status")
+async def get_deepseek_training_status(dataset_ids: Optional[List[int]] = Query(None)):
+    """Training data status for DeepSeek-OCR, and whether this computer can train it."""
+    from services.deepseek_training_service import deepseek_training_service as svc
     from services.training_common import TrainingStatus
 
-    # Normalise: single dataset_id → list for consistency
-    dids = dataset_ids or ([dataset_id] if dataset_id is not None else None)
-
-    stats = qwen_training_service.get_training_stats(global_new_text_handler, dataset_ids=dids)
-    logging.info(f"Qwen training stats: {stats}")
-
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
+    stats = svc.get_training_stats(global_new_text_handler, dataset_ids=dataset_ids)
     total_lines = stats.get("total_lines", 0)
-    curated_texts = stats.get("curated_texts", 0)
-    last_training = stats.get("last_training")
-    required_for_training = qwen_training_service.MIN_LINES
-
-    # Always use total_lines for readiness — retraining with more epochs on same data is valid
-    lines_for_progress = total_lines
-    progress = min(100, int((lines_for_progress / required_for_training) * 100)) if required_for_training > 0 else 0
-
-    current_training = None
-    if qwen_training_service.progress.status != TrainingStatus.IDLE:
-        current_training = qwen_training_service.progress.to_dict()
-
+    required = svc.MIN_LINES
+    availability = svc.availability()
     return {
-        "curatedTexts": curated_texts,
-        "previousLines": previous_lines,
-        "newLines": new_lines,
+        "curatedTexts": stats.get("curated_texts", 0),
+        "previousLines": stats.get("previous_lines", 0),
+        "newLines": stats.get("new_lines", 0),
         "totalLines": total_lines,
-        "requiredForNextTraining": required_for_training,
-        "progress": progress,
-        "isReady": lines_for_progress >= required_for_training,
-        "lastTraining": last_training,
-        "currentTraining": current_training,
+        "requiredForNextTraining": required,
+        "progress": min(100, int(total_lines / required * 100)) if required else 0,
+        "isReady": total_lines >= required and availability["available"],
+        "lastTraining": stats.get("last_training"),
+        "currentTraining": svc.progress.to_dict() if svc.progress.status != TrainingStatus.IDLE else None,
+        "available": availability["available"],
+        "unavailableReason": availability["reason"],
     }
 
 
-@router.post("/training/qwen/start")
-async def start_qwen_training(
-    epochs: int = 10,
+@router.post("/training/deepseek/start")
+async def start_deepseek_training(
+    epochs: int = 2,
     model_name: str = None,
-    base_model: str = None,
-    output_mode: str = "plain",
     device: str = "auto",
-    patience: int = 3,
-    dataset_id: int = None,
+    patience: int = 2,
     dataset_ids: Optional[List[int]] = Query(None),
 ):
-    """Start Qwen QLoRA fine-tuning, optionally scoped to one or more datasets."""
-    from services.qwen_training_service import qwen_training_service
+    """Start DeepSeek-OCR LoRA training; at the end the model is created in Ollama."""
+    from services.deepseek_training_service import deepseek_training_service as svc
     from services.training_common import TrainingStatus
+    from services.gpu_lock import acquire as gpu_acquire, release as gpu_release
     import asyncio
+    import threading
 
-    # Normalise: single dataset_id → list for consistency
-    dids = dataset_ids or ([dataset_id] if dataset_id is not None else None)
-
-    if qwen_training_service.progress.status == TrainingStatus.TRAINING:
+    if svc.progress.status in (TrainingStatus.PREPARING, TrainingStatus.TRAINING, TrainingStatus.EVALUATING):
         raise HTTPException(status_code=409, detail="Training already in progress")
+    availability = svc.availability()
+    if not availability["available"]:
+        raise HTTPException(status_code=400, detail=availability["reason"])
 
-    # Check GPU availability
-    from services.gpu_lock import acquire as gpu_acquire
-    ok, owner = gpu_acquire("qwen_training")
+    stats = svc.get_training_stats(global_new_text_handler, dataset_ids=dataset_ids)
+    if stats.get("total_lines", 0) < svc.MIN_LINES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough training data. Need at least {svc.MIN_LINES} lines, got {stats.get('total_lines', 0)}",
+        )
+
+    ok, owner = gpu_acquire("deepseek_training")
     if not ok:
         raise HTTPException(status_code=409, detail=f"GPU is busy ({owner}). Wait for it to finish or cancel it first.")
-
-    stats = qwen_training_service.get_training_stats(global_new_text_handler, dataset_ids=dids)
-    previous_lines = stats.get("previous_lines", 0)
-    new_lines = stats.get("new_lines", 0)
-    total_lines = stats.get("total_lines", 0)
-    last_training = stats.get("last_training")
-
-    # Always use total_lines — retraining with more epochs on same data is valid
-    min_required = qwen_training_service.MIN_LINES
-
-    if total_lines < min_required:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough training data. Need at least {min_required} lines, got {total_lines}"
-        )
-
-    # Validate output mode
-    valid_modes = qwen_training_service.get_output_modes()
-    if output_mode not in valid_modes:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid output_mode '{output_mode}'. Valid: {list(valid_modes.keys())}"
-        )
-
-    # Validate base model
-    if base_model and base_model not in qwen_training_service.BASE_MODELS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid base_model '{base_model}'. Valid: {list(qwen_training_service.BASE_MODELS.keys())}"
-        )
+    # The training has priority: free the GPU from Ollama's models (DeepSeek-OCR
+    # alone holds ~6.9 GB, the training needs up to ~6.5 GB on an 8 GB card)
+    from services.ollama_gpu import unload_ollama_models
+    unload_ollama_models("DeepSeek training")
 
     if not model_name:
         from datetime import datetime
-        model_name = f"qwen_lora_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    import threading
-    from services.gpu_lock import release as gpu_release
+        model_name = f"deepseek_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     def run_training_sync():
         try:
-            asyncio.run(qwen_training_service.start_training(
-                texts_handler=global_new_text_handler,
-                epochs=epochs,
-                model_name=model_name,
-                base_model=base_model,
-                output_mode=output_mode,
-                device=device,
-                patience=patience,
-                dataset_ids=dids,
+            asyncio.run(svc.start_training(
+                texts_handler=global_new_text_handler, epochs=epochs, model_name=model_name,
+                device=device, patience=patience, dataset_ids=dataset_ids,
             ))
         finally:
-            gpu_release("qwen_training")
+            gpu_release("deepseek_training")
 
-    thread = threading.Thread(target=run_training_sync, daemon=True)
-    thread.start()
-    return {
-        "message": "Qwen QLoRA training started",
-        "epochs": epochs,
-        "model_name": model_name,
-        "base_model": base_model or qwen_training_service.DEFAULT_BASE_MODEL,
-        "output_mode": output_mode,
-    }
+    threading.Thread(target=run_training_sync, daemon=True).start()
+    from services.deepseek_ollama_export import ollama_model_name
+    return {"message": "DeepSeek-OCR training started", "epochs": epochs, "model_name": model_name,
+            "ollama_model": ollama_model_name(model_name)}
 
 
-@router.get("/training/qwen/progress")
-async def get_qwen_training_progress():
-    """Get current Qwen QLoRA training progress."""
-    from services.qwen_training_service import qwen_training_service
-    return qwen_training_service.progress.to_dict()
+@router.get("/training/deepseek/progress")
+async def get_deepseek_training_progress():
+    from services.deepseek_training_service import deepseek_training_service as svc
+    return svc.progress.to_dict()
 
 
-@router.post("/training/qwen/cancel")
-async def cancel_qwen_training():
-    """Cancel ongoing Qwen QLoRA training."""
-    from services.qwen_training_service import qwen_training_service
+@router.post("/training/deepseek/cancel")
+async def cancel_deepseek_training():
+    from services.deepseek_training_service import deepseek_training_service as svc
     from services.training_common import TrainingStatus
 
-    if qwen_training_service.progress.status != TrainingStatus.TRAINING:
-        raise HTTPException(status_code=400, detail="No training in progress")
-
-    qwen_training_service.cancel_training()
+    if svc.progress.status not in (TrainingStatus.PREPARING, TrainingStatus.TRAINING):
+        raise HTTPException(status_code=400, detail="No training in progress that can be cancelled")
+    svc.cancel_training()
     return {"message": "Training cancelled"}
 
 
-@router.get("/training/qwen/models")
-async def list_qwen_models():
-    """List available Qwen QLoRA adapter models."""
-    from services.qwen_training_service import qwen_training_service
-    models = qwen_training_service.get_models()
-    return {"models": models}
+@router.get("/training/deepseek/models")
+async def list_deepseek_models():
+    from services.deepseek_training_service import deepseek_training_service as svc
+    return {"models": svc.get_models()}
 
 
-@router.get("/training/qwen/active-model")
-async def get_qwen_active_model():
-    """Get information about the currently active Qwen adapter."""
-    from services.qwen_training_service import qwen_training_service
-    return qwen_training_service.get_active_model_info()
-
-
-@router.post("/training/qwen/models/{model_name}/activate")
-async def activate_qwen_model(model_name: str):
-    """Set a Qwen QLoRA adapter as the active model."""
-    from services.qwen_training_service import qwen_training_service
-
-    success = qwen_training_service.activate_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Qwen adapter not found: {model_name}")
-
-    return {"message": f"Qwen adapter {model_name} activated"}
-
-
-@router.delete("/training/qwen/models/{model_name}")
-async def delete_qwen_model(model_name: str):
-    """Delete a Qwen QLoRA adapter."""
-    from services.qwen_training_service import qwen_training_service
-
-    success = qwen_training_service.delete_model(model_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Qwen adapter not found or is active: {model_name}")
-
-    return {"message": f"Qwen adapter {model_name} deleted"}
-
-
-@router.get("/training/qwen/output-modes")
-async def get_qwen_output_modes():
-    """Get available output modes for Qwen QLoRA training."""
-    from services.qwen_training_service import qwen_training_service
-    return {"modes": qwen_training_service.get_output_modes()}
-
-
-@router.get("/training/qwen/base-models")
-async def get_qwen_base_models():
-    """Get available Qwen base models for fine-tuning."""
-    from services.qwen_training_service import qwen_training_service
-    return {"models": qwen_training_service.get_base_models()}
+@router.delete("/training/deepseek/models/{model_name}")
+async def delete_deepseek_model(model_name: str):
+    """Delete a trained DeepSeek-OCR model: its adapter and its Ollama model."""
+    from services.deepseek_training_service import deepseek_training_service as svc
+    if not svc.delete_model(model_name):
+        raise HTTPException(status_code=404, detail=f"DeepSeek model not found: {model_name}")
+    return {"message": f"DeepSeek model {model_name} deleted"}
 
 
 @router.post("/training/regenerate")
@@ -1252,8 +1155,8 @@ async def fetch_transliteration_by_id(text_id: int, transliteration_id: int):
     return result
 
 
-@router.get("/transliterationImage/{text_id}/{transliteration_id}")
-async def get_image(text_id: int, transliteration_id: int):
+def _transliteration_image_path(text_id: int, transliteration_id: int) -> str:
+    """Path of a transliteration's image; raises HTTPException when there is none."""
     import glob
     if type(text_id) is not int or type(transliteration_id) is not int:
         raise HTTPException(status_code=500, detail="invalid BEN / transliteration id")
@@ -1306,12 +1209,44 @@ async def get_image(text_id: int, transliteration_id: int):
 
     if not image_path:
         raise HTTPException(status_code=404, detail="No image found for this transliteration")
+    return image_path
 
+
+@router.get("/transliterationImage/{text_id}/{transliteration_id}")
+async def get_image(text_id: int, transliteration_id: int):
+    image_path = _transliteration_image_path(text_id, transliteration_id)
     return FileResponse(image_path, headers={
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
         "Expires": "0"
     })
+
+
+@router.get("/transliterationThumbnail/{text_id}/{transliteration_id}")
+def get_thumbnail(text_id: int, transliteration_id: int):
+    """Small JPEG preview of a transliteration's image, for the dataset's text list.
+
+    Full images are 0.1-1.7 MB (whole dictionary pages); a list of 500 texts
+    loaded 100-300 MB just for previews. Thumbnails are stored under
+    data/cured_thumbnails and remade when the image is newer.
+    """
+    from PIL import Image
+    image_path = _transliteration_image_path(text_id, transliteration_id)
+    thumb_dir = os.path.join(StorageUtils.BASE_PATH, "cured_thumbnails")
+    thumb_path = os.path.join(thumb_dir, f"{text_id}_{transliteration_id}.jpg")
+    if not os.path.isfile(thumb_path) or os.path.getmtime(thumb_path) < os.path.getmtime(image_path):
+        try:
+            os.makedirs(thumb_dir, exist_ok=True)
+            with Image.open(image_path) as im:
+                im.thumbnail((320, 320))
+                im = im.convert("RGB")
+                tmp_path = f"{thumb_path}.{threading.get_ident()}.tmp"  # two requests may race
+                im.save(tmp_path, format="JPEG", quality=85)
+            os.replace(tmp_path, thumb_path)
+        except Exception as e:
+            logging.warning(f"Thumbnail failed for text {text_id}: {e}; sending the full image")
+            thumb_path = image_path
+    return FileResponse(thumb_path, headers={"Cache-Control": "no-cache"})
 
 
 class BatchDeleteDto(BaseModel):

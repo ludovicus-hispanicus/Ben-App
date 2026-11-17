@@ -789,9 +789,13 @@ class KrakenTrainingService:
             # Use normalized dir for training
             training_dir = str(norm_dir)
 
-            min_lines = self.MIN_LINES_FINETUNE if base_model else self.MIN_LINES_SCRATCH
+            # Without a chosen base model the active model is fine-tuned (see
+            # _build_training_command); only with no model at all is it from scratch.
+            active_name = self.get_active_model_name()
+            fine_tuning = bool(base_model) or bool(active_name and self._model_file(active_name))
+            min_lines = self.MIN_LINES_FINETUNE if fine_tuning else self.MIN_LINES_SCRATCH
             if export_result["exported_lines"] < min_lines:
-                mode = "fine-tuning" if base_model else "training from scratch"
+                mode = "fine-tuning" if fine_tuning else "training from scratch"
                 raise ValueError(
                     f"Not enough training data for {mode}. Need at least {min_lines} lines, "
                     f"got {export_result['exported_lines']}"
@@ -1253,8 +1257,15 @@ class KrakenTrainingService:
         # Replace a stale entry of the same name (e.g. re-trained model)
         registry = [e for e in registry if e.get("name") != model_name]
 
+        # The accuracy stored in the saved model is authoritative; the value
+        # parsed from the ketos log is only a fallback.
+        file_metrics = self._extract_model_metrics(model_path)
+        accuracy = self._clean_accuracy(file_metrics.get("accuracy"))
+        if accuracy is None:
+            accuracy = self._clean_accuracy(self.progress.best_accuracy)
+
         # Add new model
-        registry.append({
+        entry = {
             "name": model_name,
             "path": model_path,
             "format": "safetensors" if model_path.endswith(".safetensors") else "coreml",
@@ -1262,8 +1273,13 @@ class KrakenTrainingService:
             "kraken_version": ".".join(str(v) for v in KRAKEN_VERSION),
             "created": datetime.now().isoformat(),
             "epochs": len(self.progress.epoch_history),
-            "accuracy": self.progress.best_accuracy
-        })
+        }
+        if accuracy is not None:
+            entry["accuracy"] = accuracy
+        word_accuracy = self._clean_accuracy(file_metrics.get("word_accuracy"))
+        if word_accuracy is not None:
+            entry["word_accuracy"] = word_accuracy
+        registry.append(entry)
 
         # Save registry
         with open(registry_path, "w", encoding="utf-8") as f:
@@ -1369,6 +1385,21 @@ class KrakenTrainingService:
         self._metrics_cache[model_path] = {"mtime": mtime, "metrics": metrics}
         return metrics
 
+    @staticmethod
+    def _clean_accuracy(value):
+        """Normalise a stored accuracy to a fraction in [0, 1], or None.
+
+        Old registry entries hold kraken <= 6 history lists ([[step, acc], ...]),
+        and one held a loss value (15.019) that an earlier log parser took for
+        accuracy; neither may be shown as a percentage."""
+        if isinstance(value, list) and value and isinstance(value[-1], (list, tuple)):
+            value = value[-1][-1]
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        return value if 0.0 <= value <= 1.0 else None
+
     def _auto_register_model(self, name: str, path: str, metrics: dict):
         """Add a model to registry.json so future lookups skip model loading."""
         registry_path = Path(self.MODELS_DIR) / "registry.json"
@@ -1440,6 +1471,13 @@ class KrakenTrainingService:
                 for key in ("accuracy", "word_accuracy", "epochs", "charset_size", "learning_rate", "arch"):
                     if reg.get(key) is not None:
                         model_info[key] = reg[key]
+                for key in ("accuracy", "word_accuracy"):
+                    if key in model_info:
+                        value = self._clean_accuracy(model_info[key])
+                        if value is None:
+                            del model_info[key]
+                        else:
+                            model_info[key] = value
             else:
                 # Slow path: read model to extract metrics (only for pre-existing models)
                 logging.info(f"Loading model metrics (not in registry): {name}")

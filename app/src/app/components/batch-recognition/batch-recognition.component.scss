@@ -1100,6 +1100,33 @@
   letter-spacing: 0.5px;
 }
 
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.advanced-body {
+  margin-top: 10px;
+  padding-left: 12px;
+  border-left: 2px solid #e0e0e0;
+}
+
 .mode-buttons {
   display: flex;
   gap: 6px;

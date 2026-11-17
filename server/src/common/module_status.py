@@ -18,7 +18,6 @@ OPTIONAL_MODULES = {
     "cure": ["api.routers.cure", "torch", "torchvision", "sklearn"],
     "yolo": ["api.routers.yolo_training", "ultralytics", "torch"],
     "line_segmentation": ["api.routers.segmentation", "kraken"],
-    "qwen": ["services.qwen_training_service", "torch", "transformers", "peft"],
 }
 
 CORE_MODULES = ("cured", "library")

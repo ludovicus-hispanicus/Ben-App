@@ -170,7 +170,7 @@ export class ImageBrowserDialogComponent implements OnInit {
       project_name: this.selectedProject.name,
       page_number: page.page_number,
       filename: page.filename,
-      image_url: `${environment.apiUrl}${page.full_url}`
+      image_url: this.pageFileUrl(page)
     }];
     this.dialogRef.close(result);
   }
@@ -185,7 +185,7 @@ export class ImageBrowserDialogComponent implements OnInit {
         project_name: this.selectedProject!.name,
         page_number: p.page_number,
         filename: p.filename,
-        image_url: `${environment.apiUrl}${p.full_url}`
+        image_url: this.pageFileUrl(p)
       }));
 
     this.dialogRef.close(results);
@@ -278,6 +278,16 @@ export class ImageBrowserDialogComponent implements OnInit {
   }
 
   /** Small JPEG preview of a page (the browser loads it only when it scrolls into view). */
+  /**
+   * Address the caller downloads the page from (XHR). The "?load=1" keeps it apart
+   * from the same image shown elsewhere through <img>: browsers cached that copy
+   * without the CORS header (older servers only sent it to requests with an
+   * Origin), and reusing it blocked the download.
+   */
+  private pageFileUrl(page: { full_url: string }): string {
+    return `${environment.apiUrl}${page.full_url}?load=1`;
+  }
+
   thumbnailUrl(page: { thumbnail_url: string }): string {
     return `${environment.apiUrl}${page.thumbnail_url}`;
   }

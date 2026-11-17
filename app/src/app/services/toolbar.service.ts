@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 export interface ToolbarButton {
   label: string;
@@ -31,6 +31,15 @@ export class ToolbarService {
 
   state$ = this.stateSubject.asObservable();
   loading$ = this.loadingSubject.asObservable();
+
+  // The top bar's "CuReD" link: the CuReD hub goes back to its start page. A signal, because
+  // a tab switch inside the hub keeps the URL, and the router ignores a click on the same URL.
+  private curedHomeSubject = new Subject<void>();
+  curedHome$ = this.curedHomeSubject.asObservable();
+
+  requestCuredHome() {
+    this.curedHomeSubject.next();
+  }
 
   setToolbar(state: ToolbarState) {
     this.stateSubject.next(state);

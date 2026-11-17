@@ -6,7 +6,7 @@ import { filter, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 import { environment } from '../../../environments/environment';
 import { BatchRecognitionService } from '../../services/batch-recognition.service';
-import { CuredService, ollamaModelValue } from '../../services/cured.service';
+import { CuredService, ollamaModelValue, isOllamaCloudModel } from '../../services/cured.service';
 import { PagesService } from '../../services/pages.service';
 import { DatasetService } from '../../services/dataset.service';
 import { NotificationService } from '../../services/notification.service';
@@ -134,12 +134,6 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       ]
     },
     {
-      name: 'Qwen (local)',
-      models: [
-        // Qwen LoRA adapters, listed only when the Qwen module is installed
-      ]
-    },
-    {
       name: 'Ollama (local)',
       models: [
         // Installed Ollama models that accept images (from /ollama/vision-models)
@@ -181,7 +175,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   ];
 
   // Prompt selection
-  selectedPrompt: string = 'dictionary';
+  selectedPrompt: string = 'plain';
   ocrPromptModes: Array<{value: string; label: string; description: string}> = [
     { value: 'plain', label: 'Plain', description: 'Simple text extraction' },
     { value: 'markdown', label: 'Markdown', description: 'Formatted with markdown' },
@@ -196,46 +190,38 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   newPromptText: string = '';
   creatingPrompt: boolean = false;
 
-  // Image resize — target DPI (0 = no resize / full resolution)
-  targetDpi: number = 0;
-  targetDpiOptions: Array<{value: number; label: string}> = [
-    { value: 0, label: 'Full Resolution' },
-    { value: 600, label: '600 DPI' },
-    { value: 450, label: '450 DPI' },
-    { value: 300, label: '300 DPI' },
-    { value: 200, label: '200 DPI' },
+  // Image size sent to the model: either a target DPI or a scale (full = the setting in Settings)
+  imageSize: string = 'full';
+  imageSizeOptions: Array<{value: string; label: string; dpi?: number; scale?: number}> = [
+    { value: 'full', label: 'Full resolution' },
+    { value: 'dpi600', label: 'Reduce to 600 DPI', dpi: 600 },
+    { value: 'dpi300', label: 'Reduce to 300 DPI', dpi: 300 },
+    { value: 'dpi200', label: 'Reduce to 200 DPI', dpi: 200 },
+    { value: 'scale75', label: 'Shrink to 75%', scale: 0.75 },
+    { value: 'scale50', label: 'Shrink to 50%', scale: 0.5 },
+    { value: 'scale25', label: 'Shrink to 25%', scale: 0.25 },
   ];
 
-  // Image scale — applied after DPI resize (1.0 = no additional scaling)
-  imageScale: number = 1.0;
-  imageScaleOptions: Array<{value: number; label: string}> = [
-    { value: 1.0, label: '100%' },
-    { value: 0.75, label: '75%' },
-    { value: 0.5, label: '50%' },
-    { value: 0.33, label: '33%' },
-    { value: 0.25, label: '25%' },
-  ];
-
-  // Box detection mode
-  boxMode: string = 'estimate';
+  // Line boxes that link each text line to the image
+  boxMode: string = 'predict';
   boxModeOptions: Array<{value: string; label: string; description: string}> = [
-    { value: 'none', label: 'None', description: 'No line boxes — text only' },
-    { value: 'estimate', label: 'Estimate', description: 'Evenly divide image height by line count' },
-    { value: 'predict', label: 'Predict (Kraken)', description: 'Kraken segmentation for line boundaries' },
+    { value: 'predict', label: 'Detect (Kraken)', description: 'Kraken finds the printed lines on the page' },
+    { value: 'estimate', label: 'Even split', description: 'Divide the image height evenly by the number of lines' },
+    { value: 'none', label: 'None', description: 'Text only, no line boxes' },
   ];
 
   // Tiling Mode
   tilingMode: string = 'none';
   tilingModeOptions: Array<{value: string; label: string; description: string}> = [
-    { value: 'none', label: 'None', description: 'Process full page image natively' },
-    { value: 'full_page_clipped', label: 'Full Page (Clipped)', description: 'Aggressive margin reduction, single column' },
-    { value: 'two_columns', label: '2 Columns', description: 'Split vertically into Left & Right halves (plus margins)' },
-    { value: 'four_quadrants', label: '4 Quadrants', description: 'Split into 2x2 grid (optimizes OCR resolution)' },
+    { value: 'none', label: 'Whole page', description: 'Send the page as one image' },
+    { value: 'two_columns', label: '2 Columns', description: 'Split the page into left and right column' },
   ];
 
-  // Batch config — "dynamic" = size-based batching, "fixed" = user-specified batch size
-  batchMode: 'dynamic' | 'fixed' = 'fixed';
-  batchSize: number = 0;
+  // Images sent together in one API request (cloud APIs only). "auto" lets the
+  // backend group by image size: small snippets many per request, pages one by one.
+  batchMode: 'auto' | 'fixed' = 'auto';
+  batchSize: number = 1;
+  showAdvanced = false;
 
   // Right panel tab
   rightTab: 'settings' | 'report' | 'usage' = 'settings';
@@ -663,10 +649,11 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   /** Use a model chosen in the Ollama dropdown (adds it to the buttons if it isn't there). */
   useOllamaModel(name: string): void {
     const value = ollamaModelValue(name);
-    const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+    const category = this.ocrModelCategories.find(
+      c => c.name === (isOllamaCloudModel(name) ? 'Ollama Cloud' : 'Ollama (local)'));
     const known = this.ocrModelCategories.some(c => c.models.some(m => m.value === value));
-    if (local && !known) {
-      local.models.push({ value, label: name, description: BatchRecognitionComponent.PICKED_OLLAMA_MODEL });
+    if (category && !known) {
+      category.models.push({ value, label: name, description: BatchRecognitionComponent.PICKED_OLLAMA_MODEL });
     }
     this.modelAvailability[value] = true;
     this.selectModel(value);
@@ -721,6 +708,15 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     return apiModels.includes(this.selectedModel) && !this.selectedModel.startsWith('vllm');
   }
 
+  isKrakenModel(): boolean {
+    return this.selectedModel.startsWith('kraken');
+  }
+
+  /** Kraken reads no prompt; DeepSeek-OCR follows only its own short commands. */
+  ignoresPrompt(): boolean {
+    return this.isKrakenModel() || this.selectedModel.startsWith(ollamaModelValue('deepseek-ocr'));
+  }
+
   /** Models that expose an async Batch API (50% off, ~24h). Drives the Live/Batch toggle. */
   supportsBatchApi(): boolean {
     return ['gpt4_vision', 'claude_vision', 'gemini_vision', 'grok_xai'].includes(this.selectedModel);
@@ -757,10 +753,9 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
   private loadKrakenModels(): void {
     this.curedService.getAvailableOcrModels().subscribe({
       next: (response) => {
-        // Trained Kraken models, and Qwen LoRA when that module is installed
+        // Add trained Kraken models
         const groups = [
           { prefix: 'kraken:', category: 'Kraken (local)', description: 'Trained Kraken model' },
-          { prefix: 'qwen_lora:', category: 'Qwen (local)', description: 'Qwen QLoRA fine-tuned' },
         ];
         for (const group of groups) {
           const category = this.ocrModelCategories.find(c => c.name === group.category);
@@ -770,7 +765,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
             if (model.value.startsWith(group.prefix) && !existingValues.has(model.value)) {
               category.models.push({
                 value: model.value,
-                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
+                label: model.label.replace(' (Kraken)', ''),
                 description: group.description,
               });
               this.modelAvailability[model.value] = true;
@@ -790,12 +785,15 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
         const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
         if (!local || !cloud) return;
-        // Keep a model chosen in the Ollama dropdown; replace the discovered ones
-        local.models = local.models.filter(m => m.description === BatchRecognitionComponent.PICKED_OLLAMA_MODEL);
-        cloud.models = [];
+        // Keep a model chosen in the Ollama dropdown until Ollama reports it (then it is
+        // listed where Ollama puts it, local or cloud); replace the discovered ones
+        const reported = new Set(response.models.map(m => ollamaModelValue(m.name)));
+        const picked = <T extends { value: string; description?: string }>(models: T[]): T[] =>
+          models.filter(m => m.description === BatchRecognitionComponent.PICKED_OLLAMA_MODEL && !reported.has(m.value));
+        local.models = picked(local.models);
+        cloud.models = picked(cloud.models);
         for (const m of response.models) {
           const value = ollamaModelValue(m.name);
-          if (local.models.some(x => x.value === value)) continue;
           const description = [m.parameter_size, m.size_gb ? `${m.size_gb} GB` : null, m.cloud ? 'runs on Ollama servers' : null]
             .filter(Boolean).join(' · ');
           (m.cloud ? cloud : local).models.push({ value, label: m.name, description });
@@ -928,7 +926,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       next: () => {
         this.loadedPrompts = this.loadedPrompts.filter(p => p.key !== this.selectedPrompt);
         this.ocrPromptModes = this.ocrPromptModes.filter(m => m.value !== this.selectedPrompt);
-        this.selectedPrompt = 'dictionary';
+        this.selectedPrompt = 'plain';
         this.editingPrompt = false;
         this.notificationService.showSuccess('Prompt deleted');
       },
@@ -959,7 +957,7 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
     if (!this.hasSource) return 'Select a source: Browse Server or Browse Computer (left panel)';
     if (!this.selectedModel) return 'Select a model';
     if (this.requiresApiKey() && !this.apiKey) return 'Enter an API key';
-    if (this.selectedPrompt === 'custom' && !(this.customPromptText || '').trim()) return 'Enter a custom prompt';
+    if (this.selectedPrompt === 'custom' && !this.ignoresPrompt() && !(this.customPromptText || '').trim()) return 'Enter a custom prompt';
     if (this.activeJobIds.size >= BatchRecognitionComponent.MAX_CONCURRENT_BATCHES) {
       return `${BatchRecognitionComponent.MAX_CONCURRENT_BATCHES} jobs already running`;
     }
@@ -1016,21 +1014,26 @@ export class BatchRecognitionComponent implements OnInit, OnDestroy {
       ? Array.from(this.selectedFilenames)
       : undefined;
 
+    const kraken = this.isKrakenModel();
+    const deepseek = !kraken && this.ignoresPrompt();
+    const size = this.imageSizeOptions.find(o => o.value === this.imageSize);
     const base: BatchRecognitionRequest = {
       destination_dataset_id: this.destinationMode === 'library' && this.destinationDatasetId ? this.destinationDatasetId : undefined,
       destination_folder_path: this.destinationMode === 'export' && this.destinationFolderPath ? this.destinationFolderPath : undefined,
       export_images: this.destinationMode === 'export' ? this.exportImages : undefined,
       model: this.selectedModel,
-      prompt: this.selectedPrompt === 'custom' ? 'plain' : this.selectedPrompt,
-      custom_prompt: this.selectedPrompt === 'custom' ? this.customPromptText : undefined,
+      prompt: this.selectedPrompt === 'custom' || deepseek ? 'plain' : this.selectedPrompt,
+      // DeepSeek-OCR answers longer instructions with nothing; it only knows its own commands
+      custom_prompt: deepseek ? 'Free OCR.' : this.selectedPrompt === 'custom' ? this.customPromptText : undefined,
       api_key: this.apiKey || undefined,
       sub_model: this.selectedSubModel || undefined,
-      batch_size: this.batchMode === 'dynamic' ? -1 : Math.max(1, this.batchSize || 1),
+      batch_size: !this.requiresApiKey() ? 1 : this.batchMode === 'auto' ? -1 : Math.max(1, this.batchSize || 1),
       correction_rules: this.correctionRules || undefined,
-      image_scale: this.imageScale < 1.0 ? this.imageScale : undefined,
-      target_dpi: this.targetDpi || undefined,
-      box_mode: this.boxMode || undefined,
-      tiling_mode: this.tilingMode,
+      image_scale: kraken ? undefined : size?.scale,
+      target_dpi: kraken ? undefined : size?.dpi,
+      // Kraken brings its own line boxes; "estimate" keeps them
+      box_mode: kraken ? 'estimate' : (this.boxMode || undefined),
+      tiling_mode: kraken ? 'none' : this.tilingMode,
       execution_mode: this.supportsBatchApi() ? this.executionMode : 'live',
     };
 

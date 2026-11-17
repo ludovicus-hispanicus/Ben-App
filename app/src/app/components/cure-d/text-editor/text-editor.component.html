@@ -183,7 +183,7 @@
         <div class="rt-divider"></div>
 
         <!-- Section: Export -->
-        <button class="rt-btn" (click)="exportRequested.emit()" matTooltip="Export">
+        <button class="rt-btn" (click)="exportRequested.emit($any($event.currentTarget))" matTooltip="Export">
           <mat-icon>download</mat-icon>
         </button>
       </ng-container>

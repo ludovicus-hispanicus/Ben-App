@@ -112,12 +112,18 @@ class NewTextsHandler:
 
     def _cleanup_kraken_training(self, text_id: int, dataset_id: int = None):
         if dataset_id is not None:
-            base_dir = os.path.join(self.KRAKEN_TRAINING_DIR, str(dataset_id))
+            patterns = [os.path.join(self.KRAKEN_TRAINING_DIR, str(dataset_id), f"text{text_id}_*")]
         else:
-            base_dir = self.KRAKEN_TRAINING_DIR
-        pattern = os.path.join(base_dir, f"text{text_id}_*")
-        for f in glob_module.glob(pattern):
-            os.remove(f)
+            # Without a dataset: the top folder and every dataset's subfolder. Lines
+            # are saved under kraken-training/<dataset_id>/, and training uses every
+            # line file there, so a deleted text's lines must not stay behind.
+            patterns = [os.path.join(self.KRAKEN_TRAINING_DIR, f"text{text_id}_*"),
+                        os.path.join(self.KRAKEN_TRAINING_DIR, "*", f"text{text_id}_*")]
+        for pattern in patterns:
+            for f in glob_module.glob(pattern):
+                if os.path.basename(os.path.dirname(f)) == "_normalized":
+                    continue  # a training run's working copy, rebuilt each run
+                os.remove(f)
 
     def _find_best_kraken_edit(self, edit_history: list) -> dict:
         """Scan edit_history backward to find the best edit for Kraken training.

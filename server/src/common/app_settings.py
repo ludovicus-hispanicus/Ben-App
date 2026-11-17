@@ -21,7 +21,6 @@ _DEFAULTS = {
         "cure": True,         # CuRe sign classifier
         "yolo": True,         # YOLO layout detection/training
         "line_segmentation": True,  # Line segmentation annotation
-        "qwen": True,         # Local Qwen3-VL (LoRA training & inference)
     },
     "news_enabled": True,  # dashboard news + update check (contacts GitHub once a day)
 }

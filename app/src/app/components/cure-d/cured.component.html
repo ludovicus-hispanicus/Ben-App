@@ -499,7 +499,7 @@
             <div class="details-icon details-col-icon">
               <mat-icon>description</mat-icon>
             </div>
-            <span class="details-name details-col-name">
+            <span class="details-name details-col-name" [title]="getItemIdentifiers(item).join(' | ')">
               <span *ngFor="let id of getItemIdentifiers(item)" class="identifier-line">{{ id }}</span>
             </span>
             <span class="details-part details-col-part">{{ item.part || '—' }}</span>
@@ -880,8 +880,12 @@
               </button>
             </div>
             <div class="layout-region-list" *ngIf="layoutRegions.length > 0">
-              <span class="layout-hint">Click a region to OCR it (or draw a box yourself):</span>
+              <span class="layout-hint">
+                Click a box on the page or here to OCR it; drag it or its corners to adjust it,
+                Delete removes it. Shift + drag draws a box yourself.
+              </span>
               <button *ngFor="let r of layoutRegions" class="layout-region" type="button"
+                      [class.selected]="r.rect && r.rect === selectedBox"
                       [style.border-color]="r.color" (click)="useLayoutRegion(r)"
                       [matTooltip]="'Confidence ' + (r.confidence * 100 | number:'1.0-0') + '%'">
                 <span class="layout-swatch" [style.background]="r.color"></span>{{ r.label }}
@@ -991,9 +995,9 @@
             </div>
           </div>
 
-          <!-- Line Detection Mode -->
+          <!-- Line boxes -->
           <div class="ocr-mode-section">
-            <h3>Line Detection</h3>
+            <h3>Line boxes</h3>
             <div class="mode-buttons">
               <button *ngFor="let opt of boxModeOptions"
                       class="mode-btn"
@@ -1195,7 +1199,7 @@
         (lineHover)="transliterationLineHover($event)"
         (lineChanged)="onLinesChanged($event)"
         (regexMatchLines)="onRegexMatchLines($event)"
-        (exportRequested)="exportMenuTrigger.openMenu()"
+        (exportRequested)="openExportMenu($event)"
         [lines]="lines"
         [boxAmount]="boundingBoxes.length"
         class="lines-panel"></text-editor>
@@ -1204,7 +1208,7 @@
 </div>
 
 <!-- Hidden Export Menu (editor stage) -->
-<div style="visibility: hidden; position: fixed" [matMenuTriggerFor]="exportMenu"></div>
+<div #exportMenuTriggerEl class="export-menu-anchor" [matMenuTriggerFor]="exportMenu"></div>
 <mat-menu #exportMenu="matMenu">
   <button mat-menu-item (click)="downloadCurrentText('txt')">
     <mat-icon>description</mat-icon>

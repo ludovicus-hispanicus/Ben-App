@@ -19,7 +19,6 @@ export const APP_MODULES: ModuleConfig[] = [
   { id: 'cure', name: 'CuRe', description: 'Sign classifier editor', icon: 'gesture', core: false, installed: true },
   { id: 'yolo', name: 'Layout', description: 'YOLO layout detection & training', icon: 'grid_view', core: false, installed: true },
   { id: 'line_segmentation', name: 'Segmentation', description: 'Line segmentation annotation tool', icon: 'splitscreen', core: false, installed: true },
-  { id: 'qwen', name: 'Qwen (local)', description: 'Qwen3-VL LoRA training & OCR on your own GPU', icon: 'smart_toy', core: false, installed: true },
 ];
 
 @Injectable({ providedIn: 'root' })

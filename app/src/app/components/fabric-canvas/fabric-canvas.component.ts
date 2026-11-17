@@ -358,8 +358,8 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
 
     // Crosshair guide lines (hidden by default)
     this.crosshairH = new fabric.Line([0, 0, 5000, 0], {
-      stroke: 'rgba(25, 118, 210, 0.6)',
-      strokeWidth: 1,
+      stroke: 'rgba(13, 71, 161, 0.95)',  // dark blue, nearly opaque: visible on grey scans
+      strokeWidth: 1.5,
       strokeUniform: true,
       objectCaching: false,
       selectable: false,
@@ -368,8 +368,8 @@ export class FabricCanvasComponent implements AfterViewInit, AfterContentChecked
       visible: false
     });
     this.crosshairV = new fabric.Line([0, 0, 0, 5000], {
-      stroke: 'rgba(25, 118, 210, 0.6)',
-      strokeWidth: 1,
+      stroke: 'rgba(13, 71, 161, 0.95)',  // dark blue, nearly opaque: visible on grey scans
+      strokeWidth: 1.5,
       strokeUniform: true,
       objectCaching: false,
       selectable: false,

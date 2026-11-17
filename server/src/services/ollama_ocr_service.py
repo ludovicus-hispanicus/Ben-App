@@ -5,7 +5,10 @@ Connects to a local Ollama server for OCR using DeepSeek-OCR or other vision mod
 This is the recommended approach for desktop deployment as Ollama handles GPU/CUDA setup.
 """
 
+import json
 import logging
+import os
+import threading
 import time
 import base64
 import httpx
@@ -21,6 +24,57 @@ logger = logging.getLogger(__name__)
 # Default Ollama configuration
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first (slow per request)
 DEFAULT_MODEL = "deepseek-ocr"
+
+
+# ── GPU layers per model ───────────────────────────────────────────────
+# On a small GPU a vision model can fit while loading but leave too little memory
+# for reading the image: Ollama then fails with e.g. "CUDA error: device not ready"
+# (DeepSeek-OCR on an 8 GB laptop GPU: 13 of 13 layers fit, the image did not).
+# Keeping a layer or two in main memory fixes it at a small cost in speed. BEn
+# steps the number of GPU layers down after such an error and remembers the
+# number that worked, per model, in data/ollama_gpu_layers.json.
+
+_gpu_layers_lock = threading.Lock()
+_gpu_layers: Optional[Dict[str, int]] = None
+
+
+def _gpu_layers_file() -> str:
+    from utils.storage_utils import StorageUtils
+    return os.path.join(StorageUtils.BASE_PATH or "data", "ollama_gpu_layers.json")
+
+
+def get_gpu_layers(model: str) -> Optional[int]:
+    """Number of GPU layers that worked for this model, or None (Ollama decides)."""
+    global _gpu_layers
+    with _gpu_layers_lock:
+        if _gpu_layers is None:
+            try:
+                with open(_gpu_layers_file(), encoding="utf-8") as f:
+                    _gpu_layers = {k: int(v) for k, v in json.load(f).items()}
+            except Exception:
+                _gpu_layers = {}
+        return _gpu_layers.get(model)
+
+
+def set_gpu_layers(model: str, layers: Optional[int]) -> None:
+    global _gpu_layers
+    get_gpu_layers(model)  # load the file first
+    with _gpu_layers_lock:
+        if layers is None:
+            _gpu_layers.pop(model, None)
+        else:
+            _gpu_layers[model] = int(layers)
+        try:
+            path = _gpu_layers_file()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(_gpu_layers, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save GPU layers for {model}: {e}")
+
+
+def is_gpu_memory_error(response: httpx.Response) -> bool:
+    return response.status_code == 500 and "CUDA error" in response.text
 
 
 class OllamaOcrService:
@@ -136,6 +190,28 @@ class OllamaOcrService:
             logger.error(f"Failed to pull model: {e}")
             return False
 
+    def _layer_count(self, model: str) -> Optional[int]:
+        """Number of layers Ollama can put on the GPU (transformer blocks + output)."""
+        try:
+            response = self.client.post(f"{self.base_url}/api/show", json={"model": model}, timeout=10)
+            info = response.json().get("model_info", {}) or {}
+            arch = info.get("general.architecture")
+            blocks = info.get(f"{arch}.block_count")  # not the vision encoder's ("<arch>.vision.block_count")
+            return int(blocks) + 1 if isinstance(blocks, int) else None
+        except Exception:
+            return None
+
+    def _fewer_gpu_layers(self, model: str, current: Optional[int]) -> List[int]:
+        """GPU layer counts to try after a GPU memory error, largest first."""
+        total = self._layer_count(model) or 32
+        start = min(current, total) if current is not None else total
+        steps = [start - 1, start - 2, total * 2 // 3, total // 3, 0]
+        tries: List[int] = []
+        for n in steps:
+            if 0 <= n < start and n not in tries:
+                tries.append(n)
+        return sorted(tries, reverse=True)
+
     def ocr_from_base64(
         self,
         image_base64: str,
@@ -188,10 +264,31 @@ class OllamaOcrService:
 
             logger.info(f"Running Ollama OCR with model={model}, mode={output_mode}, prompt_length={len(prompt)} chars")
 
-            # Call Ollama chat API with image
-            response = self.client.post(
-                f"{self.base_url}/api/chat",
-                json={
+            # DeepSeek-OCR (and models trained from it) has only a raw template ({{ .Prompt }}):
+            # through /api/chat it starts with a stray "<|im_end|>" and reads about half the
+            # page (AHw G p. 10: 2,938 instead of 5,566 characters). /api/generate is its format.
+            is_deepseek_ocr = model.lower().startswith("deepseek-ocr")
+
+            # Ollama's default context is 4,096 tokens for the image AND the answer: a
+            # Qwen3-VL reading of a long AHw entry (image 2,826 tokens) stopped after 1,270
+            # tokens, half the entry (lamassu: 55.7 % CER; with 16,384: 3.1 %).
+            from services.ollama_gpu import is_ollama_cloud_model
+            num_ctx = None if (is_deepseek_ocr or is_ollama_cloud_model(model)) else 16384
+
+            def send(gpu_layers: Optional[int]):
+                options = {}
+                if gpu_layers is not None:
+                    options["num_gpu"] = gpu_layers
+                if num_ctx:
+                    options["num_ctx"] = num_ctx
+                options = options or None
+                if is_deepseek_ocr:
+                    body = {"model": model, "prompt": prompt, "images": [image_base64], "stream": False}
+                    if options:
+                        body["options"] = options
+                    return self.client.post(f"{self.base_url}/api/generate", json=body)
+                # Call Ollama chat API with image
+                body = {
                     "model": model,
                     "messages": [{
                         "role": "user",
@@ -200,7 +297,24 @@ class OllamaOcrService:
                     }],
                     "stream": False
                 }
-            )
+                if options:
+                    body["options"] = options
+                return self.client.post(f"{self.base_url}/api/chat", json=body)
+
+            gpu_layers = get_gpu_layers(model)
+            response = send(gpu_layers)
+            if is_gpu_memory_error(response):
+                # Too little GPU memory left for the image (see get_gpu_layers):
+                # retry with fewer layers on the GPU and keep what works.
+                for fewer in self._fewer_gpu_layers(model, gpu_layers):
+                    logger.warning(f"Ollama GPU error with {model} ({response.text[:120]}); "
+                                   f"trying again with {fewer} layers on the GPU")
+                    response = send(fewer)
+                    if not is_gpu_memory_error(response):
+                        if response.status_code == 200:
+                            set_gpu_layers(model, fewer)
+                            logger.info(f"{model}: {fewer} GPU layers work; using that from now on")
+                        break
 
             processing_time_ms = int((time.time() - start_time) * 1000)
 
@@ -214,7 +328,10 @@ class OllamaOcrService:
                 }
 
             result = response.json()
-            text = result.get("message", {}).get("content", "")
+            if is_deepseek_ocr:
+                text = result.get("response", "").replace("<|im_end|>", "")
+            else:
+                text = result.get("message", {}).get("content", "")
 
             # Split into lines
             lines = [line.strip() for line in text.split("\n") if line.strip()]

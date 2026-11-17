@@ -1,9 +1,10 @@
 import { AfterViewInit, Component, DoCheck, ElementRef, EventEmitter, HostListener, OnInit, OnDestroy, Output, QueryList, ViewChild, ViewChildren } from '@angular/core';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { Image as FabricImage, Rect } from 'fabric/fabric-impl';
+import { fabric } from 'fabric';
 import { PDFDocumentProxy } from 'ng2-pdf-viewer';
 import { Dimensions, Index, Letter, LetterHover, RectData } from 'src/app/models/letter';
-import { CuredService, TranslationLookupResult, ollamaModelValue } from 'src/app/services/cured.service';
+import { CuredService, TranslationLookupResult, ollamaModelValue, isOllamaCloudModel } from 'src/app/services/cured.service';
 import { NotificationService } from 'src/app/services/notification.service';
 import { CanvasMode, CanvasType, FabricCanvasComponent } from '../fabric-canvas/fabric-canvas.component';
 import { saveAs } from 'file-saver';
@@ -39,6 +40,7 @@ import { BatchRecognitionService } from 'src/app/services/batch-recognition.serv
 import { LatestModelAlias, ProviderModel } from 'src/app/models/batch-recognition';
 import { YoloTrainingService } from 'src/app/services/yolo-training.service';
 import { ModuleService } from 'src/app/services/module.service';
+import { PagesService } from 'src/app/services/pages.service';
 import { environment } from 'src/environments/environment';
 
 export class SelectedPdf {
@@ -280,8 +282,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   public layoutModel = '';
   public layoutDetecting = false;
   public layoutRegions: Array<{ label: string; color: string; confidence: number;
-                                bbox: { x: number; y: number; width: number; height: number } }> = [];
+                                bbox: { x: number; y: number; width: number; height: number }; rect?: Rect }> = [];
+  // Detected regions are real boxes: labelled, selectable, movable and resizable. The chosen
+  // one is the OCR box (selectedBox).
   private layoutOverlays: Rect[] = [];
+  private layoutLabels = new Map<Rect, fabric.Text>();
+  private layoutCanvasHandlers: Array<[string, (e: any) => void]> = [];
 
   // Live model lists from each provider's /models endpoint (keyed by provider), as in Batch.
   // When present they replace the built-in apiSubModels list below.
@@ -367,7 +373,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     });
   }
 
-  /** Run the layout model on the whole page and outline the regions it finds. */
+  /** Run the layout model on the whole page and show the regions it finds as editable boxes. */
   detectLayoutRegions(): void {
     const bgImage = this.canvas?.getCanvas().backgroundImage as unknown as FabricImage;
     if (!bgImage || !this.layoutModel) {
@@ -379,46 +385,147 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     this.yoloService.predict(base64, this.layoutModel).subscribe({
       next: (res) => {
         this.layoutDetecting = false;
+        const fc = this.canvas.getCanvas();
+        // A hand-drawn selection box would compete with the regions; the regions replace it
+        if (this.selectedBox) {
+          fc.remove(this.selectedBox);
+          this.selectedBox = null;
+        }
         // Region colours as defined for the model's classes (the prediction doesn't carry them)
         const colors = this.layoutModels.find(m => m.name === this.layoutModel)?.colors || new Map<string, string>();
         const counts = new Map<string, number>();
+        const fontSize = Math.max(14, Math.round((bgImage.width || 1000) / 70));
         // Reading order: top to bottom, then left to right
         const detections = [...res.detections].sort((a, b) => a.bbox.y - b.bbox.y || a.bbox.x - b.bbox.x);
         for (const d of detections) {
           const n = (counts.get(d.class_name) || 0) + 1;
           counts.set(d.class_name, n);
           const color = colors.get(d.class_name) || '#ff9800';
-          this.layoutRegions.push({ label: `${d.class_name} ${n}`, color, confidence: d.confidence, bbox: d.bbox });
-          const outline = this.canvas.makeRectangle(d.bbox.x, d.bbox.y, d.bbox.width, d.bbox.height,
-                                                    'rgba(0,0,0,0)', color, false, null, true);
-          outline.set({ selectable: false, evented: false, strokeDashArray: [6, 4], strokeWidth: 2 });
-          this.canvas.getCanvas().add(outline);
-          this.layoutOverlays.push(outline);
+          const label = `${d.class_name} ${n}`;
+          const rect = this.canvas.makeRectangle(d.bbox.x, d.bbox.y, d.bbox.width, d.bbox.height,
+                                                 this.withAlpha(color, 0.06), color, false, null, true);
+          rect.set({
+            selectable: true, evented: true, hasControls: true, hasBorders: true, lockRotation: true,
+            strokeWidth: 2, cornerColor: color, hoverCursor: 'pointer',
+          });
+          const text = new fabric.Text(label, {
+            left: d.bbox.x, top: 0, fontSize, fontFamily: 'Arial', fill: '#ffffff',
+            textBackgroundColor: color, selectable: false, evented: false,
+          });
+          this.layoutLabels.set(rect, text);
+          const sync = () => this.syncLayoutLabel(rect);
+          rect.on('moving', sync);
+          rect.on('scaling', sync);
+          rect.on('modified', sync);
+          fc.add(rect);
+          fc.add(text);
+          this.syncLayoutLabel(rect);
+          this.layoutOverlays.push(rect);
+          this.layoutRegions.push({ label, color, confidence: d.confidence, bbox: d.bbox, rect });
         }
-        this.canvas.getCanvas().renderAll();
-        if (!detections.length) {
+        if (detections.length) {
+          this.attachLayoutCanvasHandlers();
+          // Pan mode: click a box to choose it, drag it or its corners to adjust it
+          this.canvas.changeMode(CanvasMode.Pan);
+        } else {
           this.notificationService.showInfo('No regions found on this page with this layout model');
         }
+        fc.renderAll();
       },
       error: () => { this.layoutDetecting = false; },  // the error interceptor shows the message
     });
   }
 
-  /** Make a detected region the OCR box, like a box drawn by hand (it can still be adjusted). */
-  useLayoutRegion(region: { bbox: { x: number; y: number; width: number; height: number } }): void {
-    const box = this.canvas.makeRectangle(region.bbox.x, region.bbox.y, region.bbox.width, region.bbox.height,
-                                          undefined, undefined, true, null, true);
-    this.canvas.getCanvas().add(box);
-    this.boxAdded(box);
+  /** Choose a region from the list: select its box on the page (it becomes the OCR box). */
+  useLayoutRegion(region: { rect?: Rect }): void {
+    if (!region.rect) {
+      return;
+    }
+    this.canvas.changeMode(CanvasMode.Pan);  // so the box can be dragged and resized
+    this.canvas.getCanvas().setActiveObject(region.rect);
+    this.chooseLayoutRegion(region.rect);
   }
 
+  /** The chosen region is the OCR box; it is drawn thicker than the others. */
+  private chooseLayoutRegion(rect: Rect): void {
+    this.selectedBox = rect;
+    for (const r of this.layoutOverlays) {
+      const color = r.stroke as string;
+      r.set({ strokeWidth: r === rect ? 4 : 2, fill: this.withAlpha(color, r === rect ? 0.18 : 0.06) });
+    }
+    this.canvas.getCanvas().requestRenderAll();
+    this.updateToolbarButtons();
+  }
+
+  private syncLayoutLabel(rect: Rect): void {
+    const text = this.layoutLabels.get(rect);
+    if (!text) {
+      return;
+    }
+    text.set({ left: rect.left, top: Math.max(0, rect.top - text.getScaledHeight()) });
+    text.setCoords();
+  }
+
+  private attachLayoutCanvasHandlers(): void {
+    const fc = this.canvas.getCanvas();
+    const onSelect = (e: any) => {
+      const target = (e.selected && e.selected[0]) || e.target;
+      if (target && this.layoutOverlays.includes(target)) {
+        this.chooseLayoutRegion(target);
+      }
+    };
+    // A region deleted with the Delete key: drop its label and list entry
+    const onRemoved = (e: any) => {
+      const rect = e.target as Rect;
+      if (!this.layoutOverlays.includes(rect)) {
+        return;
+      }
+      const text = this.layoutLabels.get(rect);
+      if (text) {
+        fc.remove(text);
+      }
+      this.layoutLabels.delete(rect);
+      this.layoutOverlays = this.layoutOverlays.filter(r => r !== rect);
+      this.layoutRegions = this.layoutRegions.filter(r => r.rect !== rect);
+      if (this.selectedBox === rect) {
+        this.selectedBox = null;
+        this.updateToolbarButtons();
+      }
+    };
+    this.layoutCanvasHandlers = [
+      ['selection:created', onSelect], ['selection:updated', onSelect], ['object:removed', onRemoved],
+    ];
+    for (const [event, handler] of this.layoutCanvasHandlers) {
+      fc.on(event, handler);
+    }
+  }
+
+  /** Remove the regions from the page. The one chosen as OCR box stays (OCR styles it afterwards). */
   private clearLayoutRegions(): void {
-    const fabricCanvas = this.canvas?.getCanvas();
-    for (const outline of this.layoutOverlays) {
-      fabricCanvas?.remove(outline);
+    const fc = this.canvas?.getCanvas();
+    for (const [event, handler] of this.layoutCanvasHandlers) {
+      fc?.off(event, handler);
+    }
+    this.layoutCanvasHandlers = [];
+    for (const text of this.layoutLabels.values()) {
+      fc?.remove(text);
+    }
+    this.layoutLabels.clear();
+    for (const rect of this.layoutOverlays) {
+      if (rect !== this.selectedBox) {
+        fc?.remove(rect);
+      }
     }
     this.layoutOverlays = [];
     this.layoutRegions = [];
+  }
+
+  private withAlpha(hex: string, alpha: number): string {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+    if (!m) {
+      return `rgba(255,152,0,${alpha})`;
+    }
+    return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${alpha})`;
   }
 
   /** Fetch the provider's current model list live (needs the API key), as Batch does. */
@@ -479,12 +586,12 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     { value: 'akkadian', label: 'Akkadian', description: 'Fix glottal stops (ʾ), reference signs (↑), special chars' },
   ];
 
-  // Line detection / box mode
-  public boxMode: string = 'estimate';
+  // Line boxes that link each text line to the image
+  public boxMode: string = 'predict';
   public boxModeOptions: Array<{value: string; label: string; description: string}> = [
-    { value: 'none', label: 'None', description: 'No line boxes — text only' },
-    { value: 'estimate', label: 'Estimate', description: 'Evenly divide image height by line count' },
-    { value: 'predict', label: 'Predict (Kraken)', description: 'Kraken segmentation for line boundaries' },
+    { value: 'predict', label: 'Detect (Kraken)', description: 'Kraken finds the printed lines on the page' },
+    { value: 'estimate', label: 'Even split', description: 'Divide the image height evenly by the number of lines' },
+    { value: 'none', label: 'None', description: 'Text only, no line boxes' },
   ];
 
   // OCR prompt/mode selection (for VLM models like Ollama)
@@ -604,12 +711,6 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       ]
     },
     {
-      name: 'Qwen (local)',
-      models: [
-        // Qwen LoRA adapters, listed only when the Qwen module is installed
-      ]
-    },
-    {
       name: 'Ollama (local)',
       models: [
         // Installed Ollama models that accept images (from /ollama/vision-models)
@@ -652,7 +753,22 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
 
   @ViewChild('canvas') canvas: FabricCanvasComponent;
   @ViewChild('lineEditor', { static: false }) lineEditor: TextEditorComponent;
-  @ViewChild(MatMenuTrigger) exportMenuTrigger: MatMenuTrigger;
+  // By name: the first MatMenuTrigger in the template is the guide-line menu in the editor
+  @ViewChild('exportMenuTriggerEl', { read: MatMenuTrigger }) exportMenuTrigger: MatMenuTrigger;
+  @ViewChild('exportMenuTriggerEl') exportMenuAnchor: ElementRef<HTMLElement>;
+
+  /** Open the export menu right below the editor's export button. */
+  openExportMenu(button: HTMLElement): void {
+    const anchor = this.exportMenuAnchor?.nativeElement;
+    if (anchor && button) {
+      const r = button.getBoundingClientRect();
+      anchor.style.left = `${r.left}px`;
+      anchor.style.top = `${r.top}px`;
+      anchor.style.width = `${r.width}px`;
+      anchor.style.height = `${r.height}px`;
+    }
+    this.exportMenuTrigger.openMenu();
+  }
   @ViewChildren('datasetRenameInput') datasetRenameInputs!: QueryList<ElementRef>;
   public lines: Letter[];
 
@@ -1082,7 +1198,8 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
     public guideLineService: GuideLineService,
     private batchRecognitionService: BatchRecognitionService,
     private yoloService: YoloTrainingService,
-    private moduleService: ModuleService) {
+    private moduleService: ModuleService,
+    private pagesService: PagesService) {
     // set some stuff
     // this.stage = 5;
     // this.transliterationResult = ["hello therew world", "there are the test lines", "enjoy them while they least"];
@@ -1279,6 +1396,14 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
         this.stage = 0;
       }
       this.loadDatasets();
+    } else if (params['library_project'] && params['library_page']) {
+      // "Open in CuReD" from the Library: start a new OCR with that page, the same
+      // way as a page picked with "Browse server"
+      this.returnTo = this.returnLabel = null;
+      this.resetToCleanState();
+      this.stage = 0;
+      this.loadDatasets();
+      this.openLibraryPage(params['library_project'], +params['library_page']);
     } else {
       // Dashboard: a dataset's text list (?dataset=…), else the start page with all datasets
       this.returnTo = this.returnLabel = null;
@@ -1943,6 +2068,30 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       this.currentPageIndex = 0;
 
       this.loadPageFromQueue(0);
+    });
+  }
+
+  /** Load one Library page into a new OCR (Library → "Open in CuReD"). */
+  private openLibraryPage(projectId: string, pageNumber: number): void {
+    this.isLoading = true;
+    this.pagesService.getProject(projectId).subscribe({
+      next: (project) => {
+        const info = project.pages.find(p => p.page_number === pageNumber);
+        this.pendingPages = [{
+          project_id: projectId,
+          project_name: project.name,
+          page_number: pageNumber,
+          filename: info?.filename || `page_${pageNumber}.png`,
+          image_url: this.pagesService.getPageImageUrl(projectId, pageNumber),
+        }];
+        this.pendingLocalFiles = [];
+        this.currentPageIndex = 0;
+        this.loadPageFromQueue(0);
+      },
+      error: () => {
+        this.isLoading = false;
+        this.notificationService.showError('Could not open the page from the Library');
+      }
     });
   }
 
@@ -2798,9 +2947,13 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
 
   boxAdded(newRect: Rect) {
     if (this.stage == 2) {
-      // In stage 2, store as selection box for cropping (replace previous selection)
-      if (this.selectedBox) {
+      // In stage 2, store as selection box for cropping (replace previous selection).
+      // A detected layout region is not removed, only no longer the chosen one.
+      if (this.selectedBox && !this.layoutOverlays.includes(this.selectedBox)) {
         this.canvas.getCanvas().remove(this.selectedBox);
+      }
+      for (const r of this.layoutOverlays) {
+        r.set({ strokeWidth: 2, fill: this.withAlpha(r.stroke as string, 0.06) });
       }
       // Add-box mode finalises rects with selectable=false; re-enable editing so the
       // user can move/resize the selection before clicking Generate.
@@ -3679,7 +3832,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       if (gen !== this._thumbnailGeneration) return; // project changed, stop
       if (idx >= items.length) return;
       const item = items[idx++];
-      this.curedService.getImage(item.text_id, item.latest_transliteration_id!).subscribe(
+      this.curedService.getThumbnail(item.text_id, item.latest_transliteration_id!).subscribe(
         blob => {
           if (gen !== this._thumbnailGeneration) return;
           const url = URL.createObjectURL(blob);
@@ -4205,10 +4358,9 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
       response => {
         this.availableOcrModels = response.models;
 
-        // Add trained models: Kraken, and Qwen LoRA when that module is installed
+        // Add trained Kraken models
         const groups = [
           { prefix: 'kraken:', category: 'Kraken (local)', description: 'Trained Kraken model' },
-          { prefix: 'qwen_lora:', category: 'Qwen (local)', description: 'Qwen QLoRA fine-tuned' },
         ];
         for (const group of groups) {
           const category = this.ocrModelCategories.find(c => c.name === group.category);
@@ -4218,7 +4370,7 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
             if (model.value.startsWith(group.prefix) && !existingValues.has(model.value)) {
               category.models.push({
                 value: model.value,
-                label: model.label.replace(' (Kraken)', '').replace(/ \(Qwen QLoRA.*\)/, ''),
+                label: model.label.replace(' (Kraken)', ''),
                 description: group.description,
                 trained: true,
               });
@@ -4316,13 +4468,15 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
         const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
         const cloud = this.ocrModelCategories.find(c => c.name === 'Ollama Cloud');
         if (!local || !cloud) return;
-        // Keep a model chosen in the Ollama dropdown; replace the discovered ones
-        const typedIn = local.models.filter(m => m.description === CuredComponent.PICKED_OLLAMA_MODEL);
-        local.models = [...typedIn];
-        cloud.models = [];
+        // Keep a model chosen in the Ollama dropdown until Ollama reports it (then it is
+        // listed where Ollama puts it, local or cloud); replace the discovered ones
+        const reported = new Set(response.models.map(m => ollamaModelValue(m.name)));
+        const picked = <T extends { value: string; description?: string }>(models: T[]): T[] =>
+          models.filter(m => m.description === CuredComponent.PICKED_OLLAMA_MODEL && !reported.has(m.value));
+        local.models = picked(local.models);
+        cloud.models = picked(cloud.models);
         for (const m of response.models) {
           const value = ollamaModelValue(m.name);
-          if (local.models.some(x => x.value === value)) continue;
           const description = [m.parameter_size, m.size_gb ? `${m.size_gb} GB` : null, m.cloud ? 'runs on Ollama servers' : null]
             .filter(Boolean).join(' · ');
           (m.cloud ? cloud : local).models.push({ value, label: m.name, description });
@@ -4338,10 +4492,11 @@ export class CuredComponent implements OnInit, AfterViewInit, OnDestroy, DoCheck
   /** Use a model chosen in the Ollama dropdown (adds it to the buttons if it isn't there). */
   useOllamaModel(name: string): void {
     const value = ollamaModelValue(name);
-    const local = this.ocrModelCategories.find(c => c.name === 'Ollama (local)');
+    const category = this.ocrModelCategories.find(
+      c => c.name === (isOllamaCloudModel(name) ? 'Ollama Cloud' : 'Ollama (local)'));
     const known = this.ocrModelCategories.some(c => c.models.some(m => m.value === value));
-    if (local && !known) {
-      local.models.push({ value, label: name, description: CuredComponent.PICKED_OLLAMA_MODEL });
+    if (category && !known) {
+      category.models.push({ value, label: name, description: CuredComponent.PICKED_OLLAMA_MODEL });
     }
     this.modelAvailability[value] = true;
     this.selectedOcrModel = value;

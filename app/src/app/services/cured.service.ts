@@ -92,6 +92,11 @@ export class CuredService {
         return this.http.get(`${environment.apiUrl}${this.baseUrl}/transliterationImage/${textId}/${transliterationId}?t=${cacheBust}`, { responseType: 'blob' });
     }
 
+    /** Small JPEG preview (max 320 px) for text lists; the full image can be 1-2 MB. */
+    getThumbnail(textId: number, transliterationId: number): Observable<Blob> {
+        return this.http.get(`${environment.apiUrl}${this.baseUrl}/transliterationThumbnail/${textId}/${transliterationId}`, { responseType: 'blob' });
+    }
+
     deleteTransliteration(textId: number, transliterationId: number) {
         return this.http.delete<{deleted: string}>(`${environment.apiUrl}${this.baseUrl}/${textId}/${transliterationId}`);
     }
@@ -240,14 +245,13 @@ export class CuredService {
     }
 
     // ==========================================
-    // Qwen3-VL QLoRA Training Methods
+    // DeepSeek-OCR LoRA Training (trained models become Ollama models)
     // ==========================================
 
-    getQwenTrainingStatus(datasetIds?: number[]) {
-        let url = `${environment.apiUrl}${this.baseUrl}/training/qwen/status`;
+    getDeepSeekTrainingStatus(datasetIds?: number[]) {
+        let url = `${environment.apiUrl}${this.baseUrl}/training/deepseek/status`;
         if (datasetIds && datasetIds.length > 0) {
-            const qs = datasetIds.map(id => `dataset_ids=${id}`).join('&');
-            url += `?${qs}`;
+            url += '?' + datasetIds.map(id => `dataset_ids=${id}`).join('&');
         }
         return this.http.get<{
             curatedTexts: number;
@@ -259,65 +263,36 @@ export class CuredService {
             isReady: boolean;
             lastTraining: string | null;
             currentTraining: TrainingProgress | null;
+            available: boolean;
+            unavailableReason: string | null;
         }>(url);
     }
 
-    startQwenTraining(epochs: number = 10, modelName: string = null, baseModel: string = null, outputMode: string = 'plain', device: string = 'auto', patience: number = 3, datasetIds?: number[]) {
-        const params: any = { epochs, output_mode: outputMode, device, patience };
-        if (modelName) {
-            params.model_name = modelName;
-        }
-        if (baseModel) {
-            params.base_model = baseModel;
-        }
+    startDeepSeekTraining(epochs: number, modelName: string, device: string = 'auto', patience: number = 2, datasetIds?: number[]) {
+        const params: any = { epochs, model_name: modelName, device, patience };
         if (datasetIds && datasetIds.length > 0) {
             params.dataset_ids = datasetIds;
         }
-        return this.http.post<{ message: string; epochs: number; model_name: string; base_model: string; output_mode: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/qwen/start`,
-            null,
-            { params }
+        return this.http.post<{ message: string; epochs: number; model_name: string; ollama_model: string }>(
+            `${environment.apiUrl}${this.baseUrl}/training/deepseek/start`, null, { params }
         );
     }
 
-    getQwenTrainingProgress() {
-        return this.http.get<TrainingProgress>(`${environment.apiUrl}${this.baseUrl}/training/qwen/progress`);
+    getDeepSeekTrainingProgress() {
+        return this.http.get<TrainingProgress>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/progress`);
     }
 
-    cancelQwenTraining() {
-        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/qwen/cancel`, null);
+    cancelDeepSeekTraining() {
+        return this.http.post<{ message: string }>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/cancel`, null);
     }
 
-    listQwenModels() {
-        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/qwen/models`);
+    listDeepSeekModels() {
+        return this.http.get<{ models: TrainedModel[] }>(`${environment.apiUrl}${this.baseUrl}/training/deepseek/models`);
     }
 
-    getQwenActiveModel() {
-        return this.http.get<ActiveModelInfo>(`${environment.apiUrl}${this.baseUrl}/training/qwen/active-model`);
-    }
-
-    activateQwenModel(modelName: string) {
-        return this.http.post<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/qwen/models/${modelName}/activate`,
-            null
-        );
-    }
-
-    deleteQwenModel(modelName: string) {
+    deleteDeepSeekModel(modelName: string) {
         return this.http.delete<{ message: string }>(
-            `${environment.apiUrl}${this.baseUrl}/training/qwen/models/${modelName}`
-        );
-    }
-
-    getQwenOutputModes() {
-        return this.http.get<{ modes: { [key: string]: string } }>(
-            `${environment.apiUrl}${this.baseUrl}/training/qwen/output-modes`
-        );
-    }
-
-    getQwenBaseModels() {
-        return this.http.get<{ models: { id: string; name: string; hf_id: string }[] }>(
-            `${environment.apiUrl}${this.baseUrl}/training/qwen/base-models`
+            `${environment.apiUrl}${this.baseUrl}/training/deepseek/models/${encodeURIComponent(modelName)}`
         );
     }
 
@@ -470,6 +445,12 @@ export interface TrainedModel {
     type?: string;
     epochs_trained?: number;
     early_stopped?: boolean;
+    // DeepSeek-OCR: the model is used through Ollama
+    ollama_model?: string;
+    trained_texts?: number;
+    skipped_texts?: number;
+    imported?: boolean;   // trained outside BEn; not deleted from the Training page
+    notes?: string;
 }
 
 export interface ActiveModelInfo {
@@ -504,6 +485,11 @@ export interface OllamaCatalog {
 /** OCR model value for an Ollama model ("ollama:<exact name>", see OCRFactory). */
 export function ollamaModelValue(name: string): string {
     return `ollama:${name}`;
+}
+
+/** Ollama cloud models carry "cloud" in their tag: "kimi-k3:cloud", "gemma4:31b-cloud". */
+export function isOllamaCloudModel(name: string): boolean {
+    return /[:-]cloud$/i.test(name || '');
 }
 
 export interface BaseModelOption {

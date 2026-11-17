@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import threading
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -138,6 +139,13 @@ async def add_process_time_header(request: Request, call_next):
             }
         )
 
+    # CORSMiddleware only adds this header when the request carries an Origin.
+    # An image first shown through <img> (no Origin) is then cached without it,
+    # and a later XHR for the same URL (CuReD loading a Library page) is blocked
+    # by the browser. All origins are allowed anyway, so always send it.
+    if "access-control-allow-origin" not in response.headers:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+
     process_time = time.time() - start_time
     logging.info(f"Process time: {str(process_time)}")
     logging.debug("=============================")
@@ -173,6 +181,17 @@ def startup_event():
                             debug_handler
                         ])
     init_the_db()
+
+    # Load Kraken and the active model in the background, so the first OCR
+    # takes seconds instead of over a minute. KRAKEN_WARMUP=0 turns it off.
+    if os.environ.get("KRAKEN_WARMUP", "1") != "0":
+        def _warm_kraken():
+            try:
+                from clients.kraken_client import KrakenOcrClient
+            except Exception:
+                return  # Kraken not installed
+            KrakenOcrClient.warm_up()
+        threading.Thread(target=_warm_kraken, name="kraken-warmup", daemon=True).start()
 
     from common.app_settings import init_settings
     init_settings()

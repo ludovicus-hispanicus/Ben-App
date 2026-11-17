@@ -43,7 +43,8 @@ lark-parser>=0.11.0
 # TEI Lex-0 XML validation
 lxml>=5.0.0
 
-# VLM OCR (optional - Qwen3-VL LoRA)
+# DeepSeek-OCR training (optional, from source, needs an NVIDIA GPU):
+#   pip install unsloth peft gguf  (Unsloth brings a matching transformers)
 transformers>=4.46.0,<5.0.0
 
 # Cloud VLM APIs

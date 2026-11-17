@@ -1,5 +1,5 @@
 """
-Shared training types used by the Kraken, Qwen and CuRe training services.
+Shared training types used by the Kraken, DeepSeek-OCR and CuRe training services.
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -36,6 +36,8 @@ class TrainingProgress:
     best_loss: float = float('inf')
     no_improve_count: int = 0
     early_stopped: bool = False
+    step: int = 0          # position within the current epoch (DeepSeek-OCR: one page per step)
+    total_steps: int = 0
 
     def __post_init__(self):
         if self.epoch_history is None:
@@ -60,4 +62,6 @@ class TrainingProgress:
             "best_accuracy": self.best_accuracy,
             "no_improve_count": self.no_improve_count,
             "early_stopped": self.early_stopped,
+            "step": self.step,
+            "total_steps": self.total_steps,
         }

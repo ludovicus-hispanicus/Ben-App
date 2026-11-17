@@ -10,8 +10,9 @@ The base ships what CuReD needs on a normal computer (CPU only):
 
 Left out (optional modules, reported as "not installed" by
 common/module_status.py, which checks for their code):
-  * CuRe sign classifier, line segmentation, local Qwen3-VL (LoRA)
-  * the local VLM stack (transformers, peft, bitsandbytes, ...)
+  * CuRe sign classifier, line segmentation
+  * the local VLM training stack (transformers, peft, unsloth, ...): DeepSeek-OCR
+    training runs from source only
 
 Build it in an environment with **CPU** torch (a CUDA torch adds ~3 GB of DLLs
 and breaks GitHub's 2 GB per-file release limit):
@@ -32,7 +33,8 @@ src_dir = os.path.join(os.getcwd(), 'src')
 # model, not training scratch folders (_train_*) left in cured_models/.
 kraken_models = [
     (path, 'cured_models')
-    for pattern in ('*.safetensors', '*.mlmodel', 'active_model.txt', 'registry.json')
+    # *.README.md: model cards (licence and source), e.g. PP-OCRv6-tiny (Apache-2.0)
+    for pattern in ('*.safetensors', '*.mlmodel', '*.README.md', 'active_model.txt', 'registry.json')
     for path in glob.glob(os.path.join(src_dir, 'cured_models', pattern))
 ]
 
@@ -149,11 +151,7 @@ a = Analysis(
         # "not installed" (common/module_status.py checks for it) ──
         'api.routers.cure',
         'api.routers.segmentation',
-        'services.qwen_training_service',
-        'services.qwen_ocr_service',
-        'services.qwen3_vl_service',
-        'clients.qwen_lora_client',
-        # Local VLM / training stack (Qwen LoRA etc.)
+        # Local VLM training stack (DeepSeek-OCR training runs from source only)
         'transformers',
         'peft',
         'bitsandbytes',

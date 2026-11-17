@@ -65,7 +65,8 @@ export class TextEditorComponent implements OnInit, AfterViewInit, OnChanges, On
   @Output() lineDeleted: EventEmitter<number> = new EventEmitter();
   @Output() regexMatchLines: EventEmitter<number[]> = new EventEmitter();
   @Output() textContentChanged: EventEmitter<string> = new EventEmitter();
-  @Output() exportRequested: EventEmitter<void> = new EventEmitter();
+  /** The export button, so the export menu can open next to it. */
+  @Output() exportRequested: EventEmitter<HTMLElement> = new EventEmitter();
 
   @ViewChild('aceEditor', { static: false }) aceEditorRef: ElementRef<HTMLDivElement>;
 
