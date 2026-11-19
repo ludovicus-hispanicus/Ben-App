@@ -475,6 +475,11 @@ def ocr_page(page: "fitz.Page", model: str, prompt: str, dpi: int, layout: str =
     from common.ocr_prompts import resolve_prompt
     from services.ollama_ocr_service import OllamaOcrService
     prompt_text = resolve_prompt(prompt)
+    if model.lower().startswith("deepseek-ocr"):
+        # DeepSeek-OCR (and BEn's models trained from it) answers long instructions with
+        # nothing; it only knows its own commands (see clients/ollama_client.py)
+        from clients.ollama_client import DEEPSEEK_OCR_PROMPT
+        prompt_text = DEEPSEEK_OCR_PROMPT
     regions = page_regions(page, layout)
     service = OllamaOcrService(model=model)
     parts, warnings = [], []
