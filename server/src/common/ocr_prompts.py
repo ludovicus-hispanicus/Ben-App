@@ -238,6 +238,16 @@ SPECIAL CHARACTERS & UNCERTAINTY
   • If text is illegible, write "???".
 
 NOW output the JSON for the card image provided.""",
+    "exact_copy": """Transcribe the printed text in this image exactly as it is printed, line by line, in reading order. Output only the transcription: no introduction, no comments, no markdown.
+
+Rules:
+- Copy every character as printed. Never normalize, modernize, translate or correct spelling, even if it looks wrong.
+- Keep all diacritics exactly: š ṣ ṭ ḫ ā ē ī ū â ê î û and umlauts ä ö ü ß.
+- Keep subscript numbers as subscript digits (du₃, not du3) and superscript determinatives as superscript letters (ᵈ, ᵍⁱˢ, ᵐ, ᵏⁱ).
+- Keep brackets and half-brackets [ ] ⸢ ⸣ ⟨ ⟩, sign separators (- . :) and footnote numbers.
+- Keep a word broken at the end of a line with its hyphen, as printed.
+- Ignore handwriting, underlining and notes added by readers in the margins or between the lines.
+- If a word cannot be read, write [?] in its place. Do not guess.""",
 }
 
 # Keys that cannot be deleted via the API

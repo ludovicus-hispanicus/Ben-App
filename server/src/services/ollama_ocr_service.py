@@ -218,6 +218,7 @@ class OllamaOcrService:
         output_mode: str = "plain",
         custom_prompt: Optional[str] = None,
         model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Perform OCR on a base64-encoded image using Ollama.
@@ -227,6 +228,9 @@ class OllamaOcrService:
             output_mode: "plain", "markdown", or "tei_lex0"
             custom_prompt: Override the default prompt
             model: Override the default model
+            max_tokens: Stop the answer after this many tokens (a model that loops
+                otherwise writes until the request times out); "done_reason" in the
+                result is then "length"
 
         Returns:
             Dict with keys: success, text, processing_time_ms, lines, error
@@ -281,6 +285,8 @@ class OllamaOcrService:
                     options["num_gpu"] = gpu_layers
                 if num_ctx:
                     options["num_ctx"] = num_ctx
+                if max_tokens:
+                    options["num_predict"] = max_tokens
                 options = options or None
                 if is_deepseek_ocr:
                     body = {"model": model, "prompt": prompt, "images": [image_base64], "stream": False}
@@ -348,6 +354,7 @@ class OllamaOcrService:
                 "processing_time_ms": processing_time_ms,
                 "model": model,
                 "output_mode": output_mode,
+                "done_reason": result.get("done_reason"),
             }
 
         except httpx.TimeoutException:

@@ -81,6 +81,7 @@ server/src/data/trocr_models/
 server/src/data/ocr_debug.txt
 server/src/data/cured_thumbnails/
 server/src/data/ollama_gpu_layers.json
+server/src/data/pdf_text/
 server/src/ebl_config.json
 **/unsloth_compiled_cache/
 **/vlm-training/
