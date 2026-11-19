@@ -191,30 +191,41 @@ def _line_text(line: Dict[str, Any], undecoded: Dict[str, int]) -> str:
     return "".join(out)
 
 
-def embedded_text(page: "fitz.Page") -> Tuple[str, List[str]]:
-    """The page's text layer, cleaned; and warnings (glyphs that could not be decoded)."""
+def embedded_lines(page: "fitz.Page") -> Tuple[List[List[Tuple[str, "fitz.Rect"]]], List[str]]:
+    """The page's text layer, cleaned, as blocks of (line text, line box in page points);
+    and warnings (glyphs that could not be decoded)."""
     flags = fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_MEDIABOX_CLIP  # no PRESERVE_LIGATURES
-    blocks = page.get_text("rawdict", flags=flags)["blocks"]
     undecoded: Dict[str, int] = {}
-    paras = []
-    for b in blocks:
+    blocks = []
+    for b in page.get_text("rawdict", flags=flags)["blocks"]:
         if b.get("type") != 0:
             continue
-        lines = [_line_text(l, undecoded).rstrip() for l in b["lines"]]
-        lines = [l for l in lines if l.strip()]
+        lines = []
+        for l in b["lines"]:
+            text = _line_text(l, undecoded).rstrip()
+            if not text.strip():
+                continue
+            for lig, plain in _LIGATURES.items():
+                text = text.replace(lig, plain)
+            # soft hyphen: printed as "-" where the line breaks, invisible elsewhere
+            if text.endswith(_SOFT_HYPHEN):
+                text = text[:-1] + "-"
+            text = unicodedata.normalize("NFC", text.replace(_SOFT_HYPHEN, ""))
+            lines.append((text, fitz.Rect(l["bbox"])))
         if lines:
-            paras.append("\n".join(lines))
-    text = "\n\n".join(paras)
-    for lig, plain in _LIGATURES.items():
-        text = text.replace(lig, plain)
-    # soft hyphen: printed as "-" where the line breaks, invisible elsewhere
-    text = re.sub(_SOFT_HYPHEN + r"[ \t]*\n", "-\n", text).replace(_SOFT_HYPHEN, "")
+            blocks.append(lines)
     warnings = []
     if undecoded:
         fonts = ", ".join(f"{f} ({n})" for f, n in sorted(undecoded.items(), key=lambda kv: -kv[1]))
         warnings.append(f"{sum(undecoded.values())} glyphs without Unicode mapping marked [?] "
                         f"(fonts: {fonts}); likely math symbols or Greek; check the page image")
-    return unicodedata.normalize("NFC", text), warnings
+    return blocks, warnings
+
+
+def embedded_text(page: "fitz.Page") -> Tuple[str, List[str]]:
+    """The page's text layer, cleaned (lines as printed, blocks separated by a blank line)."""
+    blocks, warnings = embedded_lines(page)
+    return "\n\n".join("\n".join(t for t, _ in b) for b in blocks), warnings
 
 
 # ── Is the text layer usable? ──────────────────────────────────────────
@@ -507,15 +518,57 @@ def ocr_page(page: "fitz.Page", model: str, prompt: str, dpi: int, layout: str =
                     text = text[:loop].rstrip() + " [… model repeated itself; rest of this region cut]"
                 warnings.append(f"{name}: model looped (also at {attempt_dpi} dpi); repetition cut, "
                                 f"text after it may be missing: check the page image")
-            parts.append(text)
+            parts.append(unicodedata.normalize("NFC", text))
     finally:
         service.close()
-    text = unicodedata.normalize("NFC", "\n\n".join(parts))
-    return {"text": text, "warnings": warnings + _check_ocr(text), "regions": regions}
+    text = "\n\n".join(parts)
+    return {"text": text, "warnings": warnings + _check_ocr(text), "regions": regions, "parts": parts}
 
 
 def _region_list(regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [{"label": g["label"], "rect": [round(v, 1) for v in g["rect"]]} for g in regions]
+
+
+# ── A page as BEn stores it: image + lines + line boxes ────────────────
+
+BEN_IMAGE_DPI = 300
+BEN_IMAGE_MAX_SIDE = 4000  # px; a scan already at image resolution would otherwise blow up
+
+
+def ben_page(page: "fitz.Page", route: str, parts: Optional[List[str]] = None,
+             regions: Optional[List[Dict[str, Any]]] = None, text: str = "") -> Dict[str, Any]:
+    """JPEG of the page and its text as CuReD lines with boxes in image pixels. Embedded
+    lines get their real position; OCR lines are spread over their region (column, YOLO
+    box), or over the page when the regions are not known."""
+    r = page.rect
+    dpi = min(BEN_IMAGE_DPI, BEN_IMAGE_MAX_SIDE * 72 / max(r.width, r.height))
+    scale = dpi / 72
+    pix = page.get_pixmap(dpi=int(dpi), colorspace=fitz.csRGB)
+    from PIL import Image
+    img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=90)
+
+    def box(rect: "fitz.Rect") -> Dict[str, float]:
+        return {"x": round((rect.x0 - r.x0) * scale, 1), "y": round((rect.y0 - r.y0) * scale, 1),
+                "width": round(rect.width * scale, 1), "height": round(rect.height * scale, 1)}
+
+    lines, boxes = [], []
+    if route == "embedded":
+        for block in embedded_lines(page)[0]:
+            for t, rect in block:
+                lines.append(t)
+                boxes.append(box(rect))
+    else:
+        chunks = list(zip(parts, [g["rect"] for g in regions])) if parts and regions and len(parts) == len(regions) \
+            else [(text, r)]
+        for chunk, rect in chunks:
+            ls = [l for l in chunk.splitlines() if l.strip()]
+            h = rect.height / max(1, len(ls))
+            for i, l in enumerate(ls):
+                lines.append(l)
+                boxes.append(box(fitz.Rect(rect.x0, rect.y0 + i * h, rect.x1, rect.y0 + (i + 1) * h)))
+    return {"image": buf.getvalue(), "lines": lines, "boxes": boxes}
 
 
 # ── Page ranges, output folder ─────────────────────────────────────────
@@ -625,6 +678,7 @@ class Plan:
                 r = ocr_page(page, self.model, self.prompt, self.dpi, self.layout)
                 text, warnings = r["text"], r["warnings"]
                 entry["regions"] = _region_list(r["regions"])
+                entry["_parts"], entry["_regions"] = r["parts"], r["regions"]  # for BEn's line boxes; not saved
             entry.update(status="done", text=text, chars=len(text), warnings=warnings)
         except Exception as e:
             entry.update(status="failed", error=str(e))
@@ -658,13 +712,18 @@ def get_plan(plan_id: str) -> Optional[Plan]:
 # ── Jobs: the approved batch ───────────────────────────────────────────
 
 class PdfTextJob:
-    def __init__(self, plan: Plan, overwrite: bool = False):
+    def __init__(self, plan: Plan, overwrite: bool = False, ben_parent: Optional[str] = "PDF extractions"):
         if not plan.approved:
             raise PermissionError("plan not approved: check its sample pages first")
         self.id = uuid.uuid4().hex[:10]
         self.plan = plan
         self.path, self.pages, self.out_dir = plan.path, plan.pages, plan.out_dir
         self.overwrite = overwrite
+        # Results are kept in BEn (CuReD dataset <ben_parent>/<pdf name>); None = files only
+        self.ben_parent = ben_parent
+        self.ben_name = os.path.splitext(os.path.basename(self.path))[0]
+        self.ben_dataset_id: Optional[int] = None
+        self.ben_error: Optional[str] = None
         self.status = "pending"
         self.error: Optional[str] = None
         self.current: Optional[int] = None
@@ -709,9 +768,47 @@ class PdfTextJob:
         return (entry.get("method") == f"ocr:{self.plan.model}" and entry.get("layout") == self.plan.layout
                 and entry.get("prompt") == self.plan.prompt)
 
+    # ── BEn ────────────────────────────────────────────────────────────
+
+    def _ben_open(self) -> None:
+        """Connect to BEn (starting it headless if needed) and find or make the dataset."""
+        from services.ben_store import BenStore
+        self.ben = BenStore()
+        self.ben.ensure_running()
+        self.ben_dataset_id = self.ben.dataset_for(self.ben_name, self.ben_parent)
+        self.ben_existing = {BenStore.publication(t): t for t in self.ben.texts(self.ben_dataset_id)}
+        self.manifest["ben"] = {"dataset_id": self.ben_dataset_id, "dataset": f"{self.ben_parent}/{self.ben_name}"}
+
+    def _ben_store(self, doc: "fitz.Document", n: int, entry: Dict[str, Any], text: str,
+                   parts=None, regions=None) -> None:
+        pub = f"{self.ben_name}/p{n:04d}"
+        route = "embedded" if entry.get("method") in ("embedded", "empty") else "ocr"
+        try:
+            page = ben_page(doc[n - 1], route, parts, regions, text)
+            labels = ["pdf-embedded"] if route == "embedded" else ["pdf-ocr", "draft"]
+            if entry.get("warnings"):
+                labels.append("warnings")
+            approval = (self.manifest.get("approvals") or [{}])[-1]
+            meta = {"source": "ben-pdf", "pdf": self.path, "page": n, "method": entry.get("method"),
+                    "warnings": entry.get("warnings", []), "approval_notes": approval.get("notes", ""),
+                    "plan_id": approval.get("plan_id")}
+            r = self.ben.save_page(self.ben_dataset_id, pub, page["image"], page["lines"], page["boxes"],
+                                   labels, meta, existing=self.ben_existing.get(pub))
+            entry["ben"] = {"publication": pub, **r}
+        except Exception as e:
+            entry["ben"] = {"publication": pub, "error": str(e)}
+
+    # ── run ────────────────────────────────────────────────────────────
+
     def _run(self) -> None:
         self.status = "running"
         try:
+            if self.ben_parent:
+                try:
+                    self._ben_open()
+                except Exception as e:
+                    self.ben_error = f"results not stored in BEn: {e}"
+                    self.ben_parent = None
             with fitz.open(self.path) as doc:
                 for n in self.pages:
                     if self.cancelled:
@@ -721,13 +818,21 @@ class PdfTextJob:
                     old = self.manifest["pages"].get(str(n))
                     if (not self.overwrite and old and old.get("status") == "done"
                             and os.path.exists(self.page_file(n)) and self._same_settings(old, n)):
-                        continue  # done in an earlier run with the same settings
+                        # done in an earlier run with the same settings: only store it in BEn if missing
+                        if self.ben_parent and not (old.get("ben") or {}).get("text_id"):
+                            with open(self.page_file(n), encoding="utf-8") as f:
+                                self._ben_store(doc, n, old, f.read().rstrip())
+                            self._save_manifest()
+                        continue
                     entry = self.plan.samples.get(n) or self.plan.process_page(doc, n)  # samples are reused
                     entry = dict(entry)
                     text = entry.pop("text", None)
+                    parts, regions = entry.pop("_parts", None), entry.pop("_regions", None)
                     if entry.get("status") == "done":
                         with open(self.page_file(n), "w", encoding="utf-8") as f:
                             f.write(text + "\n")
+                        if self.ben_parent:
+                            self._ben_store(doc, n, entry, text, parts, regions)
                     elif old and old.get("status") == "done" and os.path.exists(self.page_file(n)):
                         # a failed rerun keeps the earlier result rather than losing it
                         entry = {**old, "last_rerun_error": entry.get("error")}
@@ -777,6 +882,14 @@ class PdfTextJob:
             "failed": {p: e["error"] for p, e in mine.items() if e.get("status") == "failed"},
             "warnings": {p: e["warnings"] for p, e in mine.items() if e.get("warnings")},
             "settings": self.plan.settings(),
+            "ben": {
+                "dataset": f"{self.ben_parent}/{self.ben_name}" if self.ben_parent else None,
+                "dataset_id": self.ben_dataset_id,
+                "pages_stored": sum(1 for e in mine.values() if (e.get("ben") or {}).get("transliteration_id")),
+                "left_unchanged_corrected": _ranges(sorted(int(p) for p, e in mine.items() if (e.get("ben") or {}).get("skipped"))),
+                "errors": {p: e["ben"]["error"] for p, e in mine.items() if (e.get("ben") or {}).get("error")},
+                "error": self.ben_error,
+            },
             "elapsed_seconds": round(time.time() - self.started, 1),
         }
 
@@ -784,8 +897,8 @@ class PdfTextJob:
 _jobs: Dict[str, PdfTextJob] = {}
 
 
-def start_job(plan: Plan, overwrite: bool = False) -> PdfTextJob:
-    job = PdfTextJob(plan, overwrite)
+def start_job(plan: Plan, overwrite: bool = False, ben_parent: Optional[str] = "PDF extractions") -> PdfTextJob:
+    job = PdfTextJob(plan, overwrite, ben_parent)
     _jobs[job.id] = job
     return job.start()
 

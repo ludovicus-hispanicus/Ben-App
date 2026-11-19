@@ -12,6 +12,12 @@ and returns each page image next to the text BEn proposes for it. The agent
 compares them and calls approve_extraction; only then does the whole document
 run. So the agent pays for one or two page images per document, not for all.
 
+Results live in BEn: every page is stored as a CuReD text (page image + lines)
+in the dataset "PDF extractions/<pdf name>", where people see and correct it,
+and agents read the text back from BEn (list_documents, read_pages), so they
+get the corrected version and never extract a PDF twice. Storage goes through
+the BEn server's API (started headless if it is not running).
+
 Register once for every Claude Code session:
     claude mcp add --scope user ben-pdf -- py <path>/server/src/mcp_server.py
 
@@ -53,9 +59,11 @@ mcp = FastMCP(
         "order, missing or invented lines). Use view_page to zoom into a region. 3) If it is good, "
         "approve_extraction(plan_id, notes); if not, call prepare_extraction again with other "
         "settings (mode='ocr', layout='columns' or 'yolo:<model>', another model, a prompt), or "
-        "stop and tell the user. 4) Poll job_status, then read_pages with a range (up to ~60k "
-        "characters per call) or read document.txt in out_dir. Embedded text is exact; OCR text "
-        "from a small local model is a draft even after approval."
+        "stop and tell the user. 4) Poll job_status; the pages are stored in BEn (CuReD dataset "
+        "'PDF extractions/<pdf name>'), where people can correct them. 5) Read them from BEn with "
+        "read_pages (current version incl. corrections; up to ~60k characters per call). Before "
+        "extracting a PDF, check list_documents: if it is already in BEn, just read it. Embedded "
+        "text is exact; OCR text from a small local model is a draft even after approval."
     ),
 )
 
@@ -151,18 +159,22 @@ def view_page(path: str, page: int, region: str = ""):
 
 
 @mcp.tool()
-def approve_extraction(plan_id: str, notes: str = "", overwrite: bool = False, wait_seconds: int = 20) -> dict:
+def approve_extraction(plan_id: str, notes: str = "", overwrite: bool = False, wait_seconds: int = 20,
+                       ben_dataset: str = "PDF extractions") -> dict:
     """Approve a plan whose sample pages you checked, and run it on all its pages locally.
-    notes: what you checked and found (kept in manifest.json with the approval).
+    Every page is stored in BEn as a CuReD text (page image + text lines) in the dataset
+    <ben_dataset>/<pdf name>, where people can see and correct it; read it back with
+    read_pages. Pages someone already corrected in BEn are never overwritten.
+    notes: what you checked and found (stored with the approval and on every page in BEn).
     overwrite: redo pages finished earlier with the same settings (otherwise skipped, so an
       interrupted run can simply be approved again).
-    Writes page_0001.txt ..., document.txt and manifest.json to out_dir. Waits up to
-    wait_seconds (embedded-only PDFs usually finish), then poll job_status."""
+    ben_dataset: parent dataset in BEn; empty = do not store in BEn (files only).
+    Waits up to wait_seconds (embedded-only PDFs usually finish), then poll job_status."""
     plan = pts.get_plan(plan_id)
     if not plan:
         return {"error": f"no plan {plan_id} in this session; run prepare_extraction"}
     plan.approved = {"approved_at": time.strftime("%Y-%m-%d %H:%M:%S"), "notes": notes}
-    job = pts.start_job(plan, overwrite=overwrite)
+    job = pts.start_job(plan, overwrite=overwrite, ben_parent=ben_dataset or None)
     deadline = time.time() + max(0, wait_seconds)
     while job.status in ("pending", "running") and time.time() < deadline:
         time.sleep(0.5)
@@ -189,32 +201,70 @@ def cancel_job(job_id: str) -> dict:
 
 
 MAX_READ_CHARS = 60_000  # about 15k tokens per call
+NL = chr(10)
+
+
+def _ben():
+    from services.ben_store import BenStore
+    store = BenStore()
+    store.ensure_running()
+    return store
 
 
 @mcp.tool()
-def read_pages(out_dir: str, pages: str = "all") -> dict:
-    """Text of extracted pages ("all", "4-20", "7"), each under a header naming how it was
-    obtained (embedded or ocr:<model>). Stops at about 60,000 characters; "next_page" then
-    says where to continue. Reading document.txt in out_dir directly works as well."""
-    with open(os.path.join(out_dir, "manifest.json"), encoding="utf-8") as f:
-        manifest = json.load(f)
-    parts, size, next_page, missing, warnings = [], 0, None, [], {}
-    for n in pts.parse_pages(pages, manifest.get("page_count", 0)):
-        entry = manifest["pages"].get(str(n))
-        if not entry or entry.get("status") != "done":
+def list_documents(ben_dataset: str = "PDF extractions") -> dict:
+    """PDFs whose text is stored in BEn (one dataset each under <ben_dataset>), with page
+    counts and how many pages people have corrected there. Check here before extracting a
+    PDF again: if it is listed, read it with read_pages."""
+    return {"parent": ben_dataset, "documents": _ben().documents(ben_dataset)}
+
+
+@mcp.tool()
+def read_pages(document: str, pages: str = "all", ben_dataset: str = "PDF extractions") -> dict:
+    """Text of a PDF's pages as stored in BEn: the current version, including corrections
+    people made in BEn. document: the PDF's path or file name, its dataset name (see
+    list_documents), or the dataset id. pages: "all", "4-20", "7".
+    Each page comes under a header naming how it was made (embedded text layer, or OCR =
+    draft) and whether a person has corrected it in BEn. Stops at about 60,000 characters;
+    "next_page" then says where to continue."""
+    store = _ben()
+    from services.ben_store import BenStore
+    if document.strip().isdigit():
+        dataset_id = int(document)
+    else:
+        name = os.path.splitext(os.path.basename(document.replace("\\", "/")))[0]
+        found = next((d for d in store.documents(ben_dataset) if d["name"] in (name, document)), None)
+        if not found:
+            return {"error": f"{document!r} is not in BEn under {ben_dataset!r}; see list_documents, "
+                             f"or extract it with prepare_extraction + approve_extraction"}
+        dataset_id = found["dataset_id"]
+    by_page = {}
+    for t in store.texts(dataset_id):
+        meta = next((m for m in t.get("metadata") or [] if m.get("source") == "ben-pdf"), {})
+        pub = BenStore.publication(t) or ""
+        n = meta.get("page") or (int(pub.rsplit("/p", 1)[1]) if "/p" in pub and pub.rsplit("/p", 1)[1].isdigit() else None)
+        if n:
+            by_page[int(n)] = (t, meta)
+    count = max(by_page) if by_page else 0
+    parts, size, next_page, missing, notes = [], 0, None, [], {}
+    for n in pts.parse_pages(pages, count):
+        if n not in by_page or not by_page[n][0].get("latest_transliteration_id"):
             missing.append(n)
             continue
-        with open(os.path.join(out_dir, f"page_{n:04d}.txt"), encoding="utf-8") as f:
-            text = f.read().rstrip()
+        t, meta = by_page[n]
+        text = NL.join(store.lines(t["text_id"], t["latest_transliteration_id"]))
         if parts and size + len(text) > MAX_READ_CHARS:
             next_page = n
             break
-        parts.append(f"=== page {n} ({entry['method']}) ===\n{text}\n")
+        how = "embedded text layer" if "pdf-embedded" in (t.get("labels") or []) else f"OCR draft ({meta.get('method', 'ocr')})"
+        if BenStore.corrected(t):
+            how += "; corrected in BEn"
+        parts.append(f"=== page {n} ({how}) ==={NL}{text}{NL}")
         size += len(text)
-        if entry.get("warnings"):
-            warnings[n] = entry["warnings"]
-    return {"text": "\n".join(parts), "next_page": next_page, "not_extracted": pts._ranges(missing),
-            "warnings": warnings}
+        if meta.get("warnings") and not BenStore.corrected(t):
+            notes[n] = meta["warnings"]
+    return {"dataset_id": dataset_id, "text": NL.join(parts), "next_page": next_page,
+            "not_in_ben": pts._ranges(missing), "warnings": notes}
 
 
 @mcp.tool()
