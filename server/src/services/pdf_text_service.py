@@ -430,6 +430,16 @@ def default_ocr_model() -> Optional[str]:
     return local[0] if local else None
 
 
+def _find_loop(text: str) -> Optional[int]:
+    """Where the model starts repeating itself (a short unit 6+ times in a row), or None."""
+    m = re.search(r"(.{2,40}?)\1{5,}", text, flags=re.S)
+    if not m or len(m.group(1).strip()) == 0:  # runs of spaces or dots are layout, not a loop
+        return None
+    if re.fullmatch(r"[.\s·…_-]+", m.group(1)):
+        return None
+    return m.start() + len(m.group(1))  # keep the first occurrence
+
+
 def _check_ocr(text: str) -> List[str]:
     warnings = []
     lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -470,16 +480,28 @@ def ocr_page(page: "fitz.Page", model: str, prompt: str, dpi: int, layout: str =
     parts, warnings = [], []
     try:
         for i, reg in enumerate(regions, 1):
-            png = page.get_pixmap(dpi=dpi, clip=reg["rect"], colorspace=fitz.csRGB).tobytes("png")
-            with _gpu_lock:
-                r = service.ocr_from_base64(base64.b64encode(png).decode(), custom_prompt=prompt_text,
-                                            model=model, max_tokens=MAX_TOKENS)
+            name = f"region {i} ({reg['label']})"
+            # A model that loops (typically on figure labels) is often fine at another
+            # resolution: one retry at 2/3 of the dpi, then cut the repetition.
+            for attempt_dpi in (dpi, max(150, dpi * 2 // 3)):
+                png = page.get_pixmap(dpi=attempt_dpi, clip=reg["rect"], colorspace=fitz.csRGB).tobytes("png")
+                with _gpu_lock:
+                    r = service.ocr_from_base64(base64.b64encode(png).decode(), custom_prompt=prompt_text,
+                                                model=model, max_tokens=MAX_TOKENS)
+                text = re.sub(r"^```[a-z]*\n|\n```$", "", (r.get("text") or "").strip())  # some models fence it
+                looped = r.get("success") and (r.get("done_reason") == "length" or _find_loop(text) is not None)
+                if r.get("success") and not looped:
+                    if attempt_dpi != dpi:
+                        warnings.append(f"{name}: read at {attempt_dpi} dpi after the model looped at {dpi}")
+                    break
             if not r.get("success"):
-                raise OcrError(f"region {i} ({reg['label']}): {r.get('error') or 'OCR failed'}", regions)
-            if r.get("done_reason") == "length":
-                warnings.append(f"region {i} ({reg['label']}): answer cut at {MAX_TOKENS} tokens (model looping?)")
-            text = r["text"].strip()
-            text = re.sub(r"^```[a-z]*\n|\n```$", "", text)  # some models fence their answer
+                raise OcrError(f"{name}: {r.get('error') or 'OCR failed'}", regions)
+            if looped:
+                loop = _find_loop(text)
+                if loop is not None:
+                    text = text[:loop].rstrip() + " [… model repeated itself; rest of this region cut]"
+                warnings.append(f"{name}: model looped (also at {attempt_dpi} dpi); repetition cut, "
+                                f"text after it may be missing: check the page image")
             parts.append(text)
     finally:
         service.close()
@@ -701,6 +723,9 @@ class PdfTextJob:
                     if entry.get("status") == "done":
                         with open(self.page_file(n), "w", encoding="utf-8") as f:
                             f.write(text + "\n")
+                    elif old and old.get("status") == "done" and os.path.exists(self.page_file(n)):
+                        # a failed rerun keeps the earlier result rather than losing it
+                        entry = {**old, "last_rerun_error": entry.get("error")}
                     self.manifest["pages"][str(n)] = entry
                     self._save_manifest()
             self._write_document()
