@@ -45,7 +45,8 @@ DEFAULT_DPI = 300
 DEFAULT_PROMPT = "exact_copy"
 # First installed one wins; general models before ones fine-tuned on one source (AHw).
 PREFERRED_OCR_MODELS = ["qwen3-vl:8b", "qwen3-vl:4b", "qwen3-vl:2b", "qwen3-vl", "glm-ocr"]
-LAYOUTS = "'page' (whole page), 'columns' (split at the gutter) or 'yolo:<model>' (BEn YOLO regions)"
+LAYOUTS = ("'page' (whole page), 'columns' (split at the gutter), 'lines' (columns, then each printed "
+           "line found by Kraken, read one by one) or 'yolo:<model>' (BEn YOLO regions)")
 
 # Code points are written as chr() so the source holds no invisible characters.
 _FFFD = chr(0xFFFD)
@@ -385,6 +386,135 @@ def _yolo_regions(page: "fitz.Page", model_name: str, confidence: float = 0.25) 
     return regions
 
 
+_blla_lock = threading.Lock()
+
+
+def _blla_lines(page: "fitz.Page", dpi: int = 200) -> List[Tuple["fitz.Rect", List[Tuple[float, float]]]]:
+    """Text lines found by Kraken's neural line detector (blla): (box, outline polygon),
+    both in page points. The outline matters: a plain box around a line also catches the
+    ascenders and descenders of its neighbours, and the model then reads one and a half lines."""
+    from PIL import Image
+    from kraken import blla
+    pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
+    img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    with _blla_lock:
+        try:
+            import torch
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            seg = blla.segment(img, device=device)
+        except RuntimeError:  # GPU busy or out of memory (Ollama holds most of it): use the CPU
+            seg = blla.segment(img, device="cpu")
+    s = 72 / dpi
+    out = []
+    for line in seg.lines:
+        pts = [(page.rect.x0 + x * s, page.rect.y0 + y * s) for x, y in (line.boundary or line.baseline)]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        out.append((fitz.Rect(min(xs), min(ys), max(xs), max(ys)), pts))
+    return out
+
+
+def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
+    """Columns, then lines: every printed line as its own region, in reading order.
+
+    Lines come from Kraken blla on the whole page. If the page has two columns (an empty
+    gutter), a detected line running across the empty gutter is split in two; a line
+    with ink in the gutter (a running header) stays whole and is read before the columns
+    below it. Specks and pen marks smaller than a text line are dropped.
+    """
+    import numpy as np
+    r = page.rect
+    lines = _blla_lines(page)
+    if not lines:
+        return [{"rect": fitz.Rect(r), "label": "page (no lines found)"}]
+
+    # the gutter, and whether there is one: a strip in the middle almost free of ink
+    pix = page.get_pixmap(dpi=100, colorspace=fitz.csRGB)
+    gray = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)[..., :3].mean(axis=2)
+    dark = gray < 128
+    dark[dark.mean(axis=1) > 0.5, :] = False  # scanner borders
+    dark[:, dark.mean(axis=0) > 0.5] = False
+    gx = _column_gutter(pix)
+    s = pix.width / r.width
+    # the gutter itself (±1 px at 100 dpi; justified text reaches right up to it), minus a printed rule
+    rule_free = [c for c in range(max(0, gx - 1), min(pix.width, gx + 2)) if dark[:, c].mean() < 0.25]
+    body = dark[int(pix.height * 0.15): int(pix.height * 0.9)]
+    two_columns = bool(rule_free) and body[:, rule_free].mean() < 0.005 and body.mean() > 0.02
+    x_gutter = r.x0 + gx / s
+
+    def ink_in_gutter(rect: "fitz.Rect") -> bool:
+        y0, y1 = int((rect.y0 - r.y0) * s), int((rect.y1 - r.y0) * s)
+        return bool(rule_free) and dark[max(0, y0):y1 + 1, rule_free].any()
+
+    pieces, outline = [], {}  # outline: id(piece) -> polygon of the detected line it comes from
+    for rect, poly in lines:
+        if two_columns and rect.x0 < x_gutter - 2 < x_gutter + 2 < rect.x1 and not ink_in_gutter(rect):
+            split = [fitz.Rect(rect.x0, rect.y0, x_gutter, rect.y1), fitz.Rect(x_gutter, rect.y0, rect.x1, rect.y1)]
+        else:
+            split = [rect]
+        for p in split:
+            pieces.append(p)
+            outline[id(p)] = poly
+    heights = sorted(p.height for p in pieces)
+    h = heights[len(heights) // 2]
+    pieces = [p for p in pieces if p.height > 0.4 * h and p.width > 2 * h]
+
+    # The text block: where most lines start and end. Readers' notes in the margins lie
+    # mostly outside it and are dropped.
+    x0s, x1s = sorted(p.x0 for p in pieces), sorted(p.x1 for p in pieces)
+    block = fitz.Rect(x0s[len(x0s) // 10] - h, r.y0, x1s[len(x1s) * 9 // 10] + h, r.y1)
+    pieces = [p for p in pieces if abs(p & block) > 0.5 * abs(p)]
+
+    def side(p):
+        if not two_columns or (p.x0 < x_gutter - 2 and p.x1 > x_gutter + 2):
+            return "full"
+        return "left" if (p.x0 + p.x1) / 2 < x_gutter else "right"
+
+    def same_row(a, b):
+        return min(a.y1, b.y1) - max(a.y0, b.y0) > 0.5 * min(a.height, b.height)
+
+    # A full-width line and the pieces beside it on the same row (a running header:
+    # page number, title, date) form one row, read left to right.
+    full = [p for p in pieces if side(p) == "full"]
+    rows = [sorted([f] + [p for p in pieces if p is not f and side(p) != "full" and same_row(f, p)],
+                   key=lambda p: p.x0) for f in full]
+    in_row = {id(p) for row in rows for p in row}
+
+    ordered, band = [], []
+
+    def flush():
+        ordered.extend(sorted((p for p in band if side(p) == "left"), key=lambda p: p.y0))
+        ordered.extend(sorted((p for p in band if side(p) == "right"), key=lambda p: p.y0))
+        band.clear()
+
+    items = [(row[0].y0, row) for row in rows] + [(p.y0, p) for p in pieces if id(p) not in in_row]
+    for _, item in sorted(items, key=lambda it: it[0]):
+        if isinstance(item, list):
+            flush()
+            ordered.extend(item)
+        else:
+            band.append(item)
+    flush()
+    label = lambda p: ("line (full)" if id(p) in in_row else f"line ({side(p)})") if two_columns else "line"
+    return [{"rect": fitz.Rect(p) & r, "label": label(p), "polygon": outline[id(p)]} for p in ordered]
+
+
+def _line_image(page_img, scale: float, origin: "fitz.Point", rect: "fitz.Rect", polygon) -> bytes:
+    """PNG of one line: the page image inside the line's outline polygon, white elsewhere,
+    cropped to the line's box (a box split at the gutter keeps its half of the outline)."""
+    from PIL import Image, ImageDraw
+    box = [int((rect.x0 - origin.x) * scale), int((rect.y0 - origin.y) * scale),
+           int((rect.x1 - origin.x) * scale) + 1, int((rect.y1 - origin.y) * scale) + 1]
+    crop = page_img.crop(box)
+    mask = Image.new("L", crop.size, 0)
+    ImageDraw.Draw(mask).polygon([((x - origin.x) * scale - box[0], (y - origin.y) * scale - box[1])
+                                  for x, y in polygon], fill=255)
+    out = Image.new("RGB", crop.size, (255, 255, 255))
+    out.paste(crop, (0, 0), mask)
+    buf = io.BytesIO()
+    out.save(buf, "PNG")
+    return buf.getvalue()
+
+
 def page_regions(page: "fitz.Page", layout: str) -> List[Dict[str, Any]]:
     """The parts of the page sent to OCR one by one, in reading order."""
     r = page.rect
@@ -395,6 +525,8 @@ def page_regions(page: "fitz.Page", layout: str) -> List[Dict[str, Any]]:
         x = r.x0 + _column_gutter(pix) / pix.width * r.width
         return [{"rect": fitz.Rect(r.x0, r.y0, x, r.y1), "label": "left column"},
                 {"rect": fitz.Rect(x, r.y0, r.x1, r.y1), "label": "right column"}]
+    if layout == "lines":
+        return _line_layout(page)
     if layout.startswith("yolo"):
         model_name = layout.partition(":")[2]
         regions = _yolo_regions(page, model_name)
@@ -492,19 +624,40 @@ def ocr_page(page: "fitz.Page", model: str, prompt: str, dpi: int, layout: str =
         from clients.ollama_client import DEEPSEEK_OCR_PROMPT
         prompt_text = DEEPSEEK_OCR_PROMPT
     regions = page_regions(page, layout)
+    per_line = layout == "lines"
+    if per_line and prompt == "exact_copy" and not model.lower().startswith("deepseek-ocr"):
+        prompt_text = resolve_prompt("exact_copy_line")
+    max_tokens = 256 if per_line else MAX_TOKENS  # one printed line is ~20-60 tokens
     service = OllamaOcrService(model=model)
     parts, warnings = [], []
+    page_imgs: Dict[int, Any] = {}  # dpi -> whole page image, for cutting out lines
+
+    def region_png(reg, at_dpi: int) -> bytes:
+        if reg.get("polygon"):
+            if at_dpi not in page_imgs:
+                from PIL import Image
+                pix = page.get_pixmap(dpi=at_dpi, colorspace=fitz.csRGB)
+                page_imgs[at_dpi] = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+            return _line_image(page_imgs[at_dpi], at_dpi / 72, page.rect.tl, reg["rect"], reg["polygon"])
+        return page.get_pixmap(dpi=at_dpi, clip=reg["rect"], colorspace=fitz.csRGB).tobytes("png")
+
     try:
-        for i, reg in enumerate(regions, 1):
+        if per_line:
+            parts, warnings = _ocr_lines(page, regions, model, prompt_text if prompt != "exact_copy" else None,
+                                         dpi, service, region_png)
+        for i, reg in enumerate(regions if not per_line else [], 1):
             name = f"region {i} ({reg['label']})"
             # A model that loops (typically on figure labels) is often fine at another
             # resolution: one retry at 2/3 of the dpi, then cut the repetition.
             for attempt_dpi in (dpi, max(150, dpi * 2 // 3)):
-                png = page.get_pixmap(dpi=attempt_dpi, clip=reg["rect"], colorspace=fitz.csRGB).tobytes("png")
+                png = region_png(reg, attempt_dpi)
                 with _gpu_lock:
                     r = service.ocr_from_base64(base64.b64encode(png).decode(), custom_prompt=prompt_text,
-                                                model=model, max_tokens=MAX_TOKENS)
+                                                model=model, max_tokens=max_tokens)
                 text = re.sub(r"^```[a-z]*\n|\n```$", "", (r.get("text") or "").strip())  # some models fence it
+                if per_line:  # one region = one printed line, whatever the model did with breaks
+                    text = " ".join(l.strip() for l in text.splitlines() if l.strip())
+                    text = text.replace("**", "")  # markdown bold: a habit of the AHw-trained models
                 looped = r.get("success") and (r.get("done_reason") == "length" or _find_loop(text) is not None)
                 if r.get("success") and not looped:
                     if attempt_dpi != dpi:
@@ -521,8 +674,107 @@ def ocr_page(page: "fitz.Page", model: str, prompt: str, dpi: int, layout: str =
             parts.append(unicodedata.normalize("NFC", text))
     finally:
         service.close()
-    text = "\n\n".join(parts)
+    if per_line:  # lines as printed; a blank line where a new column or full-width line begins
+        out = []
+        for k, (reg, line) in enumerate(zip(regions, parts)):
+            if k and reg["label"] != regions[k - 1]["label"]:
+                out.append("")
+            out.append(line)
+        text = "\n".join(out)
+    else:
+        text = "\n\n".join(parts)
     return {"text": text, "warnings": warnings + _check_ocr(text), "regions": regions, "parts": parts}
+
+
+def _stack_lines(pngs: List[bytes]) -> bytes:
+    """Line images one below the other, with white space between them."""
+    from PIL import Image
+    ims = [Image.open(io.BytesIO(p)).convert("RGB") for p in pngs]
+    gap = max(8, int(sorted(im.height for im in ims)[len(ims) // 2] * 0.6))
+    out = Image.new("RGB", (max(im.width for im in ims) + 2 * gap,
+                            sum(im.height for im in ims) + gap * (len(ims) + 1)), (255, 255, 255))
+    y = gap
+    for im in ims:
+        out.paste(im, (gap, y))
+        y += im.height + gap
+    buf = io.BytesIO()
+    out.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _numbered(lines: List[str]) -> List[str]:
+    """Drop the "1: ", "2: " ... the model was asked to put in front of its lines, but only
+    if it numbered all of them in order (a printed line may itself begin with "2.")."""
+    nums = [re.match(rf"^\s*{k}\s*[:.)]\s*", l) for k, l in enumerate(lines, 1)]
+    if all(nums):
+        return [l[m.end():] for l, m in zip(lines, nums)]
+    return lines
+
+
+def _ocr_lines(page: "fitz.Page", regions: List[Dict[str, Any]], model: str, custom_prompt: Optional[str],
+               dpi: int, service, region_png) -> Tuple[List[str], List[str]]:
+    """Read the detected lines in batches, cheapest first: a whole column (or the header
+    row) as one stack of cut-out lines; if the model returns a different number of lines
+    or loops, the batch is halved, down to single lines. A single line that still fails is
+    marked [?] and reported, for the reviewer to read from the page image.
+
+    Measured on a 1906 two-column page (Qwen3-VL 2B, throttled laptop GPU): a whole
+    58-line column in one call came back 58/58, ~1 s per line, against ~10 s per line
+    one by one. Models fine-tuned on dictionary entries (the AHw ones) join the stacked
+    lines into one paragraph: every batch then falls back to single lines.
+    """
+    from common.ocr_prompts import resolve_prompt
+    deepseek = model.lower().startswith("deepseek-ocr")
+    if deepseek:
+        from clients.ollama_client import DEEPSEEK_OCR_PROMPT
+    parts: List[Optional[str]] = [None] * len(regions)
+    warnings: List[str] = []
+    stats = {"calls": 0, "splits": 0}
+
+    def ask(png: bytes, prompt: str, max_tokens: int) -> Tuple[str, bool]:
+        with _gpu_lock:
+            r = service.ocr_from_base64(base64.b64encode(png).decode(), custom_prompt=prompt,
+                                        model=model, max_tokens=max_tokens)
+        stats["calls"] += 1
+        if not r.get("success"):
+            raise OcrError(f"line OCR: {r.get('error') or 'OCR failed'}", regions)
+        text = re.sub(r"^```[a-z]*\n|\n```$", "", (r.get("text") or "").strip()).replace("**", "")
+        return text, r.get("done_reason") == "length" or _find_loop(text) is not None
+
+    def read(lo: int, hi: int) -> None:
+        n = hi - lo
+        if n == 1:
+            prompt = DEEPSEEK_OCR_PROMPT if deepseek else (custom_prompt or resolve_prompt("exact_copy_line"))
+            for at_dpi in (dpi, max(150, dpi * 2 // 3)):
+                text, looped = ask(region_png(regions[lo], at_dpi), prompt, 256)
+                if not looped:
+                    parts[lo] = " ".join(l.strip() for l in text.splitlines() if l.strip())
+                    return
+            parts[lo] = "[?]"
+            warnings.append(f"line {lo + 1} ({regions[lo]['label']}): not read, the model looped; "
+                            f"read it from the page image")
+            return
+        prompt = DEEPSEEK_OCR_PROMPT if deepseek else resolve_prompt("exact_copy_lines").replace("{n}", str(n))
+        text, looped = ask(_stack_lines([region_png(regions[k], dpi) for k in range(lo, hi)]), prompt, 60 * n + 100)
+        lines = _numbered([l.strip() for l in text.splitlines() if l.strip()])
+        if not looped and len(lines) == n:
+            parts[lo:hi] = lines
+            return
+        stats["splits"] += 1
+        mid = lo + n // 2
+        read(lo, mid)
+        read(mid, hi)
+
+    # one batch per column / header row: consecutive lines with the same label
+    start = 0
+    for k in range(1, len(regions) + 1):
+        if k == len(regions) or regions[k]["label"] != regions[start]["label"]:
+            read(start, k)
+            start = k
+    if stats["splits"]:
+        warnings.append(f"{stats['splits']} batches of lines came back with a different number of lines or "
+                        f"looped and were read again in smaller batches ({stats['calls']} calls for {len(regions)} lines)")
+    return [unicodedata.normalize("NFC", p or "") for p in parts], warnings
 
 
 def _region_list(regions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -617,7 +869,7 @@ class Plan:
                  dpi: int, layout: str, prompt: str, out_dir: Optional[str]):
         if mode not in ("auto", "embedded", "ocr"):
             raise ValueError("mode must be 'auto', 'embedded' or 'ocr'")
-        if not (layout in ("page", "columns") or layout.startswith("yolo")):
+        if not (layout in ("page", "columns", "lines") or layout.startswith("yolo")):
             raise ValueError(f"layout must be {LAYOUTS}")
         self.id = uuid.uuid4().hex[:10]
         self.path = os.path.abspath(path)

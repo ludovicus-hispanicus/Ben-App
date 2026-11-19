@@ -248,6 +248,26 @@ Rules:
 - Keep a word broken at the end of a line with its hyphen, as printed.
 - Ignore handwriting, underlining and notes added by readers in the margins or between the lines.
 - If a word cannot be read, write [?] in its place. Do not guess.""",
+    # {n} is filled in with the number of lines in the image
+    "exact_copy_lines": """This image shows {n} lines of printed text, one below the other, separated by white space. Transcribe them exactly as printed, character by character.
+
+Output exactly {n} lines, one output line per printed line, in the same order. Start each output line with its number and a colon (1: ... 2: ... up to {n}:). No introduction, no comments, no markdown, no bold.
+
+Rules:
+- Never join two printed lines and never split one. Keep a hyphen at the end of a line as printed.
+- Never normalize, modernize, translate or correct spelling (keep "ss", "Ue", old forms), even if it looks wrong.
+- Keep all diacritics exactly: š ṣ ṭ ḫ ā ē ī ū â ê î û, umlauts ä ö ü, ß only where printed.
+- Ignore handwriting, underlining and pen marks added by readers.
+- If a word cannot be read, write [?] in its place. Do not guess.""",
+    "exact_copy_line": """This image shows one line of printed text. Transcribe exactly this one line, character by character as printed. Output only the transcription on a single line: no introduction, no comments, no markdown, no bold.
+
+Rules:
+- Never normalize, modernize, translate or correct spelling (keep "ss", "Ue", old forms), even if it looks wrong.
+- Keep all diacritics exactly: š ṣ ṭ ḫ ā ē ī ū â ê î û, umlauts ä ö ü, ß only where printed.
+- Keep subscript numbers as subscript digits (du₃) and superscripts as superscript characters (footnote numbers ¹⁵, determinatives ᵈ).
+- Keep brackets, half-brackets, punctuation and a hyphen at the end of the line as printed.
+- Ignore handwriting, underlining and pen marks added by readers.
+- If a word cannot be read, write [?] in its place. Do not guess.""",
 }
 
 # Keys that cannot be deleted via the API
