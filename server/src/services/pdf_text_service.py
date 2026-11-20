@@ -757,7 +757,9 @@ def _ocr_lines(page: "fitz.Page", regions: List[Dict[str, Any]], model: str, cus
         prompt = DEEPSEEK_OCR_PROMPT if deepseek else resolve_prompt("exact_copy_lines").replace("{n}", str(n))
         text, looped = ask(_stack_lines([region_png(regions[k], dpi) for k in range(lo, hi)]), prompt, 60 * n + 100)
         lines = _numbered([l.strip() for l in text.splitlines() if l.strip()])
-        if not looped and len(lines) == n:
+        # the right number of lines can still be a loop: the same line written over and over
+        repeats = max((lines.count(l) for l in lines if len(l) > 3), default=0)
+        if not looped and len(lines) == n and repeats < 3:
             parts[lo:hi] = lines
             return
         stats["splits"] += 1
