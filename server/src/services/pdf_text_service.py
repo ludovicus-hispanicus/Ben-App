@@ -489,7 +489,7 @@ def _gutter(page: "fitz.Page") -> Dict[str, Any]:
     gx, crossed = _column_gutter(dark)
     rule_free = list(range(max(0, gx - 1), min(pix.width, gx + 2)))
     body = dark[int(pix.height * 0.15): int(pix.height * 0.9)]
-    two_columns = crossed < 0.45 and body.mean() > 0.005
+    two_columns = crossed < 0.45  # _column_gutter needs 20+ rows with text on both sides: no ink test
     # the whole empty strip between the columns (a gap between two words of a centered
     # title can be wider than the ±1 px around the gutter's middle)
     lo = hi = gx
