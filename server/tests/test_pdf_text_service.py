@@ -290,3 +290,66 @@ def test_single_line_read_again_at_lower_dpi(ladder):
 def test_ocr_failure_raises(ladder):
     with pytest.raises(pts.OcrError):
         ladder(["line (left)"] * 3, lambda ks, attempt: {"success": False, "error": "timeout"})
+
+
+# ── Columns layout ───────────────────────────────────────────────────────
+
+COLUMN_TEXT = ("Omens from the appearance of human stillborn are written in two columns here, "
+               "the transliteration on the left and the translation on the right. ") * 12
+
+
+def _two_column_page(rule: bool):
+    doc = fitz.open()
+    p = doc.new_page(width=600, height=800)
+    # a centered title line whose middle word sits on the gutter, as "No. 20  MS 1806  Pls. L-LI"
+    p.insert_text((40, 80), "No. 20", fontsize=14)
+    p.insert_text((268, 80), "MS 1806", fontsize=14)
+    p.insert_text((480, 80), "Pls. L-LI", fontsize=14)
+    p.insert_textbox(fitz.Rect(40, 120, 285, 780), COLUMN_TEXT, fontsize=10, align=3)
+    p.insert_textbox(fitz.Rect(315, 120, 560, 780), COLUMN_TEXT, fontsize=10, align=3)
+    if rule:  # a printed rule between the columns, as in OLZ
+        p.draw_line((300, 120), (300, 780), width=0.8)
+    return doc, p
+
+
+@pytest.mark.parametrize("rule", [False, True])
+def test_columns_keep_a_title_across_the_gutter_whole(rule):
+    doc, p = _two_column_page(rule)
+    regions = pts.page_regions(p, "columns")
+    assert [r["label"] for r in regions] == ["full width", "left column", "right column"]
+    title = regions[0]["rect"]
+    assert title.y0 <= 65 and 85 <= title.y1 <= 120  # the whole title line, none of the columns
+    assert regions[1]["rect"].x1 == pytest.approx(300, abs=10)
+
+
+def test_one_column_page_is_one_region():
+    doc = fitz.open()
+    p = doc.new_page(width=600, height=800)
+    p.insert_textbox(fitz.Rect(40, 60, 560, 780), COLUMN_TEXT * 2, fontsize=10, align=3)
+    assert [r["label"] for r in pts.page_regions(p, "columns")] == ["page (one column)"]
+
+
+def test_invented_number_lines():
+    assert pts._invented("5117.034796305707646264075")
+    assert pts._invented("3.082940446897008")
+    assert not pts._invented("193 [No. 4.]")
+    assert not pts._invented("1906")
+    assert not pts._invented("S. 248, Anm. 2")
+
+
+def test_batch_with_invented_numbers_is_read_again(ladder):
+    def numbers(ks, attempt):
+        if len(ks) == 4:
+            return ok("\n".join(["text 0", "text 1", "5117.034796305707646264075", "text 3"]))
+    parts, warnings, calls = ladder(["line (left)"] * 4, numbers)
+    assert parts == [TRUTH.format(k) for k in range(4)]
+    assert calls[1:] == [[0, 1], [2, 3]]
+
+
+def test_single_line_with_invented_numbers_becomes_unread(ladder):
+    def numbers(ks, attempt):
+        if 1 in ks:
+            return ok("\n".join("3642.285685553266335" for _ in ks))
+    parts, warnings, _ = ladder(["line (left)"] * 2, numbers)
+    assert parts == ["text 0", "[?]"]
+    assert any("invented numbers" in w for w in warnings)

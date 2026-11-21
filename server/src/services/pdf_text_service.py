@@ -317,18 +317,69 @@ def inspect_pdf(path: str) -> Dict[str, Any]:
 
 # ── Layout: which parts of a page go to OCR, in which order ────────────
 
-def _column_gutter(pix: "fitz.Pixmap") -> int:
-    """x (pixels) of the emptiest vertical strip in the middle third of the page: the gutter."""
+def _column_gutter(dark, y0: Optional[int] = None, y1: Optional[int] = None) -> Tuple[int, float]:
+    """The gutter in an ink mask (100 dpi): the x in the middle third where text rows most
+    often have ink on both sides but none in between, and the share of those rows that
+    do have ink in between (0 = a clean gutter, about 0.5 and more = one column).
+
+    Only rows with text right and left of x count: rows of a figure, or a blank middle
+    in a diagram, say nothing about columns. The window in between is 9 px (~6 pt):
+    wider than a word space, narrower than any gutter."""
     import numpy as np
-    gray = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)[..., :3].mean(axis=2)
-    dark = gray < 128
-    # scanner borders: rows or columns dark over most of their length
-    dark[dark.mean(axis=1) > 0.5, :] = False
-    dark[:, dark.mean(axis=0) > 0.5] = False
-    lo, hi = int(pix.width * 0.35), int(pix.width * 0.65)
-    ink = dark[:, lo:hi].sum(axis=0).astype(float)
-    ink = np.convolve(ink, np.ones(9) / 9, mode="same")  # ignore single-pixel gaps between letters
-    return lo + int(ink.argmin())
+    h, w = dark.shape
+    body = dark[int(h * 0.1) if y0 is None else y0: int(h * 0.92) if y1 is None else y1].astype(np.int32)
+    cs = np.concatenate([np.zeros((body.shape[0], 1), np.int32), body.cumsum(axis=1)], axis=1)
+    half, flank = 4, 50
+    xs = range(max(int(w * 0.35), flank), min(int(w * 0.65), w - flank))
+    vs = []
+    for x in xs:
+        center = cs[:, x + half + 1] - cs[:, x - half] > 0
+        both = (cs[:, x - half - 1] - cs[:, x - flank] > 0) & (cs[:, x + flank] - cs[:, x + half + 2] > 0)
+        n = int(both.sum())
+        vs.append(float((center & both).sum()) / n if n >= 20 else 1.0)
+    if not vs:
+        return w // 2, 1.0
+    vs = np.array(vs)
+    best = float(vs.min())
+    # the middle of the stretch of (nearly) best x around the minimum: a clean gutter is
+    # many pixels wide, and its edge is no place to cut
+    k = lo = hi = int(vs.argmin())
+    while lo > 0 and vs[lo - 1] <= best + 0.02:
+        lo -= 1
+    while hi < len(vs) - 1 and vs[hi + 1] <= best + 0.02:
+        hi += 1
+    return xs[(lo + hi) // 2], best
+
+
+def _crossing_share(dark, xs, y0: int, y1: int) -> float:
+    """Of the rows y0..y1 with text right and left of the gutter (xs[row - y0] = its x in
+    that row), the share with ink in the gutter itself: 0 for a clean gutter."""
+    import numpy as np
+    half, flank = 4, 50
+    w = dark.shape[1]
+    hits = n = 0
+    for y, x in zip(range(y0, y1), xs):
+        x = int(min(max(x, flank), w - flank - 1))
+        row = dark[y]
+        if row[x - flank:x - half - 1].any() and row[x + half + 2:x + flank].any():
+            n += 1
+            hits += bool(row[x - half:x + half + 1].any())
+    return hits / n if n >= 20 else 1.0
+
+
+def _drop_vertical_rules(dark, min_len: int) -> None:
+    """Remove vertical strokes longer than any letter (a printed column rule, also when the
+    scan is a little skewed) from the middle third of an ink mask, in place."""
+    import numpy as np
+    h, w = dark.shape
+    for c in range(int(w * 0.3), int(w * 0.7)):
+        col = dark[:, c]
+        if col.sum() < min_len:
+            continue
+        edges = np.flatnonzero(np.diff(np.concatenate(([0], col.astype(np.int8), [0]))))
+        for start, end in zip(edges[::2], edges[1::2]):
+            if end - start >= min_len:
+                col[start:end] = False
 
 
 def _reading_order(regions: List[Dict[str, Any]], page_rect: "fitz.Rect") -> List[Dict[str, Any]]:
@@ -418,6 +469,123 @@ def _blla_lines(page: "fitz.Page", dpi: int = 200) -> List[Tuple["fitz.Rect", Li
     return out
 
 
+def _gutter(page: "fitz.Page") -> Dict[str, Any]:
+    """Whether the page has two columns, and where the gutter between them is.
+
+    Returns the ink mask at 100 dpi ("dark": scanner borders and a printed column rule
+    removed), the pixel columns of the gutter itself ("rule_free": ±1 px around it;
+    justified text reaches right up to it), the whole empty strip between the columns
+    ("gap"), "two_columns", pixels per point ("scale") and the gutter's x in points ("x")."""
+    import numpy as np
+    r = page.rect
+    pix = page.get_pixmap(dpi=100, colorspace=fitz.csRGB)
+    gray = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)[..., :3].mean(axis=2)
+    dark = gray < 128
+    dark[dark.mean(axis=1) > 0.5, :] = False  # scanner borders
+    dark[:, dark.mean(axis=0) > 0.5] = False
+    # A rule between the columns (OLZ and many journals print one) is ink in the gutter on
+    # every row; 0.18 inch of unbroken vertical ink is taller than any letter.
+    _drop_vertical_rules(dark, min_len=18)
+    gx, crossed = _column_gutter(dark)
+    rule_free = list(range(max(0, gx - 1), min(pix.width, gx + 2)))
+    body = dark[int(pix.height * 0.15): int(pix.height * 0.9)]
+    two_columns = crossed < 0.45 and body.mean() > 0.005
+    # the whole empty strip between the columns (a gap between two words of a centered
+    # title can be wider than the ±1 px around the gutter's middle)
+    lo = hi = gx
+    while lo > 0 and body[:, lo - 1].mean() < 0.002:
+        lo -= 1
+    while hi < pix.width - 1 and body[:, hi + 1].mean() < 0.002:
+        hi += 1
+    gap = list(range(lo + 3, hi - 2)) or rule_free  # keep off the column edges
+    s = pix.width / r.width
+    # A skewed scan has a slanted gutter: measured in the upper and the lower half, it
+    # gives the gutter's x at any height (a single x would put the last lines of the left
+    # column across it).
+    top, bottom = int(pix.height * 0.1), int(pix.height * 0.92)
+    mid = (top + bottom) // 2
+    xt, vt = _column_gutter(dark, top, mid)
+    xb, vb = _column_gutter(dark, mid, bottom)
+    slope = 0.0
+    y_mid = (top + bottom) / 2
+    if two_columns and vt < 0.45 and vb < 0.45 and abs(xt - xb) < 0.04 * pix.width             and abs((xt + xb) / 2 - gx) < 0.02 * pix.width:
+        tilt = (xb - xt) / ((bottom - top) / 2)  # pixels of x per pixel of y
+        # only if the slanted gutter is cleaner than the straight one: a centered heading
+        # or a figure in one half can pull that half's estimate onto the text
+        straight = _crossing_share(dark, [gx] * (bottom - top), top, bottom)
+        slanted = _crossing_share(dark, [gx + tilt * (y - y_mid) for y in range(top, bottom)], top, bottom)
+        if slanted < straight:
+            slope = tilt
+
+    def px_at(y_px: float) -> int:
+        return int(round(gx + slope * (y_px - y_mid)))
+
+    def x_at(y_pt: float) -> float:
+        return r.x0 + px_at((y_pt - r.y0) * s) / s
+
+    return {"dark": dark, "rule_free": rule_free, "gap": gap, "two_columns": two_columns,
+            "scale": s, "x": r.x0 + gx / s, "x_at": x_at, "px_at": px_at}
+
+
+def _column_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
+    """Two columns where the page has them, without cutting through what spans both.
+
+    Text lines that put ink into the gutter (a centered title such as "No. 20  MS 1806
+    Pls. L-LI", a running header, a full-width paragraph) are read as full-width bands;
+    between them, the left column, then the right one. A page without a gutter is one region."""
+    import numpy as np
+    r = page.rect
+    g = _gutter(page)
+    if not g["two_columns"]:
+        return [{"rect": fitz.Rect(r), "label": "page (one column)"}]
+    dark, s = g["dark"], g["scale"]
+    has_ink = dark.any(axis=1)
+    gutter_ink = dark[:, g["gap"]].any(axis=1)
+    # runs of rows with ink, separated by blank rows: one or more text lines each
+    runs, y = [], 0
+    while y < len(has_ink):
+        if not has_ink[y]:
+            y += 1
+            continue
+        y0 = y
+        while y < len(has_ink) and has_ink[y]:
+            y += 1
+        # wide: ink in the gutter over a good part of the run's height (letters of a title
+        # crossing it), not a few specks of a scan inside a run of column lines
+        runs.append([y0, y, gutter_ink[y0:y].sum() >= max(2, 0.12 * (y - y0))])
+    if not runs:
+        return [{"rect": fitz.Rect(r), "label": "page (blank)"}]
+    # consecutive runs of the same kind form a band; a band ends halfway into the blank between
+    bands = [runs[0][:]]
+    for y0, y1, wide in runs[1:]:
+        if wide == bands[-1][2]:
+            bands[-1][1] = y1
+        else:
+            cut = (bands[-1][1] + y0) // 2
+            bands[-1][1] = cut
+            bands.append([cut, y1, wide])
+    # a strip of "two columns" no taller than two lines between full-width bands is centered
+    # text whose word gaps happen to fall on the gutter (title pages, lists)
+    line_h = 2.5 * 12 * s  # two and a half lines of 12 pt, in pixels
+    k = 1
+    while k < len(bands) - 1:
+        if not bands[k][2] and bands[k - 1][2] and bands[k + 1][2] and bands[k][1] - bands[k][0] < line_h:
+            bands[k - 1][1] = bands[k + 1][1]
+            del bands[k:k + 2]
+        else:
+            k += 1
+    bands[0][0], bands[-1][1] = 0, len(has_ink)
+    out = []
+    for y0, y1, wide in bands:
+        top, bottom = r.y0 + y0 / s, min(r.y1, r.y0 + y1 / s)
+        if wide:
+            out.append({"rect": fitz.Rect(r.x0, top, r.x1, bottom), "label": "full width"})
+        else:
+            out.append({"rect": fitz.Rect(r.x0, top, g["x"], bottom), "label": "left column"})
+            out.append({"rect": fitz.Rect(g["x"], top, r.x1, bottom), "label": "right column"})
+    return out
+
+
 def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
     """Columns, then lines: every printed line as its own region, in reading order.
 
@@ -426,32 +594,33 @@ def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
     with ink in the gutter (a running header) stays whole and is read before the columns
     below it. Specks and pen marks smaller than a text line are dropped.
     """
-    import numpy as np
     r = page.rect
     lines = _blla_lines(page)
     if not lines:
         return [{"rect": fitz.Rect(r), "label": "page (no lines found)"}]
 
-    # the gutter, and whether there is one: a strip in the middle almost free of ink
-    pix = page.get_pixmap(dpi=100, colorspace=fitz.csRGB)
-    gray = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)[..., :3].mean(axis=2)
-    dark = gray < 128
-    dark[dark.mean(axis=1) > 0.5, :] = False  # scanner borders
-    dark[:, dark.mean(axis=0) > 0.5] = False
-    gx = _column_gutter(pix)
-    s = pix.width / r.width
-    # the gutter itself (±1 px at 100 dpi; justified text reaches right up to it), minus a printed rule
-    rule_free = [c for c in range(max(0, gx - 1), min(pix.width, gx + 2)) if dark[:, c].mean() < 0.25]
-    body = dark[int(pix.height * 0.15): int(pix.height * 0.9)]
-    two_columns = bool(rule_free) and body[:, rule_free].mean() < 0.005 and body.mean() > 0.02
-    x_gutter = r.x0 + gx / s
+    g = _gutter(page)
+    dark, two_columns, s, x_at = g["dark"], g["two_columns"], g["scale"], g["x_at"]
 
     def ink_in_gutter(rect: "fitz.Rect") -> bool:
-        y0, y1 = int((rect.y0 - r.y0) * s), int((rect.y1 - r.y0) * s)
-        return bool(rule_free) and dark[max(0, y0):y1 + 1, rule_free].any()
+        """One printed line across the gutter (a running header, a centered title), or a
+        left and a right column line that blla joined? The blank around the gutter in this
+        line's rows tells: a word space is at most ~4 pt, the gap between columns far wider."""
+        y0, y1 = (int((v - r.y0) * s) for v in (rect.y0 + 0.2 * rect.height, rect.y1 - 0.2 * rect.height))
+        ink = dark[max(0, y0):max(y0 + 1, y1), :].any(axis=0)
+        gx = min(len(ink) - 1, max(0, g["px_at"]((y0 + y1) / 2)))
+        if ink[gx]:
+            return True
+        lo = hi = gx
+        while lo > 0 and not ink[lo - 1]:
+            lo -= 1
+        while hi < len(ink) - 1 and not ink[hi + 1]:
+            hi += 1
+        return (hi - lo + 1) < 8 * s
 
     pieces, outline = [], {}  # outline: id(piece) -> polygon of the detected line it comes from
     for rect, poly in lines:
+        x_gutter = x_at((rect.y0 + rect.y1) / 2)
         if two_columns and rect.x0 < x_gutter - 2 < x_gutter + 2 < rect.x1 and not ink_in_gutter(rect):
             split = [fitz.Rect(rect.x0, rect.y0, x_gutter, rect.y1), fitz.Rect(x_gutter, rect.y0, rect.x1, rect.y1)]
         else:
@@ -470,6 +639,7 @@ def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
     pieces = [p for p in pieces if abs(p & block) > 0.5 * abs(p)]
 
     def side(p):
+        x_gutter = x_at((p.y0 + p.y1) / 2)
         if not two_columns or (p.x0 < x_gutter - 2 and p.x1 > x_gutter + 2):
             return "full"
         return "left" if (p.x0 + p.x1) / 2 < x_gutter else "right"
@@ -526,10 +696,7 @@ def page_regions(page: "fitz.Page", layout: str) -> List[Dict[str, Any]]:
     if layout in ("page", "", None):
         return [{"rect": fitz.Rect(r), "label": "page"}]
     if layout == "columns":
-        pix = page.get_pixmap(dpi=100, colorspace=fitz.csRGB)
-        x = r.x0 + _column_gutter(pix) / pix.width * r.width
-        return [{"rect": fitz.Rect(r.x0, r.y0, x, r.y1), "label": "left column"},
-                {"rect": fitz.Rect(x, r.y0, r.x1, r.y1), "label": "right column"}]
+        return _column_layout(page)
     if layout == "lines":
         return _line_layout(page)
     if layout.startswith("yolo"):
@@ -707,6 +874,16 @@ def _stack_lines(pngs: List[bytes]) -> bytes:
     return buf.getvalue()
 
 
+_NUMBER_SOUP = re.compile(r"^[\d\s.,:;]*$")
+
+
+def _invented(line: str) -> bool:
+    """A line of nothing but a long string of digits ("5117.034796305707646264075"): what
+    a model writes when it does not read the line at all. Printed numbers (page numbers,
+    dates, "S. 248") are short or come with words."""
+    return bool(_NUMBER_SOUP.match(line)) and sum(c.isdigit() for c in line) >= 10
+
+
 def _numbered(lines: List[str]) -> List[str]:
     """Drop the "1: ", "2: " ... the model was asked to put in front of its lines, but only
     if it numbered all of them in order (a printed line may itself begin with "2.")."""
@@ -744,7 +921,8 @@ def _ocr_lines(page: "fitz.Page", regions: List[Dict[str, Any]], model: str, cus
         if not r.get("success"):
             raise OcrError(f"line OCR: {r.get('error') or 'OCR failed'}", regions)
         text = re.sub(r"^```[a-z]*\n|\n```$", "", (r.get("text") or "").strip()).replace("**", "")
-        return text, r.get("done_reason") == "length" or _find_loop(text) is not None
+        bad = r.get("done_reason") == "length" or _find_loop(text) is not None
+        return text, bad or any(_invented(l.strip()) for l in text.splitlines() if l.strip())
 
     def read(lo: int, hi: int) -> None:
         n = hi - lo
@@ -756,7 +934,8 @@ def _ocr_lines(page: "fitz.Page", regions: List[Dict[str, Any]], model: str, cus
                     parts[lo] = " ".join(l.strip() for l in text.splitlines() if l.strip())
                     return
             parts[lo] = "[?]"
-            warnings.append(f"line {lo + 1} ({regions[lo]['label']}): not read, the model looped; "
+            warnings.append(f"line {lo + 1} ({regions[lo]['label']}): not read, the model looped or wrote "
+                            f"invented numbers; "
                             f"read it from the page image")
             return
         prompt = DEEPSEEK_OCR_PROMPT if deepseek else resolve_prompt("exact_copy_lines").replace("{n}", str(n))
