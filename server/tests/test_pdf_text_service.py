@@ -171,6 +171,9 @@ def test_numbered_strips_only_complete_numbering():
     assert pts._numbered(["1: foo", "2. bar", "3) baz"]) == ["foo", "bar", "baz"]
     # a printed line that happens to begin with a number is left alone
     assert pts._numbered(["2. Tafel", "nicht nummeriert"]) == ["2. Tafel", "nicht nummeriert"]
+    # some lines numbered "k:" by the model, others not: the "k:" still goes
+    assert pts._numbered(["1: Keileindrücke", "ansicht dem Blick", "3: sie in dem"]) ==         ["Keileindrücke", "ansicht dem Blick", "sie in dem"]
+    assert pts._numbered(["1) Aehnlich etwa", "Seite 3: kept"]) == ["1) Aehnlich etwa", "Seite 3: kept"]
 
 
 def test_check_ocr_warnings():
@@ -353,3 +356,36 @@ def test_single_line_with_invented_numbers_becomes_unread(ladder):
     parts, warnings, _ = ladder(["line (left)"] * 2, numbers)
     assert parts == ["text 0", "[?]"]
     assert any("invented numbers" in w for w in warnings)
+
+
+# ── Work done in BEn is never read over ───────────────────────────────────
+
+def _job(tmp_path, ben_lines, item=None, file_text="line a\n\nline b\n"):
+    import types
+    f = tmp_path / "page_0001.txt"
+    if file_text is not None:
+        f.write_text(file_text, encoding="utf-8")
+    item = item or {"text_id": 1, "labels": ["pdf-ocr", "draft"]}
+    return types.SimpleNamespace(
+        ben_name="doc", ben_existing={"doc/p0001": item}, page_file=lambda n: str(f),
+        ben=types.SimpleNamespace(latest_lines=lambda tid: ben_lines))
+
+
+def test_unchanged_page_may_be_replaced(tmp_path):
+    assert pts.PdfTextJob._edited_in_ben(_job(tmp_path, ["line a", "line b"]), 1) is None
+
+
+def test_page_edited_in_ben_is_protected(tmp_path):
+    reason = pts.PdfTextJob._edited_in_ben(_job(tmp_path, ["line a", "line b corrected"]), 1)
+    assert "edited in BEn" in reason
+
+
+def test_proofread_or_curated_page_is_protected(tmp_path):
+    job = _job(tmp_path, ["line a", "line b"], item={"text_id": 1, "labels": ["proofread"]})
+    assert "proofread" in pts.PdfTextJob._edited_in_ben(job, 1)
+    job = _job(tmp_path, ["line a", "line b"], item={"text_id": 1, "is_reviewed": True})
+    assert pts.PdfTextJob._edited_in_ben(job, 1)
+
+
+def test_page_in_ben_without_local_record_is_protected(tmp_path):
+    assert pts.PdfTextJob._edited_in_ben(_job(tmp_path, ["x"], file_text=None), 1)

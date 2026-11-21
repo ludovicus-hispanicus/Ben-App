@@ -164,7 +164,9 @@ def approve_extraction(plan_id: str, notes: str = "", overwrite: bool = False, w
     """Approve a plan whose sample pages you checked, and run it on all its pages locally.
     Every page is stored in BEn as a CuReD text (page image + text lines) in the dataset
     <ben_dataset>/<pdf name>, where people can see and correct it; read it back with
-    read_pages. Pages someone already corrected in BEn are never overwritten.
+    read_pages. Pages someone worked on in BEn are never read again or replaced, not even
+    with overwrite: curated/reviewed, labelled "proofread", or with lines that differ from
+    what this tool stored. job_status lists them under ben.left_unchanged_corrected.
     notes: what you checked and found (stored with the approval and on every page in BEn).
     overwrite: redo pages finished earlier with the same settings (otherwise skipped, so an
       interrupted run can simply be approved again).

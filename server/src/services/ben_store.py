@@ -144,5 +144,13 @@ class BenStore:
         self._ok(self.client.patch(f"/api/v1/text/{text_id}/labels", json={"labels": labels}))
         return {"text_id": text_id, "transliteration_id": transliteration_id, "image_name": image_name}
 
+    def latest_lines(self, text_id: int) -> Optional[List[str]]:
+        """The lines of a text's newest transliteration (what CuReD shows), or None."""
+        items = self._ok(self.client.get(f"/api/v1/cured/{text_id}/transliterations"))
+        items = items if isinstance(items, list) else (items or {}).get("transliterations", [])
+        if not items:
+            return None
+        return self.lines(text_id, items[-1]["transliteration_id"])
+
     def lines(self, text_id: int, transliteration_id: int) -> List[str]:
         return self._ok(self.client.get(f"/api/v1/cured/transliteration/{text_id}/{transliteration_id}"))["lines"]

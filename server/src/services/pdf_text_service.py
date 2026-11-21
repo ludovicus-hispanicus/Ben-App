@@ -890,7 +890,9 @@ def _numbered(lines: List[str]) -> List[str]:
     nums = [re.match(rf"^\s*{k}\s*[:.)]\s*", l) for k, l in enumerate(lines, 1)]
     if all(nums):
         return [l[m.end():] for l, m in zip(lines, nums)]
-    return lines
+    # "k:" is the form the prompt asks for; when the model numbers only some lines, a "k:"
+    # at its own position is still the model's number, not print ("1)" or "1." may be print)
+    return [re.sub(rf"^\s*{k}\s*:\s*", "", l, count=1) for k, l in enumerate(lines, 1)]
 
 
 def _ocr_lines(page: "fitz.Page", regions: List[Dict[str, Any]], model: str, custom_prompt: Optional[str],
@@ -1262,6 +1264,15 @@ class PdfTextJob:
                                 self._ben_store(doc, n, old, f.read().rstrip())
                             self._save_manifest()
                         continue
+                    edited = self._edited_in_ben(n) if self.ben_parent else None
+                    if edited:
+                        # someone worked on this page in BEn: never read it again over their work
+                        pub = f"{self.ben_name}/p{n:04d}"
+                        entry = dict(old) if old else {"page": n, "status": "skipped"}
+                        entry["ben"] = {**(entry.get("ben") or {"publication": pub}), "skipped": edited}
+                        self.manifest["pages"][str(n)] = entry
+                        self._save_manifest()
+                        continue
                     entry = self.plan.samples.get(n) or self.plan.process_page(doc, n)  # samples are reused
                     entry = dict(entry)
                     text = entry.pop("text", None)
@@ -1287,6 +1298,29 @@ class PdfTextJob:
             self.current = None
             self.manifest["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
             self._save_manifest()
+
+    def _edited_in_ben(self, n: int) -> Optional[str]:
+        """Why page n must not be replaced in BEn, or None. CuReD's curated/reviewed flags
+        are not enough: an AI or a person may correct the lines without setting them (on
+        2026-11-21 a rerun replaced a proofread article this way). So the page in BEn is
+        compared with what ben-pdf stored there; any difference is someone's work."""
+        from services.ben_store import BenStore
+        item = self.ben_existing.get(f"{self.ben_name}/p{n:04d}")
+        if not item:
+            return None
+        if BenStore.corrected(item) or "proofread" in (item.get("labels") or []):
+            return "corrected or proofread in BEn; left unchanged"
+        if not os.path.exists(self.page_file(n)):
+            return "in BEn but not from this extraction; left unchanged"
+        with open(self.page_file(n), encoding="utf-8") as f:
+            stored = [l for l in f.read().splitlines() if l.strip()]
+        try:
+            now = self.ben.latest_lines(item["text_id"])
+        except Exception:
+            return "could not read the page from BEn to check for corrections; left unchanged"
+        if now is not None and [l for l in now if l.strip()] != stored:
+            return "edited in BEn since ben-pdf stored it; left unchanged"
+        return None
 
     def _write_document(self) -> None:
         """All finished pages in order, each under a header naming its source."""
