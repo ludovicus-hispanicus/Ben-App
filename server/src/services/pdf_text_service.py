@@ -211,7 +211,8 @@ def embedded_lines(page: "fitz.Page") -> Tuple[List[List[Tuple[str, "fitz.Rect"]
             # soft hyphen: printed as "-" where the line breaks, invisible elsewhere
             if text.endswith(_SOFT_HYPHEN):
                 text = text[:-1] + "-"
-            text = unicodedata.normalize("NFC", text.replace(_SOFT_HYPHEN, ""))
+            # no-break spaces become plain ones: otherwise "S. 12" is not found when searched in BEn
+            text = unicodedata.normalize("NFC", text.replace(_SOFT_HYPHEN, "").replace(chr(0xA0), " "))
             lines.append((text, fitz.Rect(l["bbox"])))
         if lines:
             blocks.append(lines)
@@ -299,14 +300,18 @@ def inspect_pdf(path: str) -> Dict[str, Any]:
         pages = [analyse_page(p) for p in doc]
         meta = {k: (doc.metadata or {}).get(k) for k in ("producer", "creator", "title")}
     by_route: Dict[str, List[int]] = {}
+    by_reason: Dict[tuple, List[int]] = {}
     for p in pages:
         by_route.setdefault(p["route"], []).append(p["page"])
+        if p["route"] != "embedded":
+            by_reason.setdefault((p["route"], p["reason"]), []).append(p["page"])
+    # grouped by reason with page ranges: a 500-page book stays a few lines long
     return {
         "path": os.path.abspath(path),
         "page_count": len(pages),
         "metadata": meta,
         "routes": {k: _ranges(v) for k, v in by_route.items()},
-        "not_embedded": [{k: p[k] for k in ("page", "route", "reason")} for p in pages if p["route"] != "embedded"],
+        "not_embedded": [{"pages": _ranges(v), "route": r, "reason": why} for (r, why), v in by_reason.items()],
     }
 
 
