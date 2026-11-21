@@ -630,7 +630,10 @@ def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
             outline[id(p)] = poly
     heights = sorted(p.height for p in pieces)
     h = heights[len(heights) // 2]
-    pieces = [p for p in pieces if p.height > 0.4 * h and p.width > 2 * h]
+    # Specks and stray pen strokes go; short pieces of text height stay: an edition's line
+    # numbers ("2", "§1"), "obv.", the end of a hyphenated word on its own line ("pár").
+    pieces = [p for p in pieces if p.height > 0.4 * h and
+              (p.width > 2 * h or (0.6 * h <= p.height <= 1.6 * h and p.width >= 0.3 * h))]
 
     # The text block: where most lines start and end. Readers' notes in the margins lie
     # mostly outside it and are dropped.
@@ -646,6 +649,21 @@ def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
 
     def same_row(a, b):
         return min(a.y1, b.y1) - max(a.y0, b.y0) > 0.5 * min(a.height, b.height)
+
+    # A short piece just left of a line on the same row, in the same column, is its number
+    # ("2", "§1"): read it with the line, so the text keeps "2 [x-š]u-nu ..." together.
+    for small in sorted((p for p in pieces if p.width < 3 * h), key=lambda p: p.x0):
+        if small not in pieces:
+            continue
+        nexts = [p for p in pieces if p is not small and same_row(small, p) and side(p) == side(small)
+                 and 0 <= p.x0 - small.x1 < 4 * h]
+        if not nexts:
+            continue
+        line = min(nexts, key=lambda p: p.x0 - small.x1)
+        joined = fitz.Rect(small) | line
+        polys = [outline[id(q)] for q in (small, line)]
+        outline[id(joined)] = [pp for poly in polys for pp in (poly if isinstance(poly[0][0], (list, tuple)) else [poly])]
+        pieces = [q for q in pieces if q is not small and q is not line] + [joined]
 
     # A full-width line and the pieces beside it on the same row (a running header:
     # page number, title, date) form one row, read left to right.
@@ -681,8 +699,11 @@ def _line_image(page_img, scale: float, origin: "fitz.Point", rect: "fitz.Rect",
            int((rect.x1 - origin.x) * scale) + 1, int((rect.y1 - origin.y) * scale) + 1]
     crop = page_img.crop(box)
     mask = Image.new("L", crop.size, 0)
-    ImageDraw.Draw(mask).polygon([((x - origin.x) * scale - box[0], (y - origin.y) * scale - box[1])
-                                  for x, y in polygon], fill=255)
+    # one outline, or several (a line number joined to its line)
+    polygons = polygon if polygon and isinstance(polygon[0][0], (list, tuple)) else [polygon]
+    for poly in polygons:
+        ImageDraw.Draw(mask).polygon([((x - origin.x) * scale - box[0], (y - origin.y) * scale - box[1])
+                                      for x, y in poly], fill=255)
     out = Image.new("RGB", crop.size, (255, 255, 255))
     out.paste(crop, (0, 0), mask)
     buf = io.BytesIO()
