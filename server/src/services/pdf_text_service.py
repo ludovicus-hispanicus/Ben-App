@@ -458,8 +458,15 @@ def _blla_lines(page: "fitz.Page", dpi: int = 200) -> List[Tuple["fitz.Rect", Li
     with _blla_lock:
         try:
             import torch
-            device = "cuda:0" if torch.cuda.is_available() else "cpu"
-            seg = blla.segment(img, device=device)
+            from services.ollama_gpu import ollama_models_on_gpu
+            # Not on the GPU while an Ollama model is there (the 'sections' layout keeps
+            # DeepSeek loaded): torch keeps the memory it used, the model no longer fits
+            # and spills into system memory. On George 2013 pages went from 1 to 10-14
+            # minutes that way; blla on the CPU costs a few seconds.
+            gpu = torch.cuda.is_available() and not ollama_models_on_gpu()
+            seg = blla.segment(img, device="cuda:0" if gpu else "cpu")
+            if gpu:
+                torch.cuda.empty_cache()
         except RuntimeError:  # GPU busy or out of memory (Ollama holds most of it): use the CPU
             seg = blla.segment(img, device="cpu")
     s = 72 / dpi
@@ -776,6 +783,12 @@ def _line_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
 
 
 SECTION_MODEL = "deepseek-ocr:3b"  # the stock model: its grounding boxes are what it was trained to give
+# GPU layers for the section step, tried in turn on a CUDA error: Ollama's own choice, then all
+# layers, then few. On the 8 GB card Ollama's own split (6.9 GB on the GPU) can fail on every
+# page image with "CUDA error: device not ready" while all layers (7.8 GB) read it in 25 s.
+# The setting that worked is kept, so the model is not reloaded for every page.
+SECTION_GPU_LAYERS = (None, 99, 8)
+_section_gpu = 0
 
 
 def _grounding_blocks(page: "fitz.Page") -> List[Dict[str, Any]]:
@@ -783,15 +796,19 @@ def _grounding_blocks(page: "fitz.Page") -> List[Dict[str, Any]]:
     DeepSeek-OCR's grounding mode finds them: [{"type", "rect"}] in page points."""
     import httpx
     from services.ollama_ocr_service import DEFAULT_OLLAMA_URL
+    global _section_gpu
     png = page.get_pixmap(dpi=150, colorspace=fitz.csRGB).tobytes("png")
-    for attempt in range(2):  # "CUDA error: device not ready" while the model loads: once more
+    for i in range(_section_gpu, len(SECTION_GPU_LAYERS)):
+        options = {"num_ctx": 8192, "num_predict": 6000, "temperature": 0}
+        if SECTION_GPU_LAYERS[i] is not None:
+            options["num_gpu"] = SECTION_GPU_LAYERS[i]
         with _gpu_lock:
             r = httpx.post(f"{DEFAULT_OLLAMA_URL}/api/generate", timeout=900, json={
                 "model": SECTION_MODEL, "prompt": "<|grounding|>Convert the document to markdown.",
-                "images": [base64.b64encode(png).decode()], "stream": False,
-                "options": {"num_ctx": 8192, "num_predict": 6000, "temperature": 0}})
+                "images": [base64.b64encode(png).decode()], "stream": False, "options": options})
         d = r.json()
         if r.status_code == 200 or "CUDA" not in str(d.get("error")):
+            _section_gpu = i
             break
         time.sleep(3)
     if r.status_code != 200:
