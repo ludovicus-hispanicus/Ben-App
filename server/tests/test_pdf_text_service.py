@@ -332,6 +332,32 @@ def test_one_column_page_is_one_region():
     assert [r["label"] for r in pts.page_regions(p, "columns")] == ["page (one column)"]
 
 
+def test_kraken_leaves_superscript_open_and_it_is_closed():
+    assert pts._close_braces("MI) išakkan(⸢gar⸣){an") == "MI) išakkan(⸢gar⸣){an}"
+    assert pts._close_braces("surdû(súr.dù){mušen iṣṣūr") == "surdû(súr.dù){mušen} iṣṣūr"
+    assert pts._close_braces("{d⸣šamaš(utu)") == "{d}⸣šamaš(utu)"
+    # closed later, across a break: left alone
+    assert pts._close_braces("rab(gal) [{gi]š}sikkati(gag)") == "rab(gal) [{gi]š}sikkati(gag)"
+    assert pts._close_braces("no braces") == "no braces"
+
+
+def test_kraken_model_needs_a_line_layout(mixed_pdf):
+    with pytest.raises(ValueError, match="single lines"):
+        pts.Plan(mixed_pdf, "2", "ocr", "kraken:George2013", 300, "page", "exact_copy", None)
+    pts.Plan(mixed_pdf, "2", "ocr", "kraken:George2013", 300, "sections", "exact_copy", None)
+
+
+def test_line_image_keeps_ink_just_outside_the_outline():
+    """A superscript's tail 1 pt beyond the end of Kraken's outline is still in the line image."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (400, 100), "white")
+    ImageDraw.Draw(img).rectangle([300, 40, 303, 44], fill="black")  # 1 pt right of the outline at 72 dpi
+    outline = [(10, 40), (299, 40), (299, 60), (10, 60)]
+    png = pts._line_image(img, 1.0, fitz.Point(0, 0), fitz.Rect(10, 40, 299, 60), outline)
+    line = Image.open(__import__("io").BytesIO(png)).convert("L")
+    assert line.getextrema()[0] == 0
+
+
 def test_invented_number_lines():
     assert pts._invented("5117.034796305707646264075")
     assert pts._invented("3.082940446897008")

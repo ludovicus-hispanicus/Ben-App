@@ -115,9 +115,15 @@ def prepare_extraction(
     pages: "all", or ranges like "1-5,9".
     mode: "auto" (embedded text where trustworthy, OCR elsewhere), "embedded", or "ocr".
     layout (OCR pages only): "page" whole page; "columns" split at the column gutter (two-
-      column journals; a running header gets cut); "yolo:<model>" OCR region by region in
-      reading order, regions from a BEn YOLO model (see list_models; "yolo:" = active model).
+      column journals; a running header gets cut); "lines" every printed line found by
+      Kraken, columns by the gutter, read line by line; "sections" text blocks and their
+      reading order found by DeepSeek-OCR (deepseek-ocr:3b in Ollama), then Kraken's lines
+      in each (editions: transliteration beside translation, footnotes; falls back to
+      "lines" if the section step fails); "yolo:<model>" OCR region by region in reading
+      order, regions from a BEn YOLO model (see list_models; "yolo:" = active model).
     model: Ollama vision model for OCR pages; empty = best installed local Qwen3-VL.
+      "kraken:<name>" reads the lines with one of BEn's Kraken models (layout "lines" or
+      "sections" only): far more exact than a small VLM on the print it was trained on.
     dpi: render resolution for OCR (300 usual).
     prompt: BEn prompt key ("exact_copy", "plain", "dictionary", "ebl_atf", ...) or raw text.
     sample_pages: pages to sample, e.g. "12" or "3,17"; empty = BEn picks the hardest
@@ -271,8 +277,9 @@ def read_pages(document: str, pages: str = "all", ben_dataset: str = "PDF extrac
 
 @mcp.tool()
 def list_models() -> dict:
-    """OCR models (vision models in the local Ollama) and layout models (BEn's trained YOLO
-    models with their region classes) usable in prepare_extraction."""
+    """OCR models (vision models in the local Ollama, BEn's Kraken line models as
+    "kraken:<name>") and layout models (BEn's trained YOLO models with their region
+    classes) usable in prepare_extraction."""
     from services.ollama_ocr_service import list_vision_models
     ocr = list_vision_models()
     out = {
@@ -280,6 +287,10 @@ def list_models() -> dict:
         "ocr_models": [{k: m.get(k) for k in ("name", "cloud", "parameter_size", "size_gb")} for m in ocr.get("models", [])],
         "ocr_default": pts.default_ocr_model() if ocr.get("ollama_available") else None,
     }
+    try:
+        out["kraken_line_models"] = pts.kraken_line_models()
+    except Exception as e:
+        out["kraken_line_models_error"] = str(e)
     try:
         from clients.yolo_training_client import yolo_training_client
         active = (yolo_training_client.get_active_model() or {}).get("model_name")
