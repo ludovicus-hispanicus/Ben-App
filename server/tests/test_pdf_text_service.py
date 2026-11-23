@@ -358,6 +358,45 @@ def test_line_image_keeps_ink_just_outside_the_outline():
     assert line.getextrema()[0] == 0
 
 
+def test_section_step_shows_the_page_another_way_while_it_loops(monkeypatch):
+    doc = fitz.open()
+    page = doc.new_page()
+    tries = []
+
+    def fake(page, dpi, clip, extra):
+        tries.append((dpi, extra))
+        if len(tries) < 3:
+            raise RuntimeError("section step looped" if len(tries) == 1 else "prediction aborted, token repeat limit reached")
+        return [{"type": "text", "rect": fitz.Rect(clip)}]
+    monkeypatch.setattr(pts, "_grounding_try", fake)
+    assert pts._grounding_blocks(page)[0]["type"] == "text"
+    assert [d for d, _ in tries] == [150, 100, 200]
+
+
+def test_section_step_does_not_retry_other_errors(monkeypatch):
+    doc = fitz.open()
+    page = doc.new_page()
+    tries = []
+
+    def fake(page, dpi, clip, extra):
+        tries.append(dpi)
+        raise RuntimeError("model not found")
+    monkeypatch.setattr(pts, "_grounding_try", fake)
+    with pytest.raises(RuntimeError, match="not found"):
+        pts._grounding_blocks(page)
+    assert tries == [150]
+
+
+def test_printed_area_leaves_out_the_empty_margins():
+    doc = fitz.open()
+    page = doc.new_page(width=600, height=800)
+    page.draw_rect(fitz.Rect(100, 150, 400, 600), color=(0, 0, 0), fill=(0, 0, 0))
+    area = pts._printed_area(page)
+    assert fitz.Rect(100, 150, 400, 600) in area
+    assert area.width < 340 and area.height < 480
+    assert pts._printed_area(doc.new_page()) == doc[1].rect  # blank: the whole page
+
+
 def test_invented_number_lines():
     assert pts._invented("5117.034796305707646264075")
     assert pts._invented("3.082940446897008")

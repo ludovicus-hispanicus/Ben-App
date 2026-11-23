@@ -789,17 +789,53 @@ SECTION_MODEL = "deepseek-ocr:3b"  # the stock model: its grounding boxes are wh
 # The setting that worked is kept, so the model is not reloaded for every page.
 SECTION_GPU_LAYERS = (None, 99, 8)
 _section_gpu = 0
+# How the page is shown to DeepSeek, tried in turn while it loops (repeats a phrase until the
+# token limit, or Ollama aborts it): dpi, crop to the printed area, extra options. Which
+# image sets it off is close to chance: on George 2013, 28 of 29 pages that looped at 150 dpi
+# were read by one of the others (100 dpi 13, 200 dpi 6, 120 dpi 3, crop 3, penalty 3).
+SECTION_TRIES = ((150, False, {}), (100, False, {}), (200, False, {}), (120, False, {}),
+                 (150, True, {}), (150, False, {"repeat_penalty": 1.15}))
+
+
+def _printed_area(page: "fitz.Page") -> "fitz.Rect":
+    """The part of the page with ink on it, scanner borders left out, with a small margin."""
+    import numpy as np
+    pix =page.get_pixmap(dpi=72, colorspace=fitz.csGRAY)
+    g = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width) < 128
+    h, w = g.shape
+    mh, mw = int(h * 0.03), int(w * 0.03)
+    ys, xs = np.nonzero(g[mh:h - mh, mw:w - mw])
+    r = page.rect
+    if not len(xs):
+        return fitz.Rect(r)
+    s = r.width / w
+    return fitz.Rect(r.x0 + (xs.min() + mw) * s - 12, r.y0 + (ys.min() + mh) * s - 12,
+                     r.x0 + (xs.max() + mw) * s + 12, r.y0 + (ys.max() + mh) * s + 12) & r
 
 
 def _grounding_blocks(page: "fitz.Page") -> List[Dict[str, Any]]:
     """Text blocks of the page (paragraph, heading, footnote, table ...) in reading order, as
-    DeepSeek-OCR's grounding mode finds them: [{"type", "rect"}] in page points."""
+    DeepSeek-OCR's grounding mode finds them: [{"type", "rect"}] in page points. While the
+    model loops, the page is shown again another way (SECTION_TRIES)."""
+    error = None
+    for dpi, crop, extra in SECTION_TRIES:
+        clip = _printed_area(page) if crop else fitz.Rect(page.rect)
+        try:
+            return _grounding_try(page, dpi, clip, extra)
+        except RuntimeError as e:
+            error = e
+            if not any(k in str(e) for k in ("looped", "repeat limit", "no sections")):
+                raise
+    raise error
+
+
+def _grounding_try(page: "fitz.Page", dpi: int, clip: "fitz.Rect", extra: Dict[str, Any]) -> List[Dict[str, Any]]:
     import httpx
     from services.ollama_ocr_service import DEFAULT_OLLAMA_URL
     global _section_gpu
-    png = page.get_pixmap(dpi=150, colorspace=fitz.csRGB).tobytes("png")
+    png = page.get_pixmap(dpi=dpi, clip=clip, colorspace=fitz.csRGB).tobytes("png")
     for i in range(_section_gpu, len(SECTION_GPU_LAYERS)):
-        options = {"num_ctx": 8192, "num_predict": 6000, "temperature": 0}
+        options = {"num_ctx": 8192, "num_predict": 6000, "temperature": 0, **extra}
         if SECTION_GPU_LAYERS[i] is not None:
             options["num_gpu"] = SECTION_GPU_LAYERS[i]
         with _gpu_lock:
@@ -815,7 +851,7 @@ def _grounding_blocks(page: "fitz.Page") -> List[Dict[str, Any]]:
         raise RuntimeError(d.get("error") or f"HTTP {r.status_code}")
     if d.get("done_reason") == "length":
         raise RuntimeError("section step looped")
-    rr = page.rect
+    rr = clip
     blocks = []
     for m in re.finditer(r"(\w+)\[\[(\d+), (\d+), (\d+), (\d+)\]\]", d.get("response", "")):
         x0, y0, x1, y1 = (int(v) / 999 for v in m.groups()[1:])
@@ -840,6 +876,9 @@ def _section_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
     come in the page. If the section step fails, the page gets the 'lines' layout
     (columns by the gutter); the first region then carries "layout_note".
     """
+    lines = _page_lines(page)
+    if not lines:  # a blank page: DeepSeek only loops on it
+        return [{"rect": fitz.Rect(page.rect), "label": "page (no lines found)"}]
     try:
         blocks = _grounding_blocks(page)
     except Exception as e:
@@ -847,9 +886,6 @@ def _section_layout(page: "fitz.Page") -> List[Dict[str, Any]]:
         if regions:
             regions[0]["layout_note"] = f"section step failed ({e}): lines by columns instead"
         return regions
-    lines = _page_lines(page)
-    if not lines:
-        return [{"rect": fitz.Rect(page.rect), "label": "page (no lines found)"}]
     hs = sorted(rect.height for rect, _ in lines)
     h = hs[len(hs) // 2]
     per_block: List[List[Tuple["fitz.Rect", Any]]] = [[] for _ in blocks]
